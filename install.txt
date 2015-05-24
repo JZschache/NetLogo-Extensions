@@ -1,0 +1,2 @@
+in order for java to be able to load classes by url, the akka-actor and the config library need to be in the classpath
+for this, I added both jars to the lib directory and added the names to the manifest of NetLogo.jar (via unpack)
