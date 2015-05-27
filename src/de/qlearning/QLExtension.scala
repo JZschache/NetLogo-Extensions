@@ -1,26 +1,22 @@
 package de.qlearning
 
 import java.util.{ List => JList }
-
 import scala.collection.JavaConversions._
-
 import akka.actor.ActorSystem
 import akka.actor.ActorRef
 import akka.actor.Props
-
 import org.nlogo.api._
 import org.nlogo.api.Syntax._
 import org.nlogo.api.ScalaConversions._
+import org.nlogo.app.App
 
 object QLSystem {
   
   val system = ActorSystem("QLSystem")
   
   val QLEXTENSION = "ql"
-  val ENVIRONMENT = "environment"
-  
-  var environment:Option[ActorRef] = None
-  var agentMap = Map[Agent, ActorRef]()
+    
+  var agentMap = Map[Agent, (ActorRef,ActorRef)]()
   
 }
 
@@ -29,7 +25,6 @@ class QLExtension extends DefaultClassManager {
   
   override def load(manager: PrimitiveManager) {
     manager.addPrimitive("init-environment", new InitEnvironment)
-    manager.addPrimitive("remove-environment", new RemoveEnvironment)
     manager.addPrimitive("start-choice", new StartChoice)
     manager.addPrimitive("stop-choice", new StopChoice)
   }
@@ -43,10 +38,11 @@ class QLExtension extends DefaultClassManager {
   }
   
   override def clearAll() {
-    if (environment.isDefined)
-      system.stop(environment.get)
-    agentMap.values.foreach(agent => system.stop(agent))
-    agentMap = Map[Agent, ActorRef]() 
+    agentMap.values.foreach(pair => {
+      system.stop(pair._1)
+      system.stop(pair._2)
+    })
+    agentMap = Map[Agent, (ActorRef,ActorRef)]() 
   }
   
 }
@@ -57,8 +53,8 @@ class InitEnvironment extends DefaultCommand {
   
   override def getAgentClassString = "O"
   
-  // takes a turtle- / patchset, the name of a reporter, and the names of the alternatives
-  override def getSyntax = commandSyntax(Array( TurtlesetType | PatchsetType, StringType, ListType))
+  // takes a turtle- / patchset, the experimenting parameter, the name of a reporter, and the names of the alternatives
+  override def getSyntax = commandSyntax(Array( TurtlesetType | PatchsetType, NumberType, StringType, ListType))
   
   /**
    * new QLAgents are generated for the turtles / patches
@@ -66,42 +62,32 @@ class InitEnvironment extends DefaultCommand {
    */
   def perform(args: Array[Argument], c: Context) {
     
-    val reporterName = args(1).getString
-    
-    if (environment.isEmpty){
-      environment = Some(system.actorOf(Props(new EnvironmentActor(reporterName)), ENVIRONMENT))
-      val newAgents = args(0).getAgentSet.agents
-      agentMap = newAgents.map(agent => {
-        val a = system.actorOf(Props(new QLAgent(agent)), "QLAgent-" + agent.getVariable(0))
-        a ! Init(environment.get)
-        (agent -> a)
-      }).toMap
+    val experimenting = args(1).getDoubleValue
+    val reporterName = args(2).getString
+        
+    val newAgents = args(0).getAgentSet.agents
+    agentMap = newAgents.map(agent => {
+      val a = if (agent.isInstanceOf[org.nlogo.api.Turtle]) 
+          system.actorOf(Props(new QLAgent(agent, experimenting)), "QLAgent-" + agent.getVariable(0))
+        else // patch
+          system.actorOf(Props(new QLAgent(agent, experimenting)), "QLAgent-" + agent.getVariable(0) + "-" + agent.getVariable(1))
+      val e = if (agent.isInstanceOf[org.nlogo.api.Turtle])
+          system.actorOf(Props(new EnvironmentActor(reporterName)), "Environment-" + agent.getVariable(0))
+        else // patch
+          system.actorOf(Props(new EnvironmentActor(reporterName)), "Environment-" + agent.getVariable(0) + "-" + agent.getVariable(1))
+      a ! Init(e)
+      (agent -> (a,e))
+    }).toMap
       
-      val altList = args(2).getList.toList.map(ar => ar.asInstanceOf[String])
-      agentMap.values.foreach(a => {
-        a ! AddChoiceAltList(altList, true)
-      })
+    val altList = try {
+      args(3).getList.toList.map(ar => ar.asInstanceOf[String])
+    } catch {
+      case ex:ClassCastException =>   
+        args(3).getList.toList.map(ar => ar.asInstanceOf[Double].toString)
     }
-  }
-    
-}
-
-class RemoveEnvironment extends DefaultCommand {
-  import QLSystem._
-  import QLAgent._
-  
-  override def getAgentClassString = "O"
-  
-  // takes a turtle- / patchset, the name of a reporter, and the names of the alternatives
-  override def getSyntax = commandSyntax(Array[Int]())
-  
-  def perform(args: Array[Argument], c: Context) {
-    
-    if (environment.isDefined)
-      system.stop(environment.get)
-    agentMap.values.foreach(agent => system.stop(agent))
-    agentMap = Map[Agent, ActorRef]()
-    
+    agentMap.values.foreach(pair => {
+      pair._1 ! AddChoiceAltList(altList, true)
+    })
   }
     
 }
@@ -118,7 +104,7 @@ class StartChoice extends DefaultCommand {
   def perform(args: Array[Argument], c: Context) {
     val source = c.getAgent.asInstanceOf[org.nlogo.agent.Agent]
     if (agentMap.contains(source)) {
-      agentMap(source) ! Start
+      agentMap(source)._1 ! Start
     }
   }
 }
@@ -134,7 +120,7 @@ class StopChoice extends DefaultCommand {
   def perform(args: Array[Argument], c: Context) {
     val source = c.getAgent.asInstanceOf[org.nlogo.agent.Agent]
     if (agentMap.contains(source)) {
-      agentMap(source) ! Stop
+      agentMap(source)._1 ! Stop
     }
     
   }

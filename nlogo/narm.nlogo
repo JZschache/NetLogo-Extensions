@@ -3,38 +3,33 @@ extensions[ql]
 to setup
   clear-all
   
-  ; create a world with at least 9 patches per turtle
-  let n-patches (1 + floor sqrt (n-turtles * 9))
   resize-world 0 n-patches 0 n-patches
   set-patch-size 400 / n-patches
   
-  create-turtles n-turtles [
-    setxy random-xcor random-ycor
-  ]
-   
-  ql:init-environment turtles experimenting "testreporter" (list "forward" "turn right")
+  ql:init-environment patches experimenting "n-arm-bandit" (n-values n-alternatives [?])
   
   reset-ticks
 end
 
-to-report testreporter [agentwho alternative]
-  
-  ifelse alternative = "forward" [
-    ask turtle agentwho [ fd 1]
-    report forward-reward
+to-report n-arm-bandit [patchx patchy alternative]
+  ;show alternative
+  ifelse alternative = "0.0" [
+    ask patch patchx patchy [ set pcolor blue ]
+    report random-normal mean-1 sd
   ] [
-    ask turtle agentwho [ right 90]
-    report right-reward
+    ask patch patchx patchy [ set pcolor red]
+    report random-normal mean-2 sd
   ]
 end
 
 to startChoice
-  ask turtles [
+  ask patches [
     ql:start-choice  
   ]
 end
 
-to stopChoice  ask turtles [
+to stopChoice  
+  ask patches [
         ql:stop-choice  
   ]
 end
@@ -42,11 +37,11 @@ end
 GRAPHICS-WINDOW
 743
 10
-1171
-459
+1157
+445
 -1
 -1
-18.181818181818183
+4.0
 1
 10
 1
@@ -57,9 +52,9 @@ GRAPHICS-WINDOW
 1
 1
 0
-22
+100
 0
-22
+100
 0
 0
 1
@@ -71,11 +66,11 @@ SLIDER
 21
 240
 54
-n-turtles
-n-turtles
+n-patches
+n-patches
 0
 100
-1
+100
 1
 1
 NIL
@@ -116,12 +111,12 @@ NIL
 1
 
 SLIDER
-66
-111
-238
-144
-forward-reward
-forward-reward
+63
+264
+235
+297
+mean-1
+mean-1
 0
 100
 50
@@ -131,15 +126,15 @@ NIL
 HORIZONTAL
 
 SLIDER
-67
-156
-239
-189
-right-reward
-right-reward
+63
+300
+235
+333
+mean-2
+mean-2
 0
 100
-35
+29
 1
 1
 NIL
@@ -171,8 +166,38 @@ experimenting
 experimenting
 0
 1
-1
+0.06
 0.01
+1
+NIL
+HORIZONTAL
+
+SLIDER
+63
+225
+235
+258
+n-alternatives
+n-alternatives
+2
+10
+2
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+237
+226
+409
+259
+sd
+sd
+0
+10
+1
+0.1
 1
 NIL
 HORIZONTAL
