@@ -1,3 +1,4 @@
 bin
 .settings
 .cache
+/ql.jar
