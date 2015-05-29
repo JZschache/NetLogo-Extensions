@@ -1,6 +1,7 @@
 package de.qlearning
 
 import java.util.{ List => JList }
+import java.io.File
 import scala.collection.JavaConversions._
 import akka.actor.ActorSystem
 import akka.actor.ActorRef
@@ -9,15 +10,34 @@ import org.nlogo.api._
 import org.nlogo.api.Syntax._
 import org.nlogo.api.ScalaConversions._
 import org.nlogo.app.App
+import com.typesafe.config.ConfigFactory
+import akka.dispatch.Await
+import akka.pattern.ask
+import akka.util.Timeout
+import akka.util.duration._
+
 
 object QLSystem {
   
-  val system = ActorSystem("QLSystem")
+  val confFile = "conf/application.conf"
+  val system = ActorSystem("QLSystem", ConfigFactory.parseFile(new File(confFile)))
+  
+  case class AgentsChoiceData(agents: List[Agent], alternatives: List[String], rewards: List[Double])
+  
+  val alteredDataAgent = akka.agent.Agent(AgentsChoiceData(List(), List(), List()))(system)
+  
+  
+  
+  val nlguiActor = system.actorOf(Props(new NetLogoGUIActor(App.app, alteredDataAgent)).withDispatcher("netlogo-dispatcher"), "NetLogoGUIActor")
   
   val QLEXTENSION = "ql"
     
-  var agentMap = Map[Agent, (ActorRef,ActorRef)]()
+  var agentMap = Map[Agent, ActorRef]()
   
+  
+  def init() {
+    
+  }
 }
 
 class QLExtension extends DefaultClassManager {
@@ -27,6 +47,12 @@ class QLExtension extends DefaultClassManager {
     manager.addPrimitive("init-environment", new InitEnvironment)
     manager.addPrimitive("start-choice", new StartChoice)
     manager.addPrimitive("stop-choice", new StopChoice)
+    manager.addPrimitive("current-agent", new GetCurrentAgent)
+    manager.addPrimitive("current-alternative", new GetCurrentAlt)
+    manager.addPrimitive("update-gui", new UpdateGUI)
+    manager.addPrimitive("altered-agents", new GetAlteredAgents)
+    manager.addPrimitive("corr-alternatives", new GetCorrAlternatives)
+    manager.addPrimitive("corr-rewards", new GetCorrRewards)
   }
   
   override def additionalJars: JList[String] = {
@@ -39,16 +65,17 @@ class QLExtension extends DefaultClassManager {
   
   override def clearAll() {
     agentMap.values.foreach(pair => {
-      system.stop(pair._1)
-      system.stop(pair._2)
+      system.stop(pair)
+//      system.stop(pair._2)
     })
-    agentMap = Map[Agent, (ActorRef,ActorRef)]() 
+    agentMap = Map[Agent, ActorRef]() 
   }
   
 }
 
 class InitEnvironment extends DefaultCommand {
   import QLSystem._
+  import StartNetLogo._
   import QLAgent._
   
   override def getAgentClassString = "O"
@@ -71,14 +98,14 @@ class InitEnvironment extends DefaultCommand {
           system.actorOf(Props(new QLAgent(agent, experimenting)), "QLAgent-" + agent.getVariable(0))
         else // patch
           system.actorOf(Props(new QLAgent(agent, experimenting)), "QLAgent-" + agent.getVariable(0) + "-" + agent.getVariable(1))
-      val e = if (agent.isInstanceOf[org.nlogo.api.Turtle])
-          system.actorOf(Props(new EnvironmentActor(reporterName)), "Environment-" + agent.getVariable(0))
-        else // patch
-          system.actorOf(Props(new EnvironmentActor(reporterName)), "Environment-" + agent.getVariable(0) + "-" + agent.getVariable(1))
-      a ! Init(e)
-      (agent -> (a,e))
-    }).toMap
-      
+//      val e = if (agent.isInstanceOf[org.nlogo.api.Turtle])
+//          system.actorOf(Props(new EnvironmentActor(reporterName)), "Environment-" + agent.getVariable(0))
+//        else // patch
+//          system.actorOf(Props(new EnvironmentActor(reporterName)), "Environment-" + agent.getVariable(0) + "-" + agent.getVariable(1))
+      a ! Init(netlogo.get)
+      (agent -> a)
+    }).toMap 
+    
     val altList = try {
       args(3).getList.toList.map(ar => ar.asInstanceOf[String])
     } catch {
@@ -86,7 +113,7 @@ class InitEnvironment extends DefaultCommand {
         args(3).getList.toList.map(ar => ar.asInstanceOf[Double].toString)
     }
     agentMap.values.foreach(pair => {
-      pair._1 ! AddChoiceAltList(altList, true)
+      pair ! AddChoiceAltList(altList, true)
     })
   }
     
@@ -102,9 +129,9 @@ class StartChoice extends DefaultCommand {
   override def getSyntax = commandSyntax(Array[Int]())
   
   def perform(args: Array[Argument], c: Context) {
-    val source = c.getAgent.asInstanceOf[org.nlogo.agent.Agent]
+    val source = c.getAgent
     if (agentMap.contains(source)) {
-      agentMap(source)._1 ! Start
+      agentMap(source) ! Start
     }
   }
 }
@@ -118,11 +145,64 @@ class StopChoice extends DefaultCommand {
   override def getSyntax = commandSyntax(Array[Int]())
   
   def perform(args: Array[Argument], c: Context) {
-    val source = c.getAgent.asInstanceOf[org.nlogo.agent.Agent]
+    val source = c.getAgent
     if (agentMap.contains(source)) {
-      agentMap(source)._1 ! Stop
+      agentMap(source) ! Stop
     }
     
   }
     
+}
+
+class GetCurrentAgent extends DefaultReporter {
+    
+  override def getAgentClassString = "O"
+  
+  override def getSyntax = reporterSyntax(Array[Int](), AgentType)
+  
+  def report(args: Array[Argument], c: Context): AnyRef = currentAgent.get
+    
+}
+
+class GetCurrentAlt extends DefaultReporter {
+  
+  override def getAgentClassString = "O"
+  
+  override def getSyntax = reporterSyntax(Array[Int](), StringType)
+  
+  def report(args: Array[Argument], c: Context): AnyRef = currentAlt.get
+    
+}
+
+
+/**
+ * the UpdateGUI Message should be send to nlguiActor after all previous updates have been made
+ * because it triggers a change in the alteredDataAgent
+ */
+class UpdateGUI extends DefaultCommand {
+  import QLSystem.nlguiActor
+  import NetLogoGUIActor.UpdateGUI
+  
+  override def getAgentClassString = "O"
+  
+  override def getSyntax = commandSyntax(Array[Int]())
+  
+  def perform(args: Array[Argument], c: Context) {
+    nlguiActor ! UpdateGUI    
+  }
+}
+
+class GetAlteredAgents extends DefaultReporter {
+  import QLSystem._
+  import NetLogoGUIActor._
+  
+  
+  override def getAgentClassString = "O"
+    
+  override def getSyntax = reporterSyntax(Array[Int](), TurtlesetType | PatchsetType)
+  
+  def report(args: Array[Argument], c: Context): AnyRef = {
+    val result = alteredDataAgent.await(10.seconds)
+    result.agents.toLogoList
+  }
 }

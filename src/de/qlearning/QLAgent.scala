@@ -60,8 +60,8 @@ object QLAgent {
  */
 
 class EnvironmentActor(val reporterName: String) extends Actor {
-  import QLAgent._
-  
+  import QLAgent._ 
+   
   def receive = {
     case Choice(agent, alternative) => {
       val result = if (agent.isInstanceOf[org.nlogo.api.Turtle])
@@ -138,6 +138,8 @@ class QLAgent(val agent: org.nlogo.api.Agent, val experimenting: Double) extends
   whenUnhandled {
     case Event(Stop, _) =>
       goto(Idle)
+    case Event(Reward(amount), _) =>
+      stay
   }
     
   initialize

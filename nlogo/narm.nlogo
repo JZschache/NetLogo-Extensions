@@ -6,32 +6,45 @@ to setup
   resize-world 0 n-patches 0 n-patches
   set-patch-size 400 / n-patches
   
-  ql:init-environment patches experimenting "n-arm-bandit" (n-values n-alternatives [?])
+  ql:init-environment patches experimenting (n-values n-alternatives [?]) "reward-function" "gui-update-function"
   
   reset-ticks
 end
 
-to-report n-arm-bandit [patchx patchy alternative]
-  ;show alternative
-  ifelse alternative = "0.0" [
-    ask patch patchx patchy [ set pcolor blue ]
+to-report reward-function
+  ifelse ql:current-alternative = "0.0" [
     report random-normal mean-1 sd
   ] [
-    ask patch patchx patchy [ set pcolor red]
     report random-normal mean-2 sd
   ]
 end
 
-to startChoice
-  ask patches [
-    ql:start-choice  
+to update-view
+  ql:update-qui
+  tick
+end
+
+to gui-update-function
+  
+  let agents ql:altered-agents
+  let alternatives ql:corr-alternatives
+  let rewards ql:corr-rewards
+    
+  foreach agents alternatives rewards [
+    ifelse ?2 = "0.0" [
+      ask ?1 [ set pcolor blue]
+    ][
+      ask ?1 [ set pcolor red]
+    ]
   ]
 end
 
+to startChoice
+  ql:start-choice 
+end
+
 to stopChoice  
-  ask patches [
-        ql:stop-choice  
-  ]
+  ql:stop-choice
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
@@ -70,7 +83,7 @@ n-patches
 n-patches
 0
 100
-100
+50
 1
 1
 NIL
@@ -134,7 +147,7 @@ mean-2
 mean-2
 0
 100
-29
+100
 1
 1
 NIL
@@ -166,7 +179,7 @@ experimenting
 experimenting
 0
 1
-0.06
+0.05
 0.01
 1
 NIL
@@ -201,6 +214,23 @@ sd
 1
 NIL
 HORIZONTAL
+
+BUTTON
+484
+207
+604
+240
+NIL
+update-view
+T
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
 
 @#$#@#$#@
 ## WHAT IS IT?
