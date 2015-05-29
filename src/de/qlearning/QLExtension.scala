@@ -1,27 +1,43 @@
 package de.qlearning
 
 import java.util.{ List => JList }
-
+import java.io.File
 import scala.collection.JavaConversions._
-
 import akka.actor.ActorSystem
 import akka.actor.ActorRef
 import akka.actor.Props
-
 import org.nlogo.api._
 import org.nlogo.api.Syntax._
 import org.nlogo.api.ScalaConversions._
+import org.nlogo.app.App
+import com.typesafe.config.ConfigFactory
+import akka.dispatch.Await
+import akka.pattern.ask
+import akka.util.Timeout
+import akka.util.duration._
+
 
 object QLSystem {
   
-  val system = ActorSystem("QLSystem")
+  val confFile = "conf/application.conf"
+  val system = ActorSystem("QLSystem", ConfigFactory.parseFile(new File(confFile)))
+  
+  case class AgentsChoiceData(agents: List[Agent], alternatives: List[String], rewards: List[Double])
+  
+  val alteredDataAgent = akka.agent.Agent(AgentsChoiceData(List(), List(), List()))(system)
+  
+  
+  
+  val nlguiActor = system.actorOf(Props(new NetLogoGUIActor(App.app, alteredDataAgent)).withDispatcher("netlogo-dispatcher"), "NetLogoGUIActor")
   
   val QLEXTENSION = "ql"
-  val ENVIRONMENT = "environment"
-  
-  var environment:Option[ActorRef] = None
+    
   var agentMap = Map[Agent, ActorRef]()
   
+  
+  def init() {
+    
+  }
 }
 
 class QLExtension extends DefaultClassManager {
@@ -29,9 +45,14 @@ class QLExtension extends DefaultClassManager {
   
   override def load(manager: PrimitiveManager) {
     manager.addPrimitive("init-environment", new InitEnvironment)
-    manager.addPrimitive("remove-environment", new RemoveEnvironment)
     manager.addPrimitive("start-choice", new StartChoice)
     manager.addPrimitive("stop-choice", new StopChoice)
+    manager.addPrimitive("current-agent", new GetCurrentAgent)
+    manager.addPrimitive("current-alternative", new GetCurrentAlt)
+    manager.addPrimitive("update-gui", new UpdateGUI)
+    manager.addPrimitive("altered-agents", new GetAlteredAgents)
+    manager.addPrimitive("corr-alternatives", new GetCorrAlternatives)
+    manager.addPrimitive("corr-rewards", new GetCorrRewards)
   }
   
   override def additionalJars: JList[String] = {
@@ -43,9 +64,10 @@ class QLExtension extends DefaultClassManager {
   }
   
   override def clearAll() {
-    if (environment.isDefined)
-      system.stop(environment.get)
-    agentMap.values.foreach(agent => system.stop(agent))
+    agentMap.values.foreach(pair => {
+      system.stop(pair)
+//      system.stop(pair._2)
+    })
     agentMap = Map[Agent, ActorRef]() 
   }
   
@@ -53,12 +75,13 @@ class QLExtension extends DefaultClassManager {
 
 class InitEnvironment extends DefaultCommand {
   import QLSystem._
+  import StartNetLogo._
   import QLAgent._
   
   override def getAgentClassString = "O"
   
-  // takes a turtle- / patchset, the name of a reporter, and the names of the alternatives
-  override def getSyntax = commandSyntax(Array( TurtlesetType | PatchsetType, StringType, ListType))
+  // takes a turtle- / patchset, the experimenting parameter, the name of a reporter, and the names of the alternatives
+  override def getSyntax = commandSyntax(Array( TurtlesetType | PatchsetType, NumberType, StringType, ListType))
   
   /**
    * new QLAgents are generated for the turtles / patches
@@ -66,42 +89,32 @@ class InitEnvironment extends DefaultCommand {
    */
   def perform(args: Array[Argument], c: Context) {
     
-    val reporterName = args(1).getString
+    val experimenting = args(1).getDoubleValue
+    val reporterName = args(2).getString
+        
+    val newAgents = args(0).getAgentSet.agents
+    agentMap = newAgents.map(agent => {
+      val a = if (agent.isInstanceOf[org.nlogo.api.Turtle]) 
+          system.actorOf(Props(new QLAgent(agent, experimenting)), "QLAgent-" + agent.getVariable(0))
+        else // patch
+          system.actorOf(Props(new QLAgent(agent, experimenting)), "QLAgent-" + agent.getVariable(0) + "-" + agent.getVariable(1))
+//      val e = if (agent.isInstanceOf[org.nlogo.api.Turtle])
+//          system.actorOf(Props(new EnvironmentActor(reporterName)), "Environment-" + agent.getVariable(0))
+//        else // patch
+//          system.actorOf(Props(new EnvironmentActor(reporterName)), "Environment-" + agent.getVariable(0) + "-" + agent.getVariable(1))
+      a ! Init(netlogo.get)
+      (agent -> a)
+    }).toMap 
     
-    if (environment.isEmpty){
-      environment = Some(system.actorOf(Props(new EnvironmentActor(reporterName)), ENVIRONMENT))
-      val newAgents = args(0).getAgentSet.agents
-      agentMap = newAgents.map(agent => {
-        val a = system.actorOf(Props(new QLAgent(agent)), "QLAgent-" + agent.getVariable(0))
-        a ! Init(environment.get)
-        (agent -> a)
-      }).toMap
-      
-      val altList = args(2).getList.toList.map(ar => ar.asInstanceOf[String])
-      agentMap.values.foreach(a => {
-        a ! AddChoiceAltList(altList, true)
-      })
+    val altList = try {
+      args(3).getList.toList.map(ar => ar.asInstanceOf[String])
+    } catch {
+      case ex:ClassCastException =>   
+        args(3).getList.toList.map(ar => ar.asInstanceOf[Double].toString)
     }
-  }
-    
-}
-
-class RemoveEnvironment extends DefaultCommand {
-  import QLSystem._
-  import QLAgent._
-  
-  override def getAgentClassString = "O"
-  
-  // takes a turtle- / patchset, the name of a reporter, and the names of the alternatives
-  override def getSyntax = commandSyntax(Array[Int]())
-  
-  def perform(args: Array[Argument], c: Context) {
-    
-    if (environment.isDefined)
-      system.stop(environment.get)
-    agentMap.values.foreach(agent => system.stop(agent))
-    agentMap = Map[Agent, ActorRef]()
-    
+    agentMap.values.foreach(pair => {
+      pair ! AddChoiceAltList(altList, true)
+    })
   }
     
 }
@@ -116,7 +129,7 @@ class StartChoice extends DefaultCommand {
   override def getSyntax = commandSyntax(Array[Int]())
   
   def perform(args: Array[Argument], c: Context) {
-    val source = c.getAgent.asInstanceOf[org.nlogo.agent.Agent]
+    val source = c.getAgent
     if (agentMap.contains(source)) {
       agentMap(source) ! Start
     }
@@ -132,11 +145,64 @@ class StopChoice extends DefaultCommand {
   override def getSyntax = commandSyntax(Array[Int]())
   
   def perform(args: Array[Argument], c: Context) {
-    val source = c.getAgent.asInstanceOf[org.nlogo.agent.Agent]
+    val source = c.getAgent
     if (agentMap.contains(source)) {
       agentMap(source) ! Stop
     }
     
   }
     
+}
+
+class GetCurrentAgent extends DefaultReporter {
+    
+  override def getAgentClassString = "O"
+  
+  override def getSyntax = reporterSyntax(Array[Int](), AgentType)
+  
+  def report(args: Array[Argument], c: Context): AnyRef = currentAgent.get
+    
+}
+
+class GetCurrentAlt extends DefaultReporter {
+  
+  override def getAgentClassString = "O"
+  
+  override def getSyntax = reporterSyntax(Array[Int](), StringType)
+  
+  def report(args: Array[Argument], c: Context): AnyRef = currentAlt.get
+    
+}
+
+
+/**
+ * the UpdateGUI Message should be send to nlguiActor after all previous updates have been made
+ * because it triggers a change in the alteredDataAgent
+ */
+class UpdateGUI extends DefaultCommand {
+  import QLSystem.nlguiActor
+  import NetLogoGUIActor.UpdateGUI
+  
+  override def getAgentClassString = "O"
+  
+  override def getSyntax = commandSyntax(Array[Int]())
+  
+  def perform(args: Array[Argument], c: Context) {
+    nlguiActor ! UpdateGUI    
+  }
+}
+
+class GetAlteredAgents extends DefaultReporter {
+  import QLSystem._
+  import NetLogoGUIActor._
+  
+  
+  override def getAgentClassString = "O"
+    
+  override def getSyntax = reporterSyntax(Array[Int](), TurtlesetType | PatchsetType)
+  
+  def report(args: Array[Argument], c: Context): AnyRef = {
+    val result = alteredDataAgent.await(10.seconds)
+    result.agents.toLogoList
+  }
 }

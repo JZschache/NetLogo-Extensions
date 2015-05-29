@@ -3,50 +3,58 @@ extensions[ql]
 to setup
   clear-all
   
-  ; create a world with at least 9 patches per turtle
-  let n-patches (1 + floor sqrt (n-turtles * 9))
   resize-world 0 n-patches 0 n-patches
   set-patch-size 400 / n-patches
   
-  create-turtles n-turtles [
-    setxy random-xcor random-ycor
-  ]
-   
-  ql:init-environment turtles experimenting "testreporter" (list "forward" "turn right")
+  ql:init-environment patches experimenting (n-values n-alternatives [?]) "reward-function" "gui-update-function"
   
   reset-ticks
 end
 
-to-report testreporter [agentwho alternative]
-  
-  ifelse alternative = "forward" [
-    ask turtle agentwho [ fd 1]
-    report forward-reward
+to-report reward-function
+  ifelse ql:current-alternative = "0.0" [
+    report random-normal mean-1 sd
   ] [
-    ask turtle agentwho [ right 90]
-    report right-reward
+    report random-normal mean-2 sd
+  ]
+end
+
+to update-view
+  ql:update-qui
+  tick
+end
+
+to gui-update-function
+  
+  let agents ql:altered-agents
+  let alternatives ql:corr-alternatives
+  let rewards ql:corr-rewards
+    
+  foreach agents alternatives rewards [
+    ifelse ?2 = "0.0" [
+      ask ?1 [ set pcolor blue]
+    ][
+      ask ?1 [ set pcolor red]
+    ]
   ]
 end
 
 to startChoice
-  ask turtles [
-    ql:start-choice  
-  ]
+  ql:start-choice 
 end
 
-to stopChoice  ask turtles [
-        ql:stop-choice  
-  ]
+to stopChoice  
+  ql:stop-choice
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
 743
 10
-1171
-459
+1157
+445
 -1
 -1
-18.181818181818183
+4.0
 1
 10
 1
@@ -57,9 +65,9 @@ GRAPHICS-WINDOW
 1
 1
 0
-22
+100
 0
-22
+100
 0
 0
 1
@@ -71,11 +79,11 @@ SLIDER
 21
 240
 54
-n-turtles
-n-turtles
+n-patches
+n-patches
 0
 100
-1
+50
 1
 1
 NIL
@@ -116,12 +124,12 @@ NIL
 1
 
 SLIDER
-66
-111
-238
-144
-forward-reward
-forward-reward
+63
+264
+235
+297
+mean-1
+mean-1
 0
 100
 50
@@ -131,15 +139,15 @@ NIL
 HORIZONTAL
 
 SLIDER
-67
-156
-239
-189
-right-reward
-right-reward
+63
+300
+235
+333
+mean-2
+mean-2
 0
 100
-35
+100
 1
 1
 NIL
@@ -171,11 +179,58 @@ experimenting
 experimenting
 0
 1
-1
+0.05
 0.01
 1
 NIL
 HORIZONTAL
+
+SLIDER
+63
+225
+235
+258
+n-alternatives
+n-alternatives
+2
+10
+2
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+237
+226
+409
+259
+sd
+sd
+0
+10
+1
+0.1
+1
+NIL
+HORIZONTAL
+
+BUTTON
+484
+207
+604
+240
+NIL
+update-view
+T
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
 
 @#$#@#$#@
 ## WHAT IS IT?
