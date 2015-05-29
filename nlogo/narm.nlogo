@@ -12,30 +12,29 @@ to setup
 end
 
 to-report reward-function
-  ifelse ql:current-alternative = "0.0" [
+;  ifelse ql:current-alternative = "0.0" [
     report random-normal mean-1 sd
-  ] [
-    report random-normal mean-2 sd
-  ]
+ ; ] [
+  ;  report random-normal mean-2 sd
+  ;]
 end
 
 to update-view
-  ql:update-qui
+  ql:update-gui
   tick
 end
 
 to gui-update-function
   
-  let agents ql:altered-agents
-  let alternatives ql:corr-alternatives
-  let rewards ql:corr-rewards
+  let data ql:altered-data
     
-  foreach agents alternatives rewards [
-    ifelse ?2 = "0.0" [
-      ask ?1 [ set pcolor blue]
-    ][
-      ask ?1 [ set pcolor red]
-    ]
+  foreach data [
+    show ?
+;    ifelse ?2 = "0.0" [
+;      ask ?1 [ set pcolor blue]
+;    ][
+;      ask ?1 [ set pcolor red]
+;    ]
   ]
 end
 
@@ -50,11 +49,11 @@ end
 GRAPHICS-WINDOW
 743
 10
-1157
-445
+1553
+841
 -1
 -1
-4.0
+400.0
 1
 10
 1
@@ -65,9 +64,9 @@ GRAPHICS-WINDOW
 1
 1
 0
-100
+1
 0
-100
+1
 0
 0
 1
@@ -83,7 +82,7 @@ n-patches
 n-patches
 0
 100
-50
+1
 1
 1
 NIL
@@ -222,7 +221,7 @@ BUTTON
 240
 NIL
 update-view
-T
+NIL
 1
 T
 OBSERVER

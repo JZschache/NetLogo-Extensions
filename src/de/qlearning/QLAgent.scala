@@ -59,22 +59,22 @@ object QLAgent {
  * the reporterTask should take an agent and an alternative and return a reward 
  */
 
-class EnvironmentActor(val reporterName: String) extends Actor {
-  import QLAgent._ 
-   
-  def receive = {
-    case Choice(agent, alternative) => {
-      val result = if (agent.isInstanceOf[org.nlogo.api.Turtle])
-        App.app.report(reporterName + " " + agent.getVariable(0).asInstanceOf[Double].round 
-            + " \"" + alternative + "\"").asInstanceOf[Double]
-      else
-        App.app.report(reporterName + " " + agent.getVariable(0).asInstanceOf[Double].round 
-            + " " + agent.getVariable(1).asInstanceOf[Double].round
-            + " \"" + alternative + "\"").asInstanceOf[Double]
-      sender ! Reward(result)
-    }
-  }
-}
+//class EnvironmentActor(val reporterName: String) extends Actor {
+//  import QLAgent._ 
+//   
+//  def receive = {
+//    case Choice(agent, alternative) => {
+//      val result = if (agent.isInstanceOf[org.nlogo.api.Turtle])
+//        App.app.report(reporterName + " " + agent.getVariable(0).asInstanceOf[Double].round 
+//            + " \"" + alternative + "\"").asInstanceOf[Double]
+//      else
+//        App.app.report(reporterName + " " + agent.getVariable(0).asInstanceOf[Double].round 
+//            + " " + agent.getVariable(1).asInstanceOf[Double].round
+//            + " \"" + alternative + "\"").asInstanceOf[Double]
+//      sender ! Reward(result)
+//    }
+//  }
+//}
 
 class QLAgent(val agent: org.nlogo.api.Agent, val experimenting: Double) extends Actor with FSM[QLAgent.AgentState, QLAgent.DataTrait]{
   import QLSystem._
@@ -131,7 +131,7 @@ class QLAgent(val agent: org.nlogo.api.Agent, val experimenting: Double) extends
         currentMap
       }
     
-      Thread.sleep(10)
+      Thread.sleep(1000)
       goto(Choosing) using Data(environment, newMap, totalN, None)
   }
   
@@ -139,6 +139,8 @@ class QLAgent(val agent: org.nlogo.api.Agent, val experimenting: Double) extends
     case Event(Stop, _) =>
       goto(Idle)
     case Event(Reward(amount), _) =>
+      stay
+    case Event(Choose,_) =>
       stay
   }
     
