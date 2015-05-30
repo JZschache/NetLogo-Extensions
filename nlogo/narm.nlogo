@@ -1,59 +1,52 @@
 extensions[ql]
 
+patches-own[ qv1 qv2 ]
+
 to setup
   clear-all
-  
+
+  set-patch-size 400 / n-patches  
   resize-world 0 n-patches 0 n-patches
-  set-patch-size 400 / n-patches
   
-  ql:init-environment patches experimenting (n-values n-alternatives [?]) "reward-function" "gui-update-function"
+  ql:init-environment patches experimenting (n-values n-alternatives [?]) "reward-function"
   
   reset-ticks
 end
 
-to-report reward-function
-;  ifelse ql:current-alternative = "0.0" [
+to-report reward-function [ env-id ]
+  let params ql:env-parameters env-id
+  ;show params
+  ifelse (item 1 params) = "0.0" [
     report random-normal mean-1 sd
- ; ] [
-  ;  report random-normal mean-2 sd
-  ;]
-end
-
-to update-view
-  ql:update-gui
-  tick
-end
-
-to gui-update-function
-  
-  let data ql:altered-data
-    
-  foreach data [
-    show ?
-;    ifelse ?2 = "0.0" [
-;      ask ?1 [ set pcolor blue]
-;    ][
-;      ask ?1 [ set pcolor red]
-;    ]
+  ] [
+    report random-normal mean-2 sd
   ]
 end
 
-to startChoice
-  ql:start-choice 
-end
-
-to stopChoice  
-  ql:stop-choice
+to update-view
+  
+  ask patches [
+     ifelse ql:last-choice = "0.0" [
+      set pcolor blue
+    ][
+      set pcolor red
+    ]
+    let qvalues ql:qvalues
+    set qv1 (item 0 qvalues)
+    set qv2 (item 1 qvalues)
+  ]
+  
+  tick
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
 743
 10
-1553
-841
+1157
+445
 -1
 -1
-400.0
+4.0
 1
 10
 1
@@ -64,9 +57,9 @@ GRAPHICS-WINDOW
 1
 1
 0
-1
+100
 0
-1
+100
 0
 0
 1
@@ -82,7 +75,7 @@ n-patches
 n-patches
 0
 100
-1
+100
 1
 1
 NIL
@@ -108,10 +101,10 @@ NIL
 BUTTON
 464
 80
-578
+616
 113
 NIL
-startChoice
+ql:start-choice 
 NIL
 1
 T
@@ -146,19 +139,19 @@ mean-2
 mean-2
 0
 100
-100
+17
 1
 1
 NIL
 HORIZONTAL
 
 BUTTON
-465
-121
-577
-154
+464
+116
+616
+149
 NIL
-stopChoice
+ql:stop-choice
 NIL
 1
 T
@@ -178,7 +171,7 @@ experimenting
 experimenting
 0
 1
-0.05
+0.1
 0.01
 1
 NIL
@@ -207,8 +200,8 @@ SLIDER
 sd
 sd
 0
-10
-1
+100
+26.8
 0.1
 1
 NIL
@@ -221,7 +214,7 @@ BUTTON
 240
 NIL
 update-view
-NIL
+T
 1
 T
 OBSERVER
@@ -230,6 +223,44 @@ NIL
 NIL
 NIL
 1
+
+PLOT
+128
+490
+328
+640
+qvalues
+NIL
+NIL
+0.0
+10.0
+0.0
+10.0
+true
+false
+"" ""
+PENS
+"default" 1.0 0 -16777216 true "" "plot mean [qv1] of patches"
+"pen-1" 1.0 0 -7500403 true "" "plot mean [qv2] of patches"
+
+PLOT
+395
+510
+595
+660
+qvalue 0 0
+NIL
+NIL
+0.0
+10.0
+0.0
+10.0
+true
+false
+"" ""
+PENS
+"default" 1.0 0 -16777216 true "" "plot [qv1] of patch 0 0"
+"pen-1" 1.0 0 -7500403 true "" "plot [qv2] of patch 0 0"
 
 @#$#@#$#@
 ## WHAT IS IT?
