@@ -1,38 +1,52 @@
 extensions[ql]
 
-patches-own[ qv1 qv2 ]
+turtles-own[ qv-list n-list total-n ]
 
 to setup
-  clear-all
-
-  set-patch-size 400 / n-patches  
-  resize-world 0 n-patches 0 n-patches
+  clear-all  
   
-  ql:init-environment patches experimenting (n-values n-alternatives [?]) "reward-function"
+  let n-patches (1 + floor sqrt (n-pairs * 9))
+  set-patch-size 400 / n-patches
+  resize-world 0 n-patches 0 n-patches
+    
+  create-turtles (2 * n-pairs) [
+    setxy random-xcor random-ycor
+  ]
+  
+  ql:init-environment turtles 2 (n-values n-alternatives [?]) "reward-function" experimenting exploration
+  
+  ask turtles [    
+    set qv-list ql:qvalues
+    set n-list ql:n-choices-list
+    set total-n ql:n-choice
+  ]
+  
   
   reset-ticks
+  
 end
 
 to-report reward-function [ env-id ]
   let params ql:env-parameters env-id
   ifelse (item 1 params) = "0.0" [
-    report random-normal mean-1 sd
+    report 0.0
   ] [
-    report random-normal mean-2 sd
+    report 0.0
   ]
 end
 
 to update-view
   
-  ask patches [
+  ask turtles [
      ifelse ql:last-choice = "0.0" [
-      set pcolor blue
+      set color blue
     ][
-      set pcolor red
+      set color red
     ]
-    let qvalues ql:qvalues
-    set qv1 (item 0 qvalues)
-    set qv2 (item 1 qvalues)
+    
+    set qv-list ql:qvalues
+    set n-list ql:n-choices-list
+    set total-n ql:n-choice
   ]
   
   tick
@@ -41,11 +55,11 @@ end
 GRAPHICS-WINDOW
 743
 10
-1157
-445
+1165
+453
 -1
 -1
-4.0
+12.903225806451612
 1
 10
 1
@@ -56,9 +70,9 @@ GRAPHICS-WINDOW
 1
 1
 0
-100
+31
 0
-100
+31
 0
 0
 1
@@ -66,12 +80,12 @@ ticks
 30.0
 
 SLIDER
-68
-21
 240
-54
-n-patches
-n-patches
+25
+415
+58
+n-pairs
+n-pairs
 0
 100
 100
@@ -81,10 +95,10 @@ NIL
 HORIZONTAL
 
 BUTTON
-463
-37
-579
-70
+525
+25
+675
+58
 NIL
 setup
 NIL
@@ -98,10 +112,10 @@ NIL
 1
 
 BUTTON
-464
-80
-616
-113
+525
+60
+675
+93
 NIL
 ql:start-choice 
 NIL
@@ -114,41 +128,11 @@ NIL
 NIL
 1
 
-SLIDER
-63
-264
-235
-297
-mean-1
-mean-1
-0
-100
-50
-1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-63
-300
-235
-333
-mean-2
-mean-2
-0
-100
-17
-1
-1
-NIL
-HORIZONTAL
-
 BUTTON
-464
-116
-616
-149
+525
+95
+675
+128
 NIL
 ql:stop-choice
 NIL
@@ -162,10 +146,10 @@ NIL
 1
 
 SLIDER
-66
-67
-238
-100
+15
+25
+185
+58
 experimenting
 experimenting
 0
@@ -177,40 +161,40 @@ NIL
 HORIZONTAL
 
 SLIDER
-63
-225
-235
-258
+240
+60
+415
+93
 n-alternatives
 n-alternatives
 2
 10
-2
+4
 1
 1
 NIL
 HORIZONTAL
 
 SLIDER
-237
-226
-409
-259
+240
+220
+415
+253
 sd
 sd
 0
-100
-26.8
+10
+1
 0.1
 1
 NIL
 HORIZONTAL
 
 BUTTON
-484
-207
-604
-240
+525
+130
+675
+163
 NIL
 update-view
 NIL
@@ -224,10 +208,10 @@ NIL
 1
 
 PLOT
-128
-490
-328
-640
+20
+350
+220
+500
 qvalues
 NIL
 NIL
@@ -239,15 +223,15 @@ true
 false
 "" ""
 PENS
-"default" 1.0 0 -16777216 true "" "plot mean [qv1] of patches"
-"pen-1" 1.0 0 -7500403 true "" "plot mean [qv2] of patches"
+"default" 1.0 0 -16777216 true "" "plot mean [item 0 qv-list] of turtles"
+"pen-1" 1.0 0 -7500403 true "" "plot mean [item 1 qv-list] of turtles"
 
 PLOT
-395
-510
-595
-660
-qvalue 0 0
+225
+350
+425
+500
+histogram
 NIL
 NIL
 0.0
@@ -258,8 +242,56 @@ true
 false
 "" ""
 PENS
-"default" 1.0 0 -16777216 true "" "plot [qv1] of patch 0 0"
-"pen-1" 1.0 0 -7500403 true "" "plot [qv2] of patch 0 0"
+"default" 1.0 0 -16777216 true "" "histogram [n-list] of turtle 1"
+
+INPUTBOX
+240
+95
+415
+215
+means
+1 2 3 4 \n3 3 1 2\n4 3 3 1\n4 1 1 1 
+1
+1
+String
+
+CHOOSER
+15
+60
+185
+105
+exploration
+exploration
+"epsilon-greedy" "softmax"
+0
+
+BUTTON
+15
+110
+185
+143
+NIL
+ql:dec-exp\n
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+MONITOR
+480
+355
+662
+400
+NIL
+[total-n] of turtle 1
+17
+1
+11
 
 @#$#@#$#@
 ## WHAT IS IT?
@@ -622,5 +654,5 @@ Line -7500403 true 150 150 90 180
 Line -7500403 true 150 150 210 180
 
 @#$#@#$#@
-0
+1
 @#$#@#$#@

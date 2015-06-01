@@ -1,5 +1,7 @@
 extensions[ql]
 
+turtles-own[qv1 qv2]
+
 to setup
   clear-all
   
@@ -12,41 +14,40 @@ to setup
     setxy random-xcor random-ycor
   ]
    
-  ql:init-environment turtles experimenting "testreporter" (list "forward" "turn right")
+  ql:init-environment turtles experimenting (list "forward" "turn right") "testreporter"
   
   reset-ticks
 end
 
-to-report testreporter [agentwho alternative]
-  
-  ifelse alternative = "forward" [
-    ask turtle agentwho [ fd 1]
+to-report testreporter [ env-id ]
+  let params ql:env-parameters env-id
+  ifelse (item 1 params) = "forward" [
+    ask (item 0 params) [fd 1]
     report forward-reward
   ] [
-    ask turtle agentwho [ right 90]
+    ask (item 0 params) [right 90]
     report right-reward
   ]
 end
 
-to startChoice
+to update-view
+  wait 1
   ask turtles [
-    ql:start-choice  
+    let qvalues ql:qvalues
+    set qv1 (item 0 qvalues)
+    set qv2 (item 1 qvalues)
   ]
-end
-
-to stopChoice  ask turtles [
-        ql:stop-choice  
-  ]
+  tick 
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
 743
 10
-1171
-459
+1165
+453
 -1
 -1
-18.181818181818183
+12.903225806451612
 1
 10
 1
@@ -57,9 +58,9 @@ GRAPHICS-WINDOW
 1
 1
 0
-22
+31
 0
-22
+31
 0
 0
 1
@@ -75,7 +76,7 @@ n-turtles
 n-turtles
 0
 100
-1
+100
 1
 1
 NIL
@@ -101,10 +102,10 @@ NIL
 BUTTON
 464
 80
-578
+616
 113
 NIL
-startChoice
+ql:start-choice
 NIL
 1
 T
@@ -139,7 +140,7 @@ right-reward
 right-reward
 0
 100
-35
+22
 1
 1
 NIL
@@ -148,10 +149,10 @@ HORIZONTAL
 BUTTON
 465
 121
-577
+609
 154
 NIL
-stopChoice
+ql:stop-choice
 NIL
 1
 T
@@ -171,11 +172,69 @@ experimenting
 experimenting
 0
 1
-1
+0.05
 0.01
 1
 NIL
 HORIZONTAL
+
+BUTTON
+499
+211
+619
+244
+NIL
+update-view
+T
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+PLOT
+273
+352
+473
+502
+plot 1
+NIL
+NIL
+0.0
+10.0
+0.0
+10.0
+true
+false
+"" ""
+PENS
+"default" 1.0 0 -16777216 true "" "plot mean [qv1] of turtles"
+"pen-1" 1.0 0 -7500403 true "" "plot mean [qv2] of turtles"
+
+MONITOR
+321
+539
+471
+584
+NIL
+[qv1] of turtle 1
+17
+1
+11
+
+MONITOR
+525
+561
+675
+606
+NIL
+[qv2] of turtle 1
+17
+1
+11
 
 @#$#@#$#@
 ## WHAT IS IT?

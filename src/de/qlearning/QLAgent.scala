@@ -16,7 +16,7 @@ object QLAgent {
 
   sealed trait HasValue { val value : Double}
   
-  class QValue(val alt: String, n: Double, val value: Double) extends HasValue {
+  class QValue(val alt: String, val n: Double, val value: Double) extends HasValue {
     
     def updated(amount: Double) : QValue = {
       val newValue = value + (1.0 /(n + 1.0)) * (amount - value)
@@ -34,7 +34,28 @@ object QLAgent {
       })
     if (maxima.length == 1) maxima.head  else RandomHelper.randomComponent(maxima)
   }
-      
+  
+  class QLData(val qValuesMap: Map[String,QValue], val nMap: Map[String, Double], val nTotal: Double, val lastChoice: String) {
+    
+    def ++(newAlternatives: List[String]) = {
+      val newQvalue = qValuesMap ++ newAlternatives.map(alt => (alt -> new QValue(alt, 0.0, 0.0)))
+      val newN = nMap ++ newAlternatives.map(_ -> 0.0)
+      new QLData(newQvalue, newN, nTotal, lastChoice)
+    }
+    
+    def updated(alt:String, reward: Double) : QLData = {
+      val newQvalue = qValuesMap.getOrElse(alt, new QValue(alt, 0.0, 0.0)).updated(reward)
+      val newN = nMap.getOrElse(alt, 0.0) + 1.0
+      new QLData(qValuesMap.updated(alt, newQvalue), nMap.updated(alt, newN), nTotal + 1, alt)
+    }
+    
+    def this() = this(Map[String,QValue](), Map[String, Double](), 0.0, "")
+    
+    def this(newAlternatives: List[String]) = this(newAlternatives.map(alt => (alt -> new QValue(alt, 0.0, 0.0))).toMap,
+        newAlternatives.map(_ -> 0.0).toMap, 0.0, "")
+    
+  }
+        
   // states
   sealed trait AgentState
   case object Idle extends AgentState
@@ -43,12 +64,13 @@ object QLAgent {
   // data
   sealed trait DataTrait
   case object Uninitialized extends DataTrait
-  case class Data(environment: ActorRef, totalN: Int, lastChoice: Option[String]) extends DataTrait
   // messages
-  case class Init(environment: ActorRef)
+  case class Init(environment: ActorRef, experimenting: Double, exploration: String)
   case class AddChoiceAltList(altList: List[String], replace: Boolean)
-  case class Start
+  case object Start
   case object Stop
+  case object DecExp
+  
   case class Choice(agent: org.nlogo.api.Agent, alternative: String)
   case class Reward(amount: Double)
 
@@ -75,72 +97,99 @@ object QLAgent {
 //  }
 //}
 
-class QLAgent(val agent: org.nlogo.api.Agent, val experimenting: Double, val qValueAgent: AkkaAgent[Map[String,QLAgent.QValue]], val lastChoiceAgent: AkkaAgent[String]) extends Actor with FSM[QLAgent.AgentState, QLAgent.DataTrait]{
+class QLAgent(val nlAgent: org.nlogo.api.Agent, val dataAgent: AkkaAgent[QLAgent.QLData]) extends Actor with FSM[QLAgent.AgentState, QLAgent.DataTrait]{
   import QLSystem._
   import QLAgent._
   import FSM._
   
   val generator: RandomEngine  = new MersenneTwister64(Platform.currentTime.toInt)
   val uniform = new Uniform(generator)
+     
+    private def epsGreedy = (epsilon: Double) => {
+    if (uniform.nextDoubleFromTo(0, 1) < epsilon)
+      RandomHelper.randomComponent(dataAgent.get.qValuesMap.keys)
+    else
+      maximum(dataAgent.get.qValuesMap.values).alt
+  }
+  
+  private def softmax = (temperature:Double) => {
+    val expForm = dataAgent.get.qValuesMap.values.scanLeft(("".asInstanceOf[String], 0.0))((temp, qva) => (qva.alt, temp._2 + scala.math.exp(qva.value / temperature))).tail
+    val randomValue = uniform.nextDoubleFromTo(0, expForm.last._2)
+    expForm.find(randomValue < _._2).get._1    
+  }
+  
+  private class Decision(val experimenting: Double, val exploration: String, val decrease: Boolean = false, val n: Double = 1.0) {
+    
+    val choice = exploration match {
+        case "epsilon-greedy" => epsGreedy
+        case "softmax" => softmax
+    }
+
+    def next() = choice(experimenting / n)
+    
+    def update ={
+      if (decrease)
+        new Decision(experimenting, exploration, true, n + 1.0)
+      else
+        new Decision(experimenting, exploration)
+    } 
+    
+    def startDecreasing = new Decision(experimenting, exploration, true, 1.0)
+    
+  }
   
   // private messages
   private case object Choose
+  private case class Initialized(environment: ActorRef, lastChoice: Option[String], choice: Decision) extends DataTrait
   
   startWith(Idle, Uninitialized)
+  
   when(Idle) {
-    case Event(Init(environment), Uninitialized) =>
-      qValueAgent update Map[String, QValue]()
-      lastChoiceAgent update ""
-      stay using Data(environment, 0, None)
+    case Event(Init(environment, experimenting, exploration), _) =>
+      dataAgent update new QLData()
+      stay using Initialized(environment, None, new Decision(experimenting, exploration))
       
-    case Event(AddChoiceAltList(altList, replace), Data(environment, totalN, lastChoice)) =>
+    case Event(AddChoiceAltList(altList, replace), _) =>
       if (replace)
-        qValueAgent update altList.map(alt => (alt -> new QValue(alt, 0.0, 0.0))).toMap
+        dataAgent update new QLData(altList)
       else
-        qValueAgent send { _ ++ altList.map(alt => (alt -> new QValue(alt, 0.0, 0.0))).toMap }
-
-      stay using Data(environment, totalN, lastChoice)
+        dataAgent send { _ ++ altList }
+      stay
       
-    case Event(Start, _) =>
+    case Event(Start, data: Initialized) =>
       goto(Choosing)
   }
   
   onTransition {
     case _ -> Choosing =>
-      context.system.scheduler.scheduleOnce(100.milliseconds, self, Choose)
+      context.system.scheduler.scheduleOnce(QLSystem.pbc.milliseconds, self, Choose)
   }
   
   when(Choosing){
-    case Event(Choose, Data(environment, totalN, lastChoice)) => 
-      
-      val choice = if (uniform.nextDoubleFromTo(0, 1) < experimenting) {
-        RandomHelper.randomComponent(qValueAgent.get.keys)
-      } else {
-        maximum(qValueAgent.get.values).alt
-      }
-      implicit val timeout = Timeout(1.second)
-      environment ! Choice(this.agent, choice)
-      lastChoiceAgent update choice
-      goto(Waiting) using Data(environment, totalN + 1, Some(choice))
-      
+    case Event(Choose, Initialized(environment, lastChoice, choice)) => 
+      val c = choice.next
+      environment ! Choice(nlAgent, c)
+      goto(Waiting) using Initialized(environment, Some(c), choice.update)
   }
   
   when(Waiting){
-    case Event(Reward(amount), Data(environment, totalN, lastChoice)) =>
+    case Event(Reward(amount), Initialized(_, lastChoice, _ )) =>
       if (lastChoice.isDefined) {
         val alt = lastChoice.get
-        qValueAgent send {map =>  map.updated(alt, map(alt).updated(amount)) }
+        dataAgent send { _.updated(alt, amount) }
       }
-      goto(Choosing) using Data(environment, totalN, None)
+      goto(Choosing)
   }
   
   whenUnhandled {
     case Event(Stop, _) =>
       goto(Idle)
-    case Event(Reward(amount), _) =>
+    case Event(Reward(_), _) =>
       stay
     case Event(Choose,_) =>
       stay
+    case Event(DecExp, Initialized(environment, lastChoice, choice)) =>
+      stay using Initialized(environment, lastChoice, choice.startDecreasing)
   }
     
   initialize

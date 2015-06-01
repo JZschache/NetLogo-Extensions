@@ -25,11 +25,20 @@ object NetLogoActors {
   
 }
 
-//class NetLogoGUIActor(nlApp: App) extends Actor {
-//  import NetLogoActors._
-//  import QLSystem._
-//  
-// 
+class NetLogoGUIActor(nlApp: App, rewardReporterName: String, helper: RewardProcedureHelper) extends Actor {
+  import NetLogoActors._
+  import QLSystem._
+  
+  val reporter = nlApp.workspace.compileReporter(rewardReporterName + " 1")
+ 
+  def receive = {
+    case QLAgent.Choice(agent, alternative) => {
+      helper.setParameter(1, agent, alternative)
+      val result = nlApp.workspace.runCompiledReporter(nlApp.owner, reporter).asInstanceOf[Double]
+      sender ! QLAgent.Reward(result)
+    }
+  }
+  
 //  implicit val ec = QLSystem.system
 //  
 //  def needsGUIUpdateCommand: Receive = {
@@ -57,10 +66,8 @@ object NetLogoActors {
 //      println("return data: " + alteredData.size + " items")
 //      sender ! alteredData
 //  }
-//  
-//  def receive = needsGUIUpdateCommand
-//  
-//}
+  
+}
 
 class NetLogoHeadlessActor(id: Int, modelPath: String, rewardReporterName: String, helper: RewardProcedureHelper) extends Actor {
   import NetLogoActors._
@@ -70,8 +77,6 @@ class NetLogoHeadlessActor(id: Int, modelPath: String, rewardReporterName: Strin
   val workspace = HeadlessWorkspace.newInstance
   workspace.open(modelPath)
   val reporter = workspace.compileReporter(rewardReporterName + " " + id)
- 
-  implicit val ec = QLSystem.system
   
   override def postStop(): Unit = {
     workspace.dispose()
@@ -79,10 +84,13 @@ class NetLogoHeadlessActor(id: Int, modelPath: String, rewardReporterName: Strin
   
   def receive = {
     case QLAgent.Choice(agent, alternative) => {
-      val finished = helper.setParameter(id, agent, alternative)
+      helper.setParameter(id, agent, alternative)
 //      println(finished)
       val result = workspace.runCompiledReporter(workspace.defaultOwner, reporter).asInstanceOf[Double]
-      
+//      if (result.first.asInstanceOf[Agent] != agent) println("not the same agent")
+//      if (result.tail.first.asInstanceOf[String] != alternative) println("not the same alternative")
+//      println( result.first.asInstanceOf[Agent].toString() + " " +  agent.toString())
+//      println( result.tail.first.asInstanceOf[String].toString() + " " + alternative)
 //      println(agent + " " + alternative + " " + result)
 //      nlguiActor ! AlteredAgent(agent, alternative, result)
       sender ! QLAgent.Reward(result)
