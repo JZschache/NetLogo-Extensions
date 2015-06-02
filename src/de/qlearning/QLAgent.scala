@@ -65,14 +65,15 @@ object QLAgent {
   sealed trait DataTrait
   case object Uninitialized extends DataTrait
   // messages
-  case class Init(environment: ActorRef, experimenting: Double, exploration: String)
+  case class Init(experimenting: Double, exploration: String)
   case class AddChoiceAltList(altList: List[String], replace: Boolean)
+  case class AddGroup(group: ActorRef)
   case object Start
   case object Stop
   case object DecExp
   
-  case class Choice(agent: org.nlogo.api.Agent, alternative: String)
-  case class Reward(amount: Double)
+  case class Choice(alternative: String)
+  case class Reward(alternative: String, amount: Double)
 
 }
 
@@ -97,7 +98,7 @@ object QLAgent {
 //  }
 //}
 
-class QLAgent(val nlAgent: org.nlogo.api.Agent, val dataAgent: AkkaAgent[QLAgent.QLData]) extends Actor with FSM[QLAgent.AgentState, QLAgent.DataTrait]{
+class QLAgent(val environment: ActorRef, val dataAgent: AkkaAgent[QLAgent.QLData]) extends Actor with FSM[QLAgent.AgentState, QLAgent.DataTrait]{
   import QLSystem._
   import QLAgent._
   import FSM._
@@ -140,14 +141,14 @@ class QLAgent(val nlAgent: org.nlogo.api.Agent, val dataAgent: AkkaAgent[QLAgent
   
   // private messages
   private case object Choose
-  private case class Initialized(environment: ActorRef, lastChoice: Option[String], choice: Decision) extends DataTrait
+  private case class Initialized(groups: List[ActorRef], lastChoices: List[String], choice: Decision) extends DataTrait
   
   startWith(Idle, Uninitialized)
   
   when(Idle) {
-    case Event(Init(environment, experimenting, exploration), _) =>
+    case Event(Init(experimenting, exploration), _) =>
       dataAgent update new QLData()
-      stay using Initialized(environment, None, new Decision(experimenting, exploration))
+      stay using Initialized(Nil, Nil, new Decision(experimenting, exploration))
       
     case Event(AddChoiceAltList(altList, replace), _) =>
       if (replace)
@@ -155,6 +156,11 @@ class QLAgent(val nlAgent: org.nlogo.api.Agent, val dataAgent: AkkaAgent[QLAgent
       else
         dataAgent send { _ ++ altList }
       stay
+      
+    case Event(AddGroup(newGroup: ActorRef), Initialized(groups, lastChoices, choice)) =>
+      
+      stay using Initialized(newGroup :: groups, lastChoices, choice)
+      
       
     case Event(Start, data: Initialized) =>
       goto(Choosing)
@@ -166,30 +172,36 @@ class QLAgent(val nlAgent: org.nlogo.api.Agent, val dataAgent: AkkaAgent[QLAgent
   }
   
   when(Choosing){
-    case Event(Choose, Initialized(environment, lastChoice, choice)) => 
-      val c = choice.next
-      environment ! Choice(nlAgent, c)
-      goto(Waiting) using Initialized(environment, Some(c), choice.update)
+    case Event(Choose, Initialized(groups, _, choice)) => 
+      val decisions = if (groups.isEmpty){
+        val c = choice.next
+        environment ! Choice(c)
+        List[String](c)
+      } else {
+        // TODO: what to do if member of multiple groups
+        val c = choice.next
+        groups.first ! Choice(c)
+        List[String](c)
+      }
+      goto(Waiting) using Initialized(groups, decisions, choice.update)
   }
   
   when(Waiting){
-    case Event(Reward(amount), Initialized(_, lastChoice, _ )) =>
-      if (lastChoice.isDefined) {
-        val alt = lastChoice.get
-        dataAgent send { _.updated(alt, amount) }
-      }
+    case Event(Reward(alt, amount), _) =>
+      dataAgent send { _.updated(alt, amount) }
+      //TODO: what to do if member of multiple groups
       goto(Choosing)
   }
   
   whenUnhandled {
     case Event(Stop, _) =>
       goto(Idle)
-    case Event(Reward(_), _) =>
+    case Event(Reward(_, _), _) =>
       stay
     case Event(Choose,_) =>
       stay
-    case Event(DecExp, Initialized(environment, lastChoice, choice)) =>
-      stay using Initialized(environment, lastChoice, choice.startDecreasing)
+    case Event(DecExp, Initialized(group, lastChoice, choice)) =>
+      stay using Initialized(group, lastChoice, choice.startDecreasing)
   }
     
   initialize
