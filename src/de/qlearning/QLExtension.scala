@@ -6,6 +6,7 @@ import scala.collection.JavaConversions._
 import akka.actor.ActorSystem
 import akka.actor.ActorRef
 import akka.actor.Props
+import akka.routing.FromConfig
 import org.nlogo.api._
 import org.nlogo.api.Syntax._
 import org.nlogo.api.ScalaConversions._
@@ -16,6 +17,7 @@ import akka.pattern.ask
 import akka.util.Timeout
 import akka.util.duration._
 import akka.agent.{ Agent => AkkaAgent }
+import akka.routing.Broadcast
 
 object QLSystem {
   
@@ -24,24 +26,30 @@ object QLSystem {
   
   val cfgstr = "de.qlearning"
   val config = system.settings.config
-  val conHeadEnv = config.getInt(cfgstr + ".concurrent-headless-environments")
+//  val conHeadEnv = config.getInt(cfgstr + ".concurrent-headless-environments")
   val pbc = config.getInt(cfgstr + ".pause_between_choice_ms")
   
 //  val alteredData = AkkaAgent(List[(Agent,String,Double)]())(system)
   // the guiActor gets an own Thread-Pool for optimal performance
 //  val nlguiActor = system.actorOf(Props(new NetLogoGUIActor(App.app)).withDispatcher("netlogo-dispatcher"), "NetLogoGUIActor")
   
-  val noOfEnv = if(conHeadEnv == 0) 1 else conHeadEnv
-  val r = (1 to noOfEnv).map(i => (i -> AkkaAgent[List[String]](List())(system))).toMap
-  val rewProcHelper: RewardProcedureHelper = new RewardProcedureHelper(r)
+//  val noOfEnv = if(conHeadEnv == 0) 1 else conHeadEnv
+//  val r = (1 to noOfEnv).map(i => (i -> AkkaAgent[List[String]](List())(system))).toMap
+//  val r = (1 to conHeadEnv).map(i => (i -> AkkaAgent[List[String]](List())(system))).toMap
+  
+  // the helper keeps track of parameters that are set by an NetLogoHeadlessActor and 
+  // used from an NetLogoHeadlessApp in reward function calls
+  val rewProcHelper: RewardProcedureHelper = new RewardProcedureHelper()
+  system.actorOf(Props(new NetLogoSupervisor(rewProcHelper)), NetLogoActors.supervisorName)
+  val netLogoActors = system.actorOf(Props[NetLogoHeadlessActor].withRouter(FromConfig()), "NetLogoActors")
   
   val QLEXTENSION = "ql"
     
   var agentMap = Map[Agent, ActorRef]()
   var groupList = List[ActorRef]()
   var groupAgentsMap = Map[Int,List[Agent]]()
-  var environmentList = List[ActorRef]()
-  var envIndex = -1
+//  var environmentList = List[ActorRef]()
+//  var envIndex = -1
   var qlDataMap = Map[Agent, AkkaAgent[QLAgent.QLData]]()  
   
   def init() {
@@ -55,7 +63,7 @@ class QLExtension extends DefaultClassManager {
   override def load(manager: PrimitiveManager) {
     // observer primitives
     manager.addPrimitive("init-environment", new InitEnvironment)
-    manager.addPrimitive("add-group-structure", new AddGroupStructure)
+    manager.addPrimitive("add-group", new AddGroup)
     manager.addPrimitive("start-choice", new StartChoice)
     manager.addPrimitive("stop-choice", new StopChoice)
     manager.addPrimitive("get-decisions", rewProcHelper)
@@ -80,9 +88,9 @@ class QLExtension extends DefaultClassManager {
   }
   
   override def clearAll() {
-    environmentList.foreach(env => system.stop(env))
-    environmentList = List[ActorRef]()
-    envIndex = -1
+//    environmentList.foreach(env => system.stop(env))
+//    environmentList = List[ActorRef]()
+//    envIndex = -1
     groupList.foreach(group => system.stop(group))
     groupList = List[ActorRef]()
     groupAgentsMap = Map[Int, List[Agent]]()
@@ -94,10 +102,12 @@ class QLExtension extends DefaultClassManager {
   
 }
 
-class RewardProcedureHelper(val envParameterMap: Map[Int, AkkaAgent[List[String]]]) extends DefaultReporter {
+class RewardProcedureHelper() extends DefaultReporter {
   
-  def setParameter(envId: Int, altList: List[String]) {
-    envParameterMap(envId) update altList
+  var envParameterMap = Map[Int, AkkaAgent[List[String]]]()
+  
+  def setParameter(envId: Int, agent: AkkaAgent[List[String]]) {
+    envParameterMap = envParameterMap.updated(envId, agent)
   }
   
   override def getAgentClassString = "O"
@@ -140,24 +150,16 @@ class InitEnvironment extends DefaultCommand {
     val experimenting = args(3).getDoubleValue
     val exploration = args(4).getString
     
-    val modelPath = App.app.workspace.getModelPath()
-    
-    environmentList = if (conHeadEnv == 0) {
-      List(system.actorOf(Props(new NetLogoGUIActor(App.app, rewardReporterName, rewProcHelper)).withDispatcher("netlogo-dispatcher"), "NetLogoGuiActor"))
-    } else {
-      (1 to noOfEnv).map(i => system.actorOf(Props(new NetLogoHeadlessActor(i, modelPath, rewardReporterName, rewProcHelper)).withDispatcher("netlogo-dispatcher"), "NetLogoHeadlessActor-" + i)).toList
-    }
-    
+    netLogoActors ! Broadcast(NetLogoActors.CompileReporter(App.app.workspace.getModelPath(), rewardReporterName))
         
     agentMap = newAgents.map(agent => {
       
       val qlDataAgent = AkkaAgent(new QLAgent.QLData())(system)
       qlDataMap = qlDataMap.updated(agent, qlDataAgent)
-      envIndex = (envIndex + 1) % noOfEnv
       val a = if (agent.isInstanceOf[org.nlogo.api.Turtle]) {
-        system.actorOf(Props(new QLAgent(environmentList(envIndex), qlDataAgent)), "QLAgent-" + agent.getVariable(0))
+        system.actorOf(Props(new QLAgent(netLogoActors, qlDataAgent)), "QLAgent-" + agent.getVariable(0))
       } else { // is patch
-        system.actorOf(Props(new QLAgent(environmentList(envIndex), qlDataAgent)), "QLAgent-" + agent.getVariable(0) + "-" + agent.getVariable(1))
+        system.actorOf(Props(new QLAgent(netLogoActors, qlDataAgent)), "QLAgent-" + agent.getVariable(0) + "-" + agent.getVariable(1))
       }
       
       a ! Init(experimenting, exploration)
@@ -169,7 +171,7 @@ class InitEnvironment extends DefaultCommand {
     
 }
 
-class AddGroupStructure extends DefaultCommand {
+class AddGroup extends DefaultCommand {
   import QLSystem._
   
   override def getAgentClassString = "O"
@@ -178,8 +180,7 @@ class AddGroupStructure extends DefaultCommand {
   
   def perform(args: Array[Argument], c: Context) {
      val agents = args(0).getAgentSet.agents
-     envIndex = (envIndex + 1) % noOfEnv
-     val g = system.actorOf(Props(new QLGroup(environmentList(envIndex), agents.size)))
+     val g = system.actorOf(Props(new QLGroup(netLogoActors, agents.size)))
      agents.foreach(agent => QLSystem.agentMap(agent) ! QLAgent.AddGroup(g))
   }
   

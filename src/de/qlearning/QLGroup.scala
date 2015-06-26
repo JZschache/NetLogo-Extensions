@@ -5,7 +5,7 @@ import akka.actor.{Actor, ActorRef, FSM}
 
 object QLGroup {
   
-  case class Choices(alternatives: List[String])
+  case class Choices(group: ActorRef, alternatives: List[String])
   case class Rewards(amounts: List[Double])
   
   // states
@@ -28,7 +28,7 @@ class QLGroup(val environment: ActorRef, val groupSize: Int) extends Actor  with
       val newSenders = sender :: senders
       val newMessages = alternative :: messages
       if (newSenders.size == groupSize) {
-        environment ! Choices(newMessages)
+        environment ! Choices(self, newMessages)
         goto(Waiting) using Initialized(newSenders, newMessages)
       } else {
         stay using Initialized(newSenders, newMessages)

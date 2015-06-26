@@ -106,7 +106,7 @@ class QLAgent(val environment: ActorRef, val dataAgent: AkkaAgent[QLAgent.QLData
   val generator: RandomEngine  = new MersenneTwister64(Platform.currentTime.toInt)
   val uniform = new Uniform(generator)
      
-    private def epsGreedy = (epsilon: Double) => {
+  private def epsGreedy = (epsilon: Double) => {
     if (uniform.nextDoubleFromTo(0, 1) < epsilon)
       RandomHelper.randomComponent(dataAgent.get.qValuesMap.keys)
     else
