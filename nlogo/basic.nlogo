@@ -14,26 +14,31 @@ to setup
     setxy random-xcor random-ycor
   ]
    
-  ql:init-environment turtles experimenting (list "forward" "turn right") "testreporter"
+  ql:init turtles experimenting "epsilon-greedy"
   
   reset-ticks
 end
 
-to-report testreporter [ env-id ]
-  let params ql:env-parameters env-id
-  ifelse (item 1 params) = "forward" [
-    ask (item 0 params) [fd 1]
-    report forward-reward
+to-report get-reward [ env-id ]
+  let params ql:get-decisions env-id
+  let first-and-only (item 0 params)
+  ifelse (item 1 first-and-only) = "forward" [
+    ask (item 0 first-and-only) [fd 1]
+    report (list forward-reward)
   ] [
-    ask (item 0 params) [right 90]
-    report right-reward
+    ask (item 0 first-and-only) [right 90]
+    report (list right-reward)
   ]
+end
+
+to-report get-groups 
+  report [ql:create-singleton self (list "forward" "turn right")] of turtles
 end
 
 to update-view
   wait 1
   ask turtles [
-    let qvalues ql:qvalues
+    let qvalues ql:get-q-values
     set qv1 (item 0 qvalues)
     set qv2 (item 1 qvalues)
   ]
@@ -43,11 +48,11 @@ end
 GRAPHICS-WINDOW
 743
 10
-1165
-453
+1193
+481
 -1
 -1
-12.903225806451612
+40.0
 1
 10
 1
@@ -58,9 +63,9 @@ GRAPHICS-WINDOW
 1
 1
 0
-31
+10
 0
-31
+10
 0
 0
 1
@@ -76,17 +81,17 @@ n-turtles
 n-turtles
 0
 100
-100
+10
 1
 1
 NIL
 HORIZONTAL
 
 BUTTON
-463
-37
-579
-70
+465
+45
+575
+78
 NIL
 setup
 NIL
@@ -100,12 +105,12 @@ NIL
 1
 
 BUTTON
-464
+465
 80
-616
+575
 113
 NIL
-ql:start-choice
+ql:start
 NIL
 1
 T
@@ -148,11 +153,11 @@ HORIZONTAL
 
 BUTTON
 465
-121
-609
-154
+115
+575
+148
 NIL
-ql:stop-choice
+ql:stop
 NIL
 1
 T
@@ -597,5 +602,5 @@ Line -7500403 true 150 150 90 180
 Line -7500403 true 150 150 210 180
 
 @#$#@#$#@
-0
+1
 @#$#@#$#@

@@ -16,7 +16,6 @@ object QLAgent {
 
   // finding an object with the highest value
   sealed trait HasValue { val value : Double}
-  
   def maximum[A <: HasValue](list: Iterable[A]) = {
     require(list.size >= 1)
     val maxima = list.tail.foldLeft(List(list.head))((result,b) => 
@@ -40,11 +39,11 @@ object QLAgent {
   // an object holding all the data of interest
   class QLData(val qValuesMap: Map[String,QValue], val nMap: Map[String, Double], val nTotal: Double, val lastChoice: String) {
     
-    def ++(newAlternatives: List[String]) = {
-      val newQvalue = qValuesMap ++ newAlternatives.map(alt => (alt -> new QValue(alt, 0.0, 0.0)))
-      val newN = nMap ++ newAlternatives.map(_ -> 0.0)
-      new QLData(newQvalue, newN, nTotal, lastChoice)
-    }
+//    def ++(newAlternatives: List[String]) = {
+//      val newQvalue = qValuesMap ++ newAlternatives.map(alt => (alt -> new QValue(alt, 0.0, 0.0)))
+//      val newN = nMap ++ newAlternatives.map(_ -> 0.0)
+//      new QLData(newQvalue, newN, nTotal, lastChoice)
+//    }
     
     def updated(alt:String, reward: Double) : QLData = {
       val newQvalue = qValuesMap.getOrElse(alt, new QValue(alt, 0.0, 0.0)).updated(reward)
@@ -54,39 +53,44 @@ object QLAgent {
     
     def this() = this(Map[String,QValue](), Map[String, Double](), 0.0, "")
     
-    def this(newAlternatives: List[String]) = this(newAlternatives.map(alt => (alt -> new QValue(alt, 0.0, 0.0))).toMap,
-        newAlternatives.map(_ -> 0.0).toMap, 0.0, "")
+//    def this(newAlternatives: List[String]) = this(newAlternatives.map(alt => (alt -> new QValue(alt, 0.0, 0.0))).toMap,
+//        newAlternatives.map(_ -> 0.0).toMap, 0.0, "")
     
   }
   
   // various decision making algorithms
   def getDecisionAlgorithm(exploration: String, dataAgent: AkkaAgent[QLAgent.QLData]) = {
     exploration match {
-      case "epsilon-greedy" => epsGreedy(dataAgent, _:Double)
-      case "softmax" => softmax(dataAgent, _:Double)
+      case "epsilon-greedy" => epsGreedy(dataAgent, _:List[String], _:Double)
+      case "softmax" => softmax(dataAgent, _:List[String], _:Double)
     }
   }
-  def epsGreedy = (dataAgent: AkkaAgent[QLAgent.QLData], epsilon: Double) => {
-    if (RandomHelper.uniform.nextDoubleFromTo(0, 1) < epsilon)
-      RandomHelper.randomComponent(dataAgent.get.qValuesMap.keys)
-    else
-      maximum(dataAgent.get.qValuesMap.values).alt
-  }
-  def softmax = (dataAgent: AkkaAgent[QLAgent.QLData], temperature:Double) => {
-    val expForm = dataAgent.get.qValuesMap.values.scanLeft(("".asInstanceOf[String], 0.0))((temp, qva) => (qva.alt, temp._2 + scala.math.exp(qva.value / temperature))).tail
-    val randomValue = RandomHelper.uniform.nextDoubleFromTo(0, expForm.last._2)
-    expForm.find(randomValue < _._2).get._1    
-  }
+  private def epsGreedy(dataAgent: AkkaAgent[QLAgent.QLData], alternatives: List[String], epsilon: Double): String = {
+      if (RandomHelper.uniform.nextDoubleFromTo(0, 1) < epsilon)
+        RandomHelper.randomComponent(alternatives)
+      else {
+        val qvm = dataAgent.get.qValuesMap
+        maximum(alternatives.map(alt => qvm.getOrElse(alt, new QValue(alt, 0.0, 0.0)))).alt
+      }
+    }
+    
+  private def softmax(dataAgent: AkkaAgent[QLAgent.QLData], alternatives: List[String], temperature:Double): String = {
+      val qvm = dataAgent.get.qValuesMap
+      val qvalues = alternatives.map(alt => qvm.getOrElse(alt, new QValue(alt, 0.0, 0.0)))
+      val expForm = qvalues.scanLeft(("".asInstanceOf[String], 0.0))((temp, qva) => (qva.alt, temp._2 + scala.math.exp(qva.value / temperature))).tail
+      val randomValue = RandomHelper.uniform.nextDoubleFromTo(0, expForm.last._2)
+      expForm.find(randomValue < _._2).get._1    
+    }
   
   // a class that holds data and helps with the decision making
-  class Decisions(val experimenting: Double, val decisionAlg: Double => String, var decrease: Boolean = false, var n: Double = 0.0) {
+  class Decisions(val experimenting: Double, val decisionAlg: (List[String], Double) => String, var decrease: Boolean = false, var n: Double = 0.0) {
 
-    def next = {
+    def next(alternatives: List[String]) = {
       if (decrease){
         n += 1.0
-        decisionAlg(experimenting / n)
+        decisionAlg(alternatives, experimenting / n)
       } else
-        decisionAlg(experimenting)
+        decisionAlg(alternatives, experimenting)
     }
     
     def startDecreasing = {
@@ -162,23 +166,24 @@ class QLAgent(val dataAgent: AkkaAgent[QLAgent.QLData], val experimenting: Doubl
 //  when(Choosing){
     
     case Choose(altList) => 
-      val decisions = if (groups.isEmpty){
-        val c = choice.next
-        environment ! Choice(c)
-        List[String](c)
-      } else {
-        // TODO: what to do if member of multiple groups
-        val c = choice.next
-        groups.first ! Choice(c)
-        List[String](c)
-      }
+      sender ! Choice(decisions.next(altList))
+//      val decisions = if (groups.isEmpty){
+//        val c = choice.next
+//        environment ! Choice(c)
+//        List[String](c)
+//      } else {
+//        // TODO: what to do if member of multiple groups
+//        val c = choice.next
+//        groups.first ! Choice(c)
+//        List[String](c)
+//      }
 //      goto(Waiting) using Initialized(choice.update)
       
     case Reward(alt, amount) =>
-    
+      dataAgent send { _.updated(alt, amount) }
       
-    case DecExp =>
-      decision = decision.startDecreasing
+    case DecExp => 
+      decisions.startDecreasing
   }
   
 //  when(Waiting){

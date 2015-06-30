@@ -2,7 +2,7 @@ package de.qlearning
 
 import java.util.{ List => JList }
 import java.io.File
-import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 import akka.actor.ActorSystem
 import akka.actor.ActorRef
 import akka.actor.Props
@@ -72,6 +72,8 @@ class QLExtension extends DefaultClassManager {
     manager.addPrimitive("stop", new Stop)
     manager.addPrimitive("get-decisions", rewProcHelper)
     manager.addPrimitive("decrease-experimenting", new DecreaseExperimenting)
+    manager.addPrimitive("create-singleton", new CreateSingleton)
+    manager.addPrimitive("create-group", new CreateGroup)
     // agent primitives
     manager.addPrimitive("get-q-values", new GetQValues)
     manager.addPrimitive("get-last-choice", new GetLastChoice)
@@ -103,14 +105,47 @@ class QLExtension extends DefaultClassManager {
     qlDataMap.values.foreach(_.close)
     qlDataMap = Map[Agent, AkkaAgent[QLAgent.QLData]]()
   }
-  
+    
+}
+
+class QLGroup(val group: List[(org.nlogo.api.Agent, List[String])]) extends org.nlogo.api.ExtensionObject {
+    
+  /**
+   * @param readable  If true the result should be readable as NetLogo code
+   * @param exporting If false the result is for display only
+   * @param reference If true the result may be a reference to a complete object exported in the extension section of the file if false the object should be recreatable from the result
+   * @return a string representation of the object.
+   */
+  def dump(readable: Boolean, exporting: Boolean, reference: Boolean): String = 
+    group.foldLeft("".toString())((s, pair) => s + "( " + pair._1.id + " : " + 
+        pair._2.tail.foldLeft(pair._2.head)((subs, alt) => subs + ", " + alt) + ")")
+
+  /** @return the name of the extension this object was created by */
+  def getExtensionName: String = QLSystem.QLEXTENSION
+
+  /**
+   * @return the type of this Object, which is extension defined.
+   *         If this is the only ExtensionObject type defined by this extension
+   *         it is appropriate to return an empty string.
+   */
+  def getNLTypeName: String = "QLGroup"
+
+  /**
+   * @return true if this object equal to obj
+   *         not simply the same object but all of the
+   *         elements are the same
+   */
+  def recursivelyEqual(obj: AnyRef): Boolean = {
+    obj.isInstanceOf[QLGroup] || obj.asInstanceOf[QLGroup].group.equals(this.group)
+  }
+    
 }
 
 class RewardProcedureHelper() extends DefaultReporter {
   
-  private var envParameterMap = Map[Int, AkkaAgent[List[String]]]()
+  private var envParameterMap = Map[Int, AkkaAgent[List[(org.nlogo.api.Agent,String)]]]()
   
-  def setParameter(envId: Int, agent: AkkaAgent[List[String]]) {
+  def setParameter(envId: Int, agent: AkkaAgent[List[(org.nlogo.api.Agent,String)]]) {
     envParameterMap = envParameterMap.updated(envId, agent)
   }
   
@@ -133,9 +168,8 @@ class Init extends DefaultCommand {
   
   override def getAgentClassString = "O"
   
-  // takes a turtle- / patchset, the names of the alternatives, 
-  // the experimenting and the exploration global
-  override def getSyntax = commandSyntax(Array( TurtlesetType | PatchsetType, ListType, NumberType, StringType))
+  // takes a turtle- / patchset, the experimenting and the exploration global
+  override def getSyntax = commandSyntax(Array( TurtlesetType | PatchsetType, NumberType, StringType))
   
   /**
    * new QLAgents are generated for the turtles / patches
@@ -143,15 +177,17 @@ class Init extends DefaultCommand {
    */
   def perform(args: Array[Argument], c: Context) {
     
-    val newAgents = args(0).getAgentSet.agents
-    val altList = try {
-      args(1).getList.toList.map(ar => ar.asInstanceOf[String])
-    } catch {
-      case ex:ClassCastException =>   
-        args(1).getList.toList.map(ar => ar.asInstanceOf[Double].toString)
-    }
-    val experimenting = args(2).getDoubleValue
-    val exploration = args(3).getString
+    netLogoSuper ! NetLogoActors.InitNetLogoActors
+    
+    val newAgents = args(0).getAgentSet.agents.asScala
+//    val altList = try {
+//      args(1).getList.toList.map(ar => ar.asInstanceOf[String])
+//    } catch {
+//      case ex:ClassCastException =>   
+//        args(1).getList.toList.map(ar => ar.asInstanceOf[Double].toString)
+//    }
+    val experimenting = args(1).getDoubleValue
+    val exploration = args(2).getString
     
     // set index of variables-array that holds the QLAgent 
     agentMappingIndex = if (newAgents.isEmpty) 0 else newAgents.first.variables.length   
@@ -164,19 +200,40 @@ class Init extends DefaultCommand {
       qlDataMap = qlDataMap.updated(nlAgent, qlDataAgent)
       // create a QLAgent
       val a = if (nlAgent.isInstanceOf[org.nlogo.api.Turtle]) {
-        system.actorOf(Props(new QLAgent(qlDataAgent)), "QLAgent-" + nlAgent.getVariable(0))
+        system.actorOf(Props(new QLAgent(qlDataAgent, experimenting, exploration)), "QLAgent-" + nlAgent.getVariable(0))
       } else { // is patch
-        system.actorOf(Props(new QLAgent(qlDataAgent)), "QLAgent-" + nlAgent.getVariable(0) + "-" + nlAgent.getVariable(1))
+        system.actorOf(Props(new QLAgent(qlDataAgent, experimenting, exploration)), "QLAgent-" + nlAgent.getVariable(0) + "-" + nlAgent.getVariable(1))
       }
+      // set the newly added variable
       nlAgent.setVariable(agentMappingIndex, a)
-      
-      a ! QLAgent.Init(experimenting, exploration)
-      a ! QLAgent.AddChoiceAltList(altList, true)
-      
       a
     }).toList
   }
     
+}
+
+class CreateSingleton extends DefaultReporter {
+  override def getAgentClassString = "OTPL"
+  override def getSyntax = reporterSyntax(Array( TurtleType | PatchType, ListType), WildcardType)
+  
+  def report(args: Array[Argument], context: Context): AnyRef = {
+    val agent = args(0).getAgent
+    val alternatives = args(1).getList.map(_.asInstanceOf[String]).toList
+    new QLGroup(List((agent,alternatives)))
+  }
+  
+}
+
+class CreateGroup extends DefaultReporter {
+  override def getAgentClassString = "OTPL"
+  override def getSyntax = reporterSyntax(Array( TurtlesetType | PatchsetType, ListType), WildcardType)
+  
+  def report(args: Array[Argument], context: Context): AnyRef = {
+    val agents = args(0).getAgentSet.agents.asScala
+    val alternatives = args(1).getList.map(_.asInstanceOf[String]).toList
+    new QLGroup(agents.map((_, alternatives)).toList) 
+  }
+  
 }
 
 //class AddGroup extends DefaultCommand {

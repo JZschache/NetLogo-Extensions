@@ -40,7 +40,7 @@ object NetLogoActors {
   case object Start
   case object Stop
   case class CompileReporter(modelPath: String, rewardReporterName: String)
-  case class HandleGroup(group: List[org.nlogo.api.Agent])
+  case class HandleGroup(group: QLGroup)
   
   
 //  case object GetNetLogoRouter
@@ -110,7 +110,7 @@ class NetLogoSupervisor(helper: RewardProcedureHelper) extends Actor with FSM[Ne
       
       override def preStart()  {
         (1 to conHeadlessEnv).foreach(id => {
-          val agent = AkkaAgent[List[String]](List())(context.system)
+          val agent = AkkaAgent[List[(org.nlogo.api.Agent,String)]](List())(context.system)
           helper.setParameter(id, agent)
           context.actorOf(Props(new NetLogoHeadlessActor(id, agent)).withDispatcher("netlogo-dispatcher"))
         })
@@ -138,7 +138,7 @@ class NetLogoSupervisor(helper: RewardProcedureHelper) extends Actor with FSM[Ne
     // routees arrive
     case Event(Children(routees: Iterable[ActorRef]), Uninitialized) =>
       // create router
-      val router = context.actorOf(Props().withRouter(SmallestMailboxRouter(routees)), routerName)
+      val router = context.actorOf(Props().withRouter(SmallestMailboxRouter(routees.toSeq)), routerName)
       // compile the reward- and group-reporter
       router ! Broadcast(CompileReporter(nlApp.workspace.getModelPath(), rewardRepName))
       val groupReporter = nlApp.workspace.compileReporter(groupRepName)
@@ -166,8 +166,10 @@ class NetLogoSupervisor(helper: RewardProcedureHelper) extends Actor with FSM[Ne
   when(Supervising) {
     case Event(Tick, Initialized(router, groupReporter)) =>
       
-      val result = nlApp.workspace.runCompiledReporter(nlApp.owner, groupReporter).asInstanceOf[List[List[org.nlogo.api.Agent]]]
-      result.foreach(group => router ! HandleGroup(group))
+      val result = nlApp.workspace.runCompiledReporter(nlApp.owner, groupReporter).asInstanceOf[org.nlogo.api.LogoList]
+      val r = result.foreach(group => {
+        router ! HandleGroup(group.asInstanceOf[QLGroup])
+      })
       
       //TODO: use slider-position to control speed 
       println(nlApp.workspace.speedSliderPosition())
@@ -197,7 +199,7 @@ class NetLogoSupervisor(helper: RewardProcedureHelper) extends Actor with FSM[Ne
    * (see also: https://groups.google.com/forum/#!msg/netlogo-devel/8oDmCRERDlQ/0IDZm015eNwJ). 
    */
 
-class NetLogoHeadlessActor(id: Int, helperAgent: AkkaAgent[List[String]]) extends Actor {
+class NetLogoHeadlessActor(id: Int, helperAgent: AkkaAgent[List[(org.nlogo.api.Agent,String)]]) extends Actor {
   import NetLogoActors._
   import QLSystem._
   import org.nlogo.headless.HeadlessWorkspace
@@ -208,7 +210,7 @@ class NetLogoHeadlessActor(id: Int, helperAgent: AkkaAgent[List[String]]) extend
   val workspace = HeadlessWorkspace.newInstance
   
   //private messages
-  private case class GroupChoice(group: List[ActorRef], alternatives: List[String])
+  private case class GroupChoice(group: List[org.nlogo.api.Agent], actorRefs: List[ActorRef], alternatives: List[String])
   
   override def postStop() {
     workspace.dispose()
@@ -233,26 +235,25 @@ class NetLogoHeadlessActor(id: Int, helperAgent: AkkaAgent[List[String]]) extend
     
     // if supervisor assigns a group to this HeadlessActor, it asks every agent to choose an alternative
     // and waits for their responses, which are send to self via the GroupChoice-message
-    case HandleGroup(group) => {
+    case HandleGroup(g) => {
       implicit val timeout = Timeout(60 seconds)
-      Future.sequence(group.map(agent => {
-        val ar = QLSystem.getActorRef(agent)
-        //TODO: Choice needs list of alternatives
-        val future = (ar ? QLAgent.Choose).mapTo[QLAgent.Choice]
-        future.map(f => (ar, f))
+      Future.sequence(g.group.map(pair => {
+        val ar = QLSystem.getActorRef(pair._1)
+        val future = (ar ? QLAgent.Choose(pair._2)).mapTo[QLAgent.Choice]
+        future.map(f => (pair._1, ar, f))
       })) onSuccess {
         case result =>
-          val unzipped = result.unzip
-          self ! GroupChoice(unzipped._1, unzipped._2.map(_.alternative))
+          val unzipped = result.unzip3
+          self ! GroupChoice(unzipped._1, unzipped._2, unzipped._3.map(_.alternative))
       }
     }
     
     // after a group of Agents has chosen alternatives, the HeadlessWorkspaceInstance is used
     // to calculate the reward, which are returned to the agents
-    case GroupChoice(group, alternatives) => {
-      helperAgent update alternatives
+    case GroupChoice(group, actorRefs, alternatives) => {
+      helperAgent update (group zip alternatives)
       val result = workspace.runCompiledReporter(workspace.defaultOwner, reporter).asInstanceOf[List[Double]]
-      (group, alternatives, result).zipped.foreach((agent, alt, r) => agent ! QLAgent.Reward(alt, r))
+      (actorRefs, alternatives, result).zipped.foreach((ar, alt, r) => ar ! QLAgent.Reward(alt, r))
     }
     
   }
