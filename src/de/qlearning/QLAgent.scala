@@ -18,13 +18,12 @@ object QLAgent {
   sealed trait HasValue { val value : Double}
   def maximum[A <: HasValue](list: Iterable[A]) = {
     require(list.size >= 1)
-    val maxima = list.tail.foldLeft(List(list.head))((result,b) => 
+    list.tail.foldLeft(List(list.head))((result,b) => 
       scala.math.signum(result.head.value - b.value) match {
         case -1 => List(b)
         case 1 => result
         case 0 => b :: result
       })
-    if (maxima.length == 1) maxima.head  else RandomHelper.randomComponent(maxima)
   }
   
   // the QValue-Object
@@ -61,36 +60,37 @@ object QLAgent {
   // various decision making algorithms
   def getDecisionAlgorithm(exploration: String, dataAgent: AkkaAgent[QLAgent.QLData]) = {
     exploration match {
-      case "epsilon-greedy" => epsGreedy(dataAgent, _:List[String], _:Double)
-      case "softmax" => softmax(dataAgent, _:List[String], _:Double)
+      case "epsilon-greedy" => epsGreedy(dataAgent, _:List[String], _:Double, _:RandomHelper)
+      case "softmax" => softmax(dataAgent, _:List[String], _:Double, _:RandomHelper)
     }
   }
-  private def epsGreedy(dataAgent: AkkaAgent[QLAgent.QLData], alternatives: List[String], epsilon: Double): String = {
-      if (RandomHelper.uniform.nextDoubleFromTo(0, 1) < epsilon)
-        RandomHelper.randomComponent(alternatives)
+  private def epsGreedy(dataAgent: AkkaAgent[QLAgent.QLData], alternatives: List[String], epsilon: Double, rh: RandomHelper): String = {
+      if (rh.uniform.nextDoubleFromTo(0, 1) < epsilon)
+        rh.randomComponent(alternatives)
       else {
         val qvm = dataAgent.get.qValuesMap
-        maximum(alternatives.map(alt => qvm.getOrElse(alt, new QValue(alt, 0.0, 0.0)))).alt
+        val maxima = maximum(alternatives.map(alt => qvm.getOrElse(alt, new QValue(alt, 0.0, 0.0))))
+        if (maxima.length == 1) maxima.head.alt  else rh.randomComponent(maxima).alt
       }
     }
     
-  private def softmax(dataAgent: AkkaAgent[QLAgent.QLData], alternatives: List[String], temperature:Double): String = {
+  private def softmax(dataAgent: AkkaAgent[QLAgent.QLData], alternatives: List[String], temperature:Double, rh: RandomHelper): String = {
       val qvm = dataAgent.get.qValuesMap
       val qvalues = alternatives.map(alt => qvm.getOrElse(alt, new QValue(alt, 0.0, 0.0)))
       val expForm = qvalues.scanLeft(("".asInstanceOf[String], 0.0))((temp, qva) => (qva.alt, temp._2 + scala.math.exp(qva.value / temperature))).tail
-      val randomValue = RandomHelper.uniform.nextDoubleFromTo(0, expForm.last._2)
+      val randomValue = rh.uniform.nextDoubleFromTo(0, expForm.last._2)
       expForm.find(randomValue < _._2).get._1    
     }
   
   // a class that holds data and helps with the decision making
-  class Decisions(val experimenting: Double, val decisionAlg: (List[String], Double) => String, var decrease: Boolean = false, var n: Double = 0.0) {
+  class Decisions(val experimenting: Double, val decisionAlg: (List[String], Double, RandomHelper) => String, var decrease: Boolean = false, var n: Double = 0.0) {
 
-    def next(alternatives: List[String]) = {
+    def next(alternatives: List[String], rh:RandomHelper) = {
       if (decrease){
         n += 1.0
-        decisionAlg(alternatives, experimenting / n)
+        decisionAlg(alternatives, experimenting / n, rh)
       } else
-        decisionAlg(alternatives, experimenting)
+        decisionAlg(alternatives, experimenting, rh)
     }
     
     def startDecreasing = {
@@ -101,7 +101,7 @@ object QLAgent {
 
   // messages
   case object DecExp
-  case class Choose(alternatives: List[String])
+  case class Choose(alternatives: List[String], rh: RandomHelper)
   case class Choice(alternative: String)
   case class Reward(alternative: String, amount: Double)
 
@@ -165,8 +165,8 @@ class QLAgent(val dataAgent: AkkaAgent[QLAgent.QLData], val experimenting: Doubl
   
 //  when(Choosing){
     
-    case Choose(altList) => 
-      sender ! Choice(decisions.next(altList))
+    case Choose(altList, rh) => 
+      sender ! Choice(decisions.next(altList, rh))
 //      val decisions = if (groups.isEmpty){
 //        val c = choice.next
 //        environment ! Choice(c)

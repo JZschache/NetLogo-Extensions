@@ -7,7 +7,7 @@ import cern.jet.random.engine.MersenneTwister64
 import scala.compat.Platform
 
 
-object RandomHelper {
+class RandomHelper {
 
   val generator: RandomEngine  = new MersenneTwister64(Platform.currentTime.toInt)
   val uniform = new Uniform(generator)

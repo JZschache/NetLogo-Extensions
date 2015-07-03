@@ -44,13 +44,13 @@ object QLSystem {
   val QLEXTENSION = "ql"
     
   // index of the (NetLogo-)agent's variables-array that holds the QLAgent 
-  var agentMappingIndex = 0
-  val getActorRef = (nlAgent: org.nlogo.api.Agent) => {
-    nlAgent.getVariable(agentMappingIndex).asInstanceOf[ActorRef]
-  }
+//  var agentMappingIndex = 0
+//  val getActorRef = (nlAgent: org.nlogo.api.Agent) => {
+//    nlAgent.getVariable(agentMappingIndex).asInstanceOf[ActorRef]
+//  }
     
-//  var agentMap = Map[Agent, ActorRef]()
-  var agents = List[ActorRef]()
+  var agentMap = Map[org.nlogo.api.Agent, ActorRef]()
+//  var agents = List[ActorRef]()
 //  var groupList = List[ActorRef]()
 //  var groupAgentsMap = Map[Int,List[Agent]]()
 //  var environmentList = List[ActorRef]()
@@ -68,6 +68,7 @@ class QLExtension extends DefaultClassManager {
   override def load(manager: PrimitiveManager) {
     // observer primitives
     manager.addPrimitive("init", new Init)
+    manager.addPrimitive("set-group-structure", new SetGroupStructure)
     manager.addPrimitive("start", new Start)
     manager.addPrimitive("stop", new Stop)
     manager.addPrimitive("get-decisions", rewProcHelper)
@@ -75,10 +76,10 @@ class QLExtension extends DefaultClassManager {
     manager.addPrimitive("create-singleton", new CreateSingleton)
     manager.addPrimitive("create-group", new CreateGroup)
     // agent primitives
-    manager.addPrimitive("get-q-values", new GetQValues)
+    manager.addPrimitive("get-q-value", new GetQValue)
     manager.addPrimitive("get-last-choice", new GetLastChoice)
     manager.addPrimitive("get-total-n", new GetTotalN)
-    manager.addPrimitive("get-n-list", new GetNs)
+    manager.addPrimitive("get-n", new GetN)
   }
   
   override def additionalJars: JList[String] = {
@@ -98,17 +99,17 @@ class QLExtension extends DefaultClassManager {
 //    groupList.foreach(group => system.stop(group))
 //    groupList = List[ActorRef]()
 //    groupAgentsMap = Map[Int, List[Agent]]()
-//    agentMap.values.foreach(agent => system.stop(agent))
-//    agentMap = Map[Agent, ActorRef]()
-    agents.foreach(agent => system.stop(agent))
-    agents = List[ActorRef]()
+    agentMap.values.foreach(agent => system.stop(agent))
+    agentMap = Map[Agent, ActorRef]()
+//    agents.foreach(agent => system.stop(agent))
+//    agents = List[ActorRef]()
     qlDataMap.values.foreach(_.close)
     qlDataMap = Map[Agent, AkkaAgent[QLAgent.QLData]]()
   }
     
 }
 
-class QLGroup(val group: List[(org.nlogo.api.Agent, List[String])]) extends org.nlogo.api.ExtensionObject {
+class QLGroup(val group: List[(org.nlogo.api.Agent, ActorRef, List[String])]) extends org.nlogo.api.ExtensionObject {
     
   /**
    * @param readable  If true the result should be readable as NetLogo code
@@ -118,7 +119,7 @@ class QLGroup(val group: List[(org.nlogo.api.Agent, List[String])]) extends org.
    */
   def dump(readable: Boolean, exporting: Boolean, reference: Boolean): String = 
     group.foldLeft("".toString())((s, pair) => s + "( " + pair._1.id + " : " + 
-        pair._2.tail.foldLeft(pair._2.head)((subs, alt) => subs + ", " + alt) + ")")
+        pair._3.tail.foldLeft(pair._3.head)((subs, alt) => subs + ", " + alt) + ")")
 
   /** @return the name of the extension this object was created by */
   def getExtensionName: String = QLSystem.QLEXTENSION
@@ -155,7 +156,7 @@ class RewardProcedureHelper() extends DefaultReporter {
   
   def report(args: Array[Argument], c: Context): AnyRef = {
     val param = envParameterMap(args(0).getIntValue).await(Timeout(5.seconds))
-    return param.toLogoList
+    return param.map(pair => List(pair._1, pair._2).toLogoList).toLogoList
   }
   
 }
@@ -190,11 +191,9 @@ class Init extends DefaultCommand {
     val exploration = args(2).getString
     
     // set index of variables-array that holds the QLAgent 
-    agentMappingIndex = if (newAgents.isEmpty) 0 else newAgents.first.variables.length   
+//    agentMappingIndex = if (newAgents.isEmpty) 0 else newAgents.first.variables.length   
       
-    agents = newAgents.map(nlAgent => {
-      // add an variable to the agent's variables-array
-      nlAgent.asInstanceOf[org.nlogo.agent.Agent].variables = nlAgent.variables ++ new Array[AnyRef](1)
+    agentMap = newAgents.map(nlAgent => {
       // create a QLData-object that holds all the information about the Q-learning process
       val qlDataAgent = AkkaAgent(new QLAgent.QLData())(system)
       qlDataMap = qlDataMap.updated(nlAgent, qlDataAgent)
@@ -204,13 +203,12 @@ class Init extends DefaultCommand {
       } else { // is patch
         system.actorOf(Props(new QLAgent(qlDataAgent, experimenting, exploration)), "QLAgent-" + nlAgent.getVariable(0) + "-" + nlAgent.getVariable(1))
       }
-      // set the newly added variable
-      nlAgent.setVariable(agentMappingIndex, a)
-      a
-    }).toList
+      nlAgent -> a
+    }).toMap
   }
     
 }
+
 
 class CreateSingleton extends DefaultReporter {
   override def getAgentClassString = "OTPL"
@@ -219,7 +217,7 @@ class CreateSingleton extends DefaultReporter {
   def report(args: Array[Argument], context: Context): AnyRef = {
     val agent = args(0).getAgent
     val alternatives = args(1).getList.map(_.asInstanceOf[String]).toList
-    new QLGroup(List((agent,alternatives)))
+    new QLGroup(List((agent, QLSystem.agentMap(agent), alternatives)))
   }
   
 }
@@ -231,10 +229,25 @@ class CreateGroup extends DefaultReporter {
   def report(args: Array[Argument], context: Context): AnyRef = {
     val agents = args(0).getAgentSet.agents.asScala
     val alternatives = args(1).getList.map(_.asInstanceOf[String]).toList
-    new QLGroup(agents.map((_, alternatives)).toList) 
+    new QLGroup(agents.map(a => (a, QLSystem.agentMap(a), alternatives)).toList) 
   }
   
 }
+
+class SetGroupStructure extends DefaultCommand {
+  import QLSystem._
+  
+  override def getAgentClassString = "O"
+  override def getSyntax = commandSyntax(Array(ListType))
+  
+  def perform(args: Array[Argument], c: Context) {
+    
+    val groupStructure = args(0).getList.map(_.asInstanceOf[QLGroup]).toList
+    netLogoSuper ! NetLogoActors.SetGroupStructure(groupStructure)
+    
+  }
+}
+
 
 //class AddGroup extends DefaultCommand {
 //  import QLSystem._
@@ -282,7 +295,7 @@ class DecreaseExperimenting extends DefaultCommand {
   override def getSyntax = commandSyntax(Array[Int]())
   
   def perform(args: Array[Argument], c: Context) {
-    QLSystem.agents.foreach(_ ! QLAgent.DecExp)
+    QLSystem.agentMap.values.foreach(_ ! QLAgent.DecExp)
   }
 }
 
@@ -313,18 +326,20 @@ class DecreaseExperimenting extends DefaultCommand {
 //  }
 //}
 
-class GetQValues extends DefaultReporter {
+class GetQValue extends DefaultReporter {
   override def getAgentClassString = "TP"    
-  override def getSyntax = reporterSyntax(Array[Int](), ListType)
+  override def getSyntax = reporterSyntax(Array(StringType), NumberType)
   def report(args: Array[Argument], c: Context): AnyRef = {
-    QLSystem.qlDataMap(c.getAgent).get.qValuesMap.foldLeft(List[Any]())((list, pair) => pair._2.value :: list).reverse.toLogoList
+    val key = args(0).getString
+    QLSystem.qlDataMap(c.getAgent).get.qValuesMap.getOrElse(key, new QLAgent.QValue(key, 0.0, 0.0)).value.toDouble.toLogoObject
   }
 }
-class GetNs extends DefaultReporter {
+class GetN extends DefaultReporter {
   override def getAgentClassString = "TP"    
-  override def getSyntax = reporterSyntax(Array[Int](), ListType)
+  override def getSyntax = reporterSyntax(Array(StringType), NumberType)
   def report(args: Array[Argument], c: Context): AnyRef = {
-    QLSystem.qlDataMap(c.getAgent).get.nMap.foldLeft(List[Any]())((list, pair) => pair._2 :: list).reverse.toLogoList
+    val key = args(0).getString
+    QLSystem.qlDataMap(c.getAgent).get.nMap.getOrElse(key, 0.0).toDouble.toLogoObject
   }
 }
 class GetTotalN extends DefaultReporter {

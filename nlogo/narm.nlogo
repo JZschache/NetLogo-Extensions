@@ -2,37 +2,48 @@ extensions[ql]
 
 patches-own[ qv1 qv2 ]
 
+globals[ group-structure ]
+
 to setup
   clear-all
 
   set-patch-size 400 / n-patches  
   resize-world 0 n-patches 0 n-patches
+    
+  ql:init patches experimenting "epsilon-greedy"
   
-  ql:init-environment patches experimenting (n-values n-alternatives [?]) "reward-function"
+  ;ql:set-group-structure [ql:create-singleton self (n-values n-alternatives [(word ?)])] of patches
+  
   
   reset-ticks
 end
 
-to-report reward-function [ env-id ]
-  let params ql:env-parameters env-id
-  ifelse (item 1 params) = "0.0" [
-    report random-normal mean-1 sd
-  ] [
-    report random-normal mean-2 sd
-  ]
+to-report get-reward [ env-id ]
+  let params ql:get-decisions env-id
+  ;let first-and-only (item 0 params)
+  ;ifelse (item 1 first-and-only) = "0" [
+  ;  report (list random-normal mean-1 sd)
+  ;] [
+  ;  report (list random-normal mean-2 sd)
+  ;]
+  report map [ifelse-value ((item 1 ?) = "0") [ random-normal mean-1 sd ] [ random-normal mean-2 sd ]] params
+end
+
+to-report get-groups 
+;  report [ql:create-singleton self (n-values n-alternatives [(word ?)])] of patches
+  report n-values 100 [ ql:create-group n-of 100 patches (n-values n-alternatives [(word ?)])]
 end
 
 to update-view
   
   ask patches [
-     ifelse ql:last-choice = "0.0" [
+     ifelse ql:get-last-choice = "0" [
       set pcolor blue
     ][
       set pcolor red
     ]
-    let qvalues ql:qvalues
-    set qv1 (item 0 qvalues)
-    set qv2 (item 1 qvalues)
+    set qv1 ql:get-q-value "0"
+    set qv2 ql:get-q-value "1"
   ]
   
   tick
@@ -103,7 +114,7 @@ BUTTON
 616
 113
 NIL
-ql:start-choice 
+ql:start
 NIL
 1
 T
@@ -150,7 +161,7 @@ BUTTON
 616
 149
 NIL
-ql:stop-choice
+ql:stop
 NIL
 1
 T
@@ -213,7 +224,7 @@ BUTTON
 240
 NIL
 update-view
-NIL
+T
 1
 T
 OBSERVER
@@ -260,6 +271,17 @@ false
 PENS
 "default" 1.0 0 -16777216 true "" "plot [qv1] of patch 0 0"
 "pen-1" 1.0 0 -7500403 true "" "plot [qv2] of patch 0 0"
+
+MONITOR
+430
+384
+677
+429
+NIL
+[ql:get-total-n] of patch 0 0
+17
+1
+11
 
 @#$#@#$#@
 ## WHAT IS IT?

@@ -1,61 +1,55 @@
 extensions[ql]
 
-turtles-own[qv1 qv2]
+patches-own[ qv1 qv2 n1 n2]
 
-globals[group-structure]
+globals[ group-structure ]
 
 to setup
   clear-all
-  
-  ; create a world with at least 9 patches per turtle
-  let n-patches (1 + floor sqrt (n-turtles * 9))
+
+  set-patch-size 400 / n-patches  
   resize-world 0 n-patches 0 n-patches
-  set-patch-size 400 / n-patches
+    
+  ;ql:init patches experimenting "epsilon-greedy"
   
-  create-turtles n-turtles [
-    setxy random-xcor random-ycor
+  ;ql:set-group-structure [ql:create-singleton self (n-values n-alternatives [(word ?)])] of patches
+  
+  ask patches [
+    set qv1 0
+    set qv2 0
+    set n1 0
+    set n2 0
   ]
-   
-  ql:init turtles experimenting "epsilon-greedy"
   
-  set group-structure [ql:create-singleton self (list "forward" "turn right")] of turtles
   
   reset-ticks
 end
 
-to-report get-reward [ env-id ]
-  let params ql:get-decisions env-id
-  let first-and-only (item 0 params)
-  ifelse (item 1 first-and-only) = "forward" [
-    ask (item 0 first-and-only) [fd 1]
-    report (list forward-reward)
-  ] [
-    ask (item 0 first-and-only) [right 90]
-    report (list right-reward)
+to go
+  
+  ask patches [
+    let choice one-of (n-values n-alternatives [(word ?)])
+    ifelse (choice = "0") [ 
+      set n1 n1 + 1
+      set qv1 qv1 + (1 / n1) * ((random-normal mean-1 sd) - qv1)
+      set pcolor blue
+    ] [
+      set n2 n2 + 1
+      set qv2 qv2 + (1 / n2) * ((random-normal mean-2 sd) - qv2)
+      set pcolor red
+    ]
   ]
-end
-
-to-report get-groups 
-  report group-structure
-end
-
-to update-view
-  wait 1
-  ask turtles [
-    set qv1 ql:get-q-value "forward"
-    set qv2 ql:get-q-value "turn right"
-  ]
-  tick 
+  
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
 743
 10
-1164
-452
+1157
+445
 -1
 -1
-12.903225806451612
+4.0
 1
 10
 1
@@ -66,9 +60,9 @@ GRAPHICS-WINDOW
 1
 1
 0
-31
+100
 0
-31
+100
 0
 0
 1
@@ -76,12 +70,12 @@ ticks
 30.0
 
 SLIDER
-65
-20
-237
-53
-n-turtles
-n-turtles
+68
+21
+240
+54
+n-patches
+n-patches
 0
 100
 100
@@ -91,10 +85,10 @@ NIL
 HORIZONTAL
 
 BUTTON
-515
-20
-625
-53
+463
+37
+579
+70
 NIL
 setup
 NIL
@@ -108,10 +102,10 @@ NIL
 1
 
 BUTTON
-515
-55
-625
-88
+464
+80
+616
+113
 NIL
 ql:start
 NIL
@@ -125,12 +119,12 @@ NIL
 1
 
 SLIDER
-65
-115
-237
-148
-forward-reward
-forward-reward
+63
+264
+235
+297
+mean-1
+mean-1
 0
 100
 50
@@ -140,25 +134,25 @@ NIL
 HORIZONTAL
 
 SLIDER
-65
-150
-237
-183
-right-reward
-right-reward
+63
+300
+235
+333
+mean-2
+mean-2
 0
 100
-22
+17
 1
 1
 NIL
 HORIZONTAL
 
 BUTTON
-515
-90
-625
-123
+464
+116
+616
+149
 NIL
 ql:stop
 NIL
@@ -172,25 +166,55 @@ NIL
 1
 
 SLIDER
-65
-55
-237
-88
+66
+67
+238
+100
 experimenting
 experimenting
 0
 1
-0.05
+0.1
 0.01
 1
 NIL
 HORIZONTAL
 
+SLIDER
+63
+225
+235
+258
+n-alternatives
+n-alternatives
+2
+10
+2
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+237
+226
+409
+259
+sd
+sd
+0
+100
+26.8
+0.1
+1
+NIL
+HORIZONTAL
+
 BUTTON
-515
-125
-625
-158
+484
+207
+604
+240
 NIL
 update-view
 T
@@ -204,11 +228,11 @@ NIL
 1
 
 PLOT
-273
-352
-473
-502
-plot 1
+128
+490
+328
+640
+qvalues
 NIL
 NIL
 0.0
@@ -219,27 +243,35 @@ true
 false
 "" ""
 PENS
-"default" 1.0 0 -16777216 true "" "plot mean [qv1] of turtles"
-"pen-1" 1.0 0 -7500403 true "" "plot mean [qv2] of turtles"
+"default" 1.0 0 -16777216 true "" "plot mean [qv1] of patches"
+"pen-1" 1.0 0 -7500403 true "" "plot mean [qv2] of patches"
+
+PLOT
+395
+510
+595
+660
+qvalue 0 0
+NIL
+NIL
+0.0
+10.0
+0.0
+10.0
+true
+false
+"" ""
+PENS
+"default" 1.0 0 -16777216 true "" "plot [qv1] of patch 0 0"
+"pen-1" 1.0 0 -7500403 true "" "plot [qv2] of patch 0 0"
 
 MONITOR
-321
-539
-471
-584
+430
+384
+677
+429
 NIL
-[qv1] of turtle 1
-17
-1
-11
-
-MONITOR
-525
-561
-675
-606
-NIL
-[qv2] of turtle 1
+[ql:get-total-n] of patch 0 0
 17
 1
 11
@@ -605,5 +637,5 @@ Line -7500403 true 150 150 90 180
 Line -7500403 true 150 150 210 180
 
 @#$#@#$#@
-1
+0
 @#$#@#$#@
