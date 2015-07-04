@@ -1,14 +1,14 @@
 package de.qlearning
 
 //import scala.compat.Platform
-import akka.actor.{Actor}
+import akka.actor.{Actor, ActorRef, FSM}
 import akka.agent.{Agent => AkkaAgent}
-//import akka.util.duration._
-//import cern.jet.random.engine.MersenneTwister64
-//import cern.jet.random.engine.RandomEngine
-//import cern.jet.random.Uniform
-//import org.nlogo.app.App
+import akka.dispatch.Future
+import akka.pattern.ask
+import akka.util.duration._
+import akka.util.Timeout
 import de.qlearning.util.RandomHelper
+import akka.actor.Cancellable
 //import akka.util.Timeout
 
 
@@ -99,31 +99,80 @@ object QLAgent {
     
   }
 
-  // messages
+  // messages QLAgent
   case object DecExp
   case class Choose(alternatives: List[String], rh: RandomHelper)
   case class Choice(alternative: String)
   case class Reward(alternative: String, amount: Double)
 
+  // states GroupActor
+  sealed class State
+  case object Idle extends State
+  case object Active extends State
+  // data GroupActor
+  sealed class Data
+  case object NoGroup extends Data
+  case class WithGroup(nlGroup: NLGroup, scheduler: Cancellable) extends Data
+  //messages GroupActor
+  case class SetGroup(nlGroup: NLGroup)
+  case class Start(once: Boolean, pauseMS: Int)
+  case object Stop
+    
 }
 
 
-//class EnvironmentActor(val reporterName: String) extends Actor {
-//  import QLAgent._ 
-//   
-//  def receive = {
-//    case Choice(agent, alternative) => {
-//      val result = if (agent.isInstanceOf[org.nlogo.api.Turtle])
-//        App.app.report(reporterName + " " + agent.getVariable(0).asInstanceOf[Double].round 
-//            + " \"" + alternative + "\"").asInstanceOf[Double]
-//      else
-//        App.app.report(reporterName + " " + agent.getVariable(0).asInstanceOf[Double].round 
-//            + " " + agent.getVariable(1).asInstanceOf[Double].round
-//            + " \"" + alternative + "\"").asInstanceOf[Double]
-//      sender ! Reward(result)
-//    }
-//  }
-//}
+class GroupActor(router: ActorRef, seed:Int) extends Actor with FSM[QLAgent.State, QLAgent.Data]{
+  import QLAgent._
+  
+  val rh = new util.RandomHelper(seed)
+  implicit val ec = context.dispatcher
+  
+  //private messages
+  case object Tick
+  
+  startWith(Idle, NoGroup)
+  
+  when(Idle) {
+    case Event(SetGroup(nlGroup), _) =>
+      stay using WithGroup(nlGroup, null)
+    
+    case Event(Start(once, pauseMS), WithGroup(nlGroup,_)) =>
+      if (once) {
+        val scheduler = context.system.scheduler.scheduleOnce(pauseMS.milliseconds, self, Tick)
+        goto(Active) using WithGroup(nlGroup, scheduler)
+      } else { 
+        context.system.scheduler.schedule(pauseMS.milliseconds, pauseMS.milliseconds, self, Tick)
+        stay
+      }
+  }
+  when(Active) {
+    case Event(Stop, WithGroup(nlGroup, scheduler)) => 
+      scheduler.cancel
+      goto(Idle)
+  }
+  
+  whenUnhandled {
+    case Event(Tick, WithGroup(nlGroup, scheduler)) =>
+      implicit val timeout = Timeout(60 seconds)
+      Future.sequence(nlGroup.group.map(triple => {
+        val ar = triple._2
+        val future = (ar ? QLAgent.Choose(triple._3, rh)).mapTo[QLAgent.Choice]
+        future.map(f => (triple._1, ar, f))
+      })) onSuccess {
+        case result =>
+          val unzipped = result.unzip3
+          router ! NetLogoActors.GroupChoice(unzipped._1, unzipped._2, unzipped._3.map(_.alternative))
+      }
+      stay
+    case Event(Start, _) =>
+      goto(Idle)
+    case Event(Stop, _) =>
+      goto(Idle)
+  }
+      
+  initialize
+  
+}
 
 class QLAgent(val dataAgent: AkkaAgent[QLAgent.QLData], val experimenting: Double, val exploration: String) extends Actor {
   import QLSystem._

@@ -4,12 +4,16 @@ import scala.collection.mutable.ArrayBuffer
 import cern.jet.random.engine.RandomEngine
 import cern.jet.random.Uniform
 import cern.jet.random.engine.MersenneTwister64
-import scala.compat.Platform
 
 
-class RandomHelper {
 
-  val generator: RandomEngine  = new MersenneTwister64(Platform.currentTime.toInt)
+/**
+ * scala.compat.Platform.currentTime.toInt 
+ */
+
+class RandomHelper(seed:Int) {
+
+  val generator: RandomEngine  = new MersenneTwister64(seed)
   val uniform = new Uniform(generator)
 
    /** Returns a new collection of the same type in a randomly chosen order.

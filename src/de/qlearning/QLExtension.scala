@@ -109,7 +109,7 @@ class QLExtension extends DefaultClassManager {
     
 }
 
-class QLGroup(val group: List[(org.nlogo.api.Agent, ActorRef, List[String])]) extends org.nlogo.api.ExtensionObject {
+class NLGroup(val group: List[(org.nlogo.api.Agent, ActorRef, List[String])]) extends org.nlogo.api.ExtensionObject {
     
   /**
    * @param readable  If true the result should be readable as NetLogo code
@@ -137,7 +137,7 @@ class QLGroup(val group: List[(org.nlogo.api.Agent, ActorRef, List[String])]) ex
    *         elements are the same
    */
   def recursivelyEqual(obj: AnyRef): Boolean = {
-    obj.isInstanceOf[QLGroup] || obj.asInstanceOf[QLGroup].group.equals(this.group)
+    obj.isInstanceOf[NLGroup] || obj.asInstanceOf[NLGroup].group.equals(this.group)
   }
     
 }
@@ -217,7 +217,7 @@ class CreateSingleton extends DefaultReporter {
   def report(args: Array[Argument], context: Context): AnyRef = {
     val agent = args(0).getAgent
     val alternatives = args(1).getList.map(_.asInstanceOf[String]).toList
-    new QLGroup(List((agent, QLSystem.agentMap(agent), alternatives)))
+    new NLGroup(List((agent, QLSystem.agentMap(agent), alternatives)))
   }
   
 }
@@ -229,7 +229,7 @@ class CreateGroup extends DefaultReporter {
   def report(args: Array[Argument], context: Context): AnyRef = {
     val agents = args(0).getAgentSet.agents.asScala
     val alternatives = args(1).getList.map(_.asInstanceOf[String]).toList
-    new QLGroup(agents.map(a => (a, QLSystem.agentMap(a), alternatives)).toList) 
+    new NLGroup(agents.map(a => (a, QLSystem.agentMap(a), alternatives)).toList) 
   }
   
 }
@@ -242,7 +242,7 @@ class SetGroupStructure extends DefaultCommand {
   
   def perform(args: Array[Argument], c: Context) {
     
-    val groupStructure = args(0).getList.map(_.asInstanceOf[QLGroup]).toList
+    val groupStructure = args(0).getList.map(_.asInstanceOf[NLGroup]).toList
     netLogoSuper ! NetLogoActors.SetGroupStructure(groupStructure)
     
   }
