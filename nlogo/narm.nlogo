@@ -12,7 +12,7 @@ to setup
     
   ql:init patches experimenting "epsilon-greedy"
   
-  ;ql:set-group-structure [ql:create-singleton self (n-values n-alternatives [(word ?)])] of patches
+  ql:set-group-structure [ql:create-singleton self (n-values n-alternatives [(word ?)])] of patches
   
   
   reset-ticks
@@ -29,10 +29,10 @@ to-report get-reward [ env-id ]
   report map [ifelse-value ((item 1 ?) = "0") [ random-normal mean-1 sd ] [ random-normal mean-2 sd ]] params
 end
 
-to-report get-groups 
+;to-report get-groups 
 ;  report [ql:create-singleton self (n-values n-alternatives [(word ?)])] of patches
-  report n-values 100 [ ql:create-group n-of 100 patches (n-values n-alternatives [(word ?)])]
-end
+;  report n-values 100 [ ql:create-group n-of 100 patches (n-values n-alternatives [(word ?)])]
+;end
 
 to update-view
   
@@ -52,11 +52,11 @@ end
 GRAPHICS-WINDOW
 743
 10
-1157
-445
+1353
+641
 -1
 -1
-4.0
+200.0
 1
 10
 1
@@ -67,9 +67,9 @@ GRAPHICS-WINDOW
 1
 1
 0
-100
+2
 0
-100
+2
 0
 0
 1
@@ -85,7 +85,7 @@ n-patches
 n-patches
 0
 100
-100
+2
 1
 1
 NIL
