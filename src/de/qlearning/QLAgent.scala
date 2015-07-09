@@ -109,7 +109,7 @@ object QLAgent {
 }
 
 // an object holding all the data of interest
-//  class QLData(val qValuesMap: Map[String,QValue], val nMap: Map[String, Double], val nTotal: Double, val lastChoice: String, val decrease: Boolean, val decN: Double) {
+// class QLData(val qValuesMap: Map[String,QValue], val nMap: Map[String, Double], val nTotal: Double, val lastChoice: String, val decrease: Boolean, val decN: Double) {
 class QLAgent(val experimenting: Double, val qValuesMap: Map[String,QLAgent.QValue], val nTotal: Double, val lastChoice: String, 
   val choiceAlg: (Map[String,QLAgent.QValue], List[String], Double, RandomHelper) => String,
   val decrease: Boolean, val decN: Double) {
@@ -142,7 +142,7 @@ class QLAgent(val experimenting: Double, val qValuesMap: Map[String,QLAgent.QVal
     
   }
 
-class GroupHandler(router: ActorRef, seed:Int, fixedGroups: List[NLGroup]) extends Actor with FSM[QLAgent.State, QLAgent.Data]{
+class GroupHandler(netLogoRouter: ActorRef, seed:Int, fixedGroups: List[NLGroup]) extends Actor with FSM[QLAgent.State, QLAgent.Data]{
   import QLAgent._
   
   val rh = new util.RandomHelper(seed)
@@ -163,12 +163,20 @@ class GroupHandler(router: ActorRef, seed:Int, fixedGroups: List[NLGroup]) exten
 //  } 
   
   private def handleGroup(group: NLGroup) = {
-    val result = group.alternatives.map(pair => {
-      // choice may be done before all updates (QValue) have been placed
-      (pair._1, pair._1.get.choose(pair._2, rh))
-    })
-    val unzipped = result.unzip
-    router ! NetLogoActors.GroupChoice(group.nlAgents, unzipped._1, unzipped._2)
+//    val result = group.alternatives.map(pair => {
+//      // choice may be done before all updates (QValue) have been placed
+//      (pair._1, pair._1.get.choose(pair._2, rh))
+//    })
+    implicit val timeout = Timeout(1 second)
+    implicit val ec = context.dispatcher
+    
+    // wait for choice of agents until all updates (QValue) have been placed
+    Future.sequence(group.alternatives.map(pair => 
+      pair._1.future map {_.choose(pair._2, rh)}
+    )) onSuccess {
+      case list =>
+        netLogoRouter ! NetLogoActors.GroupChoice(new NLGroupChoice(group.nlAgents, group.qlAgents, list, Nil))  
+    }
   }
     
   if (fixedGroups.isEmpty)

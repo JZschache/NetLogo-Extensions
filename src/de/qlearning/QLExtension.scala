@@ -10,7 +10,6 @@ import akka.routing.FromConfig
 import org.nlogo.api._
 import org.nlogo.api.Syntax._
 import org.nlogo.api.ScalaConversions._
-//import org.nlogo.app.App
 import com.typesafe.config.ConfigFactory
 import akka.dispatch.Await
 import akka.pattern.ask
@@ -18,6 +17,9 @@ import akka.util.Timeout
 import akka.util.duration._
 import akka.agent.{ Agent => AkkaAgent }
 import akka.routing.Broadcast
+import akka.dispatch.ExecutionContext
+import akka.routing.SmallestMailboxRouter
+
 
 object QLSystem {
   
@@ -38,7 +40,12 @@ object QLSystem {
   // the helper keeps track of parameters that are set by an NetLogoHeadlessActor and 
   // used from an NetLogoHeadlessApp in reward function calls
   val rewProcHelper: RewardProcedureHelper = new RewardProcedureHelper(system)
-  val netLogoSuper = system.actorOf(Props[NetLogoSupervisor].withDispatcher(NetLogoActors.dispatcherName), NetLogoActors.supervisorName)
+  val conHeadlessEnv = system.settings.config.getInt("netlogo.concurrent-headless-environments")
+  val routeesMap = (1 to conHeadlessEnv).map(id => {
+    (id -> system.actorOf(Props(new NetLogoHeadlessActor(id)).withDispatcher(NetLogoActors.dispatcherName)))
+  }).toMap
+  val netLogoRouter = system.actorOf(Props[NetLogoHeadlessActor].withRouter(SmallestMailboxRouter(routeesMap.values)), NetLogoActors.routerName)
+  val netLogoSuper = system.actorOf(Props(new NetLogoSupervisor(netLogoRouter)).withDispatcher(NetLogoActors.dispatcherName), NetLogoActors.supervisorName)
   
   
   val QLEXTENSION = "ql"
@@ -49,12 +56,13 @@ object QLSystem {
 //    nlAgent.getVariable(agentMappingIndex).asInstanceOf[ActorRef]
 //  }
     
-  var agentMap = Map[org.nlogo.api.Agent, ActorRef]()
+//  var agentMap = Map[org.nlogo.api.Agent, ActorRef]()
 //  var agents = List[ActorRef]()
 //  var groupList = List[ActorRef]()
 //  var groupAgentsMap = Map[Int,List[Agent]]()
 //  var environmentList = List[ActorRef]()
 //  var envIndex = -1
+    //TODO: should be an AkkaAgent
   var qlDataMap = Map[Agent, AkkaAgent[QLAgent]]()  
   
   def init() {
@@ -109,7 +117,7 @@ class QLExtension extends DefaultClassManager {
     
 }
 
-class NLGroup(val nlAgents: List[org.nlogo.api.Agent], val alternatives: List[(AkkaAgent[QLAgent], List[String])]) extends org.nlogo.api.ExtensionObject {
+class NLGroup(val nlAgents: List[org.nlogo.api.Agent], val qlAgents: List[AkkaAgent[QLAgent]], val alternatives: List[(AkkaAgent[QLAgent], List[String])]) extends org.nlogo.api.ExtensionObject {
     
   /**
    * @param readable  If true the result should be readable as NetLogo code
@@ -130,7 +138,7 @@ class NLGroup(val nlAgents: List[org.nlogo.api.Agent], val alternatives: List[(A
    *         If this is the only ExtensionObject type defined by this extension
    *         it is appropriate to return an empty string.
    */
-  def getNLTypeName: String = "QLGroup"
+  def getNLTypeName: String = "NLGroup"
 
   /**
    * @return true if this object equal to obj
@@ -143,11 +151,45 @@ class NLGroup(val nlAgents: List[org.nlogo.api.Agent], val alternatives: List[(A
     
 }
 
+class NLGroupChoice(val nlAgents: List[org.nlogo.api.Agent], val qlAgents: List[AkkaAgent[QLAgent]], val choices: List[String], val results: List[Double]) extends org.nlogo.api.ExtensionObject {
+  
+  /**
+   * @param readable  If true the result should be readable as NetLogo code
+   * @param exporting If false the result is for display only
+   * @param reference If true the result may be a reference to a complete object exported in the extension section of the file if false the object should be recreatable from the result
+   * @return a string representation of the object.
+   */
+  def dump(readable: Boolean, exporting: Boolean, reference: Boolean): String = 
+//    group.foldLeft("".toString())((s, pair) => s + "( " + pair._1.id + " : " + 
+//        pair._3.tail.foldLeft(pair._3.head)((subs, alt) => subs + ", " + alt) + ")")
+    nlAgents.foldLeft("".toString())((s, a) => s + " " + a.id + " ")
+
+  /** @return the name of the extension this object was created by */
+  def getExtensionName: String = QLSystem.QLEXTENSION
+
+  /**
+   * @return the type of this Object, which is extension defined.
+   *         If this is the only ExtensionObject type defined by this extension
+   *         it is appropriate to return an empty string.
+   */
+  def getNLTypeName: String = "NLGroupChoice"
+
+  /**
+   * @return true if this object equal to obj
+   *         not simply the same object but all of the
+   *         elements are the same
+   */
+  def recursivelyEqual(obj: AnyRef): Boolean = {
+    obj.isInstanceOf[NLGroupChoice] && obj.asInstanceOf[NLGroupChoice].nlAgents.equals(this.nlAgents)
+  }
+    
+}
+
 class RewardProcedureHelper(system: ActorSystem) extends DefaultReporter {
   
-  val helper = system.actorOf(Props[NetLogoHelperActor].withDispatcher(NetLogoActors.dispatcherName), NetLogoActors.helperName)
+//  val helper = system.actorOf(Props[NetLogoHelperActor].withDispatcher(NetLogoActors.dispatcherName), NetLogoActors.helperName)
   
-  
+//  implicit val ec = system.dispatchers.lookup("my-dispatcher")
   
 //  def getLargestKey = (0 /: envParameterMap.keys) (Math.max(_,_))
   
@@ -157,14 +199,16 @@ class RewardProcedureHelper(system: ActorSystem) extends DefaultReporter {
   
   override def getAgentClassString = "O"
   
-  override def getSyntax = reporterSyntax(Array[Int](NumberType), ListType)
+  override def getSyntax = reporterSyntax(Array[Int](NumberType), WildcardType)
   
   def report(args: Array[Argument], c: Context): AnyRef = {
+//    println("rewardProcedureHelperCall: " + args(0).getIntValue)
     implicit val timeout = Timeout(5 seconds)
     implicit val ec = system.dispatcher
-    val future = (helper ? NetLogoActors.GetParam(args(0).getIntValue)).mapTo[NetLogoActors.Param]
-    val param = Await.result(future, 5 seconds).param
-    
+    val future = (QLSystem.routeesMap(args(0).getIntValue) ? NetLogoActors.GetGroupChoice).mapTo[NetLogoActors.GroupChoice]
+    //TODO: coding the future
+//    val param = Await.result(future, 5 seconds).param
+//    println("params reveived: " + param)
 //    val param = envParameterMap(args(0).getIntValue).await(Timeout(5.seconds))
     return param.map(pair => List(pair._1, pair._2).toLogoList).toLogoList
   }
@@ -374,14 +418,4 @@ class GetLastChoice extends DefaultReporter {
     QLSystem.qlDataMap(c.getAgent).get.lastChoice.toLogoObject
   }
 }
-
-
-
-//class GetAgentsOfGroup extends DefaultReporter {
-//  override def getAgentClassString = "O"    
-//  override def getSyntax = reporterSyntax(Array[Int](NumberType), ListType)
-//  def report(args: Array[Argument], c: Context): AnyRef = { 
-//    QLSystem.groupAgentsMap(args(0).getIntValue).toLogoList
-//  }
-//}
 

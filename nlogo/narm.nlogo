@@ -85,7 +85,7 @@ n-patches
 n-patches
 0
 100
-2
+100
 1
 1
 NIL
