@@ -162,20 +162,22 @@ class GroupHandler(netLogoRouter: ActorRef, seed:Int, fixedGroups: List[NLGroup]
 //    }
 //  } 
   
-  private def handleGroup(group: NLGroup) = {
+  private def handleGroups(groups: List[NLGroup]) = {
 //    val result = group.alternatives.map(pair => {
 //      // choice may be done before all updates (QValue) have been placed
 //      (pair._1, pair._1.get.choose(pair._2, rh))
 //    })
     implicit val timeout = Timeout(1 second)
-    implicit val ec = context.dispatcher
+    implicit val ec = context.dispatcher // default dispatcher
     
     // wait for choice of agents until all updates (QValue) have been placed
-    Future.sequence(group.alternatives.map(pair => 
+    Future.sequence(groups.map(group => Future.sequence(group.alternatives.map(pair => 
       pair._1.future map {_.choose(pair._2, rh)}
-    )) onSuccess {
-      case list =>
-        netLogoRouter ! NetLogoActors.GroupChoice(new NLGroupChoice(group.nlAgents, group.qlAgents, list, Nil))  
+    )))) onSuccess {
+      case list =>  {
+        val groupsChoices = (groups zip list).map(pair => new NLGroupChoice(pair._1.nlAgents, pair._1.qlAgents, pair._2, Nil))
+        netLogoRouter ! NetLogoActors.GroupsChoices(groupsChoices)
+      }
     }
   }
     
@@ -195,7 +197,7 @@ class GroupHandler(netLogoRouter: ActorRef, seed:Int, fixedGroups: List[NLGroup]
   when(Active) {
     case Event(Tick, _) => {
 //      println("Tick in GroupActor")
-      fixedGroups.foreach(handleGroup(_))
+      handleGroups(fixedGroups)
       stay
     }
 //    case Event(Stop, WithScheduler(scheduler)) => {
@@ -206,7 +208,7 @@ class GroupHandler(netLogoRouter: ActorRef, seed:Int, fixedGroups: List[NLGroup]
   
   whenUnhandled {
     case Event(HandleGroups(grouplist: List[NLGroup]), _) => {
-      grouplist.foreach(handleGroup(_))
+      handleGroups(grouplist)
       stay
     }
 //    case Event(Tick, _) =>

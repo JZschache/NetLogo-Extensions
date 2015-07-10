@@ -18,15 +18,34 @@ to setup
   reset-ticks
 end
 
+to-report reward [group-choice]
+  let decisions ql:get-decisions group-choice
+  ;show decisions
+  let rewards (map [ifelse-value (? = "0") [ random-normal mean-1 sd ] [ random-normal mean-2 sd ]] decisions)
+  ;show rewards
+  let new-object ql:set-rewards group-choice rewards
+  report new-object
+end
+
 to-report get-reward [ env-id ]
-  let params ql:get-decisions env-id
+  let dec-list ql:get-param-list env-id
+  
+  let result map [reward ?] dec-list
+  
+  ;let decisions ql:get-decisions dec-object
+  ;show decisions
+  ;let rewards (map [ifelse-value (? = "0") [ random-normal mean-1 sd ] [ random-normal mean-2 sd ]] decisions)
+  ;show rewards
+  ;let new-object ql:set-rewards dec-object rewards
+  ;show "return result"
+  report result
   ;let first-and-only (item 0 params)
   ;ifelse (item 1 first-and-only) = "0" [
   ;  report (list random-normal mean-1 sd)
   ;] [
   ;  report (list random-normal mean-2 sd)
   ;]
-  report map [ifelse-value ((item 1 ?) = "0") [ random-normal mean-1 sd ] [ random-normal mean-2 sd ]] params
+  ;report map [ifelse-value ((item 1 ?) = "0") [ random-normal mean-1 sd ] [ random-normal mean-2 sd ]] params
 end
 
 ;to-report get-groups 
@@ -52,11 +71,11 @@ end
 GRAPHICS-WINDOW
 743
 10
-1353
-641
+1157
+445
 -1
 -1
-200.0
+4.040404040404041
 1
 10
 1
@@ -67,9 +86,9 @@ GRAPHICS-WINDOW
 1
 1
 0
-2
+99
 0
-2
+99
 0
 0
 1
@@ -85,7 +104,7 @@ n-patches
 n-patches
 0
 100
-100
+99
 1
 1
 NIL

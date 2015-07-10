@@ -3,6 +3,7 @@ package de.qlearning
 import akka.actor.Actor
 import akka.actor.ActorRef
 import akka.actor.OneForOneStrategy
+import akka.actor.SupervisorStrategy
 import akka.actor.SupervisorStrategy._
 import akka.actor.ActorKilledException
 import akka.actor.ActorInitializationException
@@ -11,16 +12,20 @@ import akka.actor.Cancellable
 import akka.routing.{SmallestMailboxRouter, BroadcastRouter, FromConfig}
 import akka.agent.{ Agent => AkkaAgent }
 import akka.routing.Broadcast
+import akka.routing.Route
+import akka.routing.RouteeProvider
 import akka.actor.FSM
 import akka.dispatch.Future
+import akka.dispatch.Dispatchers
 import akka.pattern.ask
 import akka.util.Timeout
 import akka.util.duration._
-
 import akka.dispatch.ExecutionContext
-//import scala.concurrent.ExecutionContext
 import scala.collection.immutable.Queue
 import java.util.concurrent.Executors
+import akka.routing.RouterConfig
+import java.util.concurrent.atomic.AtomicInteger
+import akka.routing.Destination
 
 
 object NetLogoActors {
@@ -30,10 +35,10 @@ object NetLogoActors {
 //  case object ReturnData
 //  case class AlteredAgent(agent: Agent, alt: String, reward: Double)
   
-  val supervisorName = "NetLogoSupervisor"
+//  val supervisorName = "NetLogoSupervisor"
   val helperName = "NetLogoHelper"
 //  val routeeSuperName = "NetLogoRouteeSuper"
-  val routerName = "NetLogoActorsRouter"
+//  val routerName = "NetLogoActorsRouter"
   val dispatcherName = "netlogo-dispatcher"
     
   val config = QLSystem.system.settings.config
@@ -62,12 +67,13 @@ object NetLogoActors {
   case object CompileReporter
 //  case class HandleGroup(group: QLGroup)
 //  case class HandleGroups(groups: List[QLGroup])
-  case class GroupChoice(groupChoice: NLGroupChoice)
+  case class NLGroupChoicesList(list: List[NLGroupChoice])
+//  case class GroupChoice(groupChoice: NLGroupChoice)
   
 //  case object GetIdFromHelper
 //  case class IdFromHelper(id: Int)
 //  case class Update(id: Int, param: List[(org.nlogo.api.Agent,String)])
-  case class GetGroupChoice
+  case class GetNLGroupChoices(id: Int)
   
 //  case object GetNetLogoRouter
 //  case class NetLogoRouter(router: ActorRef)
@@ -158,12 +164,12 @@ class NetLogoSupervisor(netLogoRouter: ActorRef) extends Actor with FSM[NetLogoA
   startWith(Idle, Uninitialized)
   
   when(Idle) {
-    // no router yet
     case Event(InitNetLogoActors, data) => {
+      // the groups structure is deleted, schedulers are cancelled, 
+      // the NetLogo-model is reloaded and the reward-reporter is recompiled
       data match {
         case Uninitialized => // do nothing
-//        case Initialized(router: ActorRef) =>
-//          router
+        case Initialized => // do nothing
         case WithGroupStructure(groups) =>
           context.system.stop(groups)
         case WithGroupStructureAndScheduler(groups, scheduler) =>
@@ -175,10 +181,7 @@ class NetLogoSupervisor(netLogoRouter: ActorRef) extends Actor with FSM[NetLogoA
           if (!scheduler.isCancelled)
             scheduler.cancel
       }
-//      val routeeSuper = context.actorFor(routeeSuperName)
-//      routeeSuper ! GetChildren
       netLogoRouter ! Broadcast(CompileReporter)
-//      stay using Initialized(router)
       stay using Initialized
     }
     
@@ -229,6 +232,8 @@ class NetLogoSupervisor(netLogoRouter: ActorRef) extends Actor with FSM[NetLogoA
     }
     
     // start without fixed GroupStructure
+    // the group-reporter is called repeatedly 
+    // in order to get a list of objects of type NLGroup 
     case Event(Start, Initialized) => {
       val seed = scala.compat.Platform.currentTime.toInt
       val routees = (1 to groupNo).map(id => {
@@ -319,7 +324,9 @@ class NetLogoHeadlessActor(val id: Int) extends Actor {
   import org.nlogo.headless.HeadlessWorkspace
   
   // use the (pinned) netlogo-dispatcher as execution environment of the futures
-  implicit val ec = context.dispatcher
+//  implicit val ec = context.dispatcher
+  // use the system's default dispatcher
+  implicit val executionContext = system.dispatcher
 //  implicit val ec = ExecutionContext.fromExecutorService(Executors.newCachedThreadPool())
   
   val workspace = HeadlessWorkspace.newInstance
@@ -347,7 +354,7 @@ class NetLogoHeadlessActor(val id: Int) extends Actor {
     case CompileReporter => {
       workspace.modelOpened = false
       workspace.open(org.nlogo.app.App.app.workspace.getModelPath())
-      context.become(ready(workspace.compileReporter(rewardRepName + " " + id), Queue[NLGroupChoice]()))
+      context.become(ready(workspace.compileReporter(rewardRepName + " " + id), Queue[List[NLGroupChoice]]()) orElse idle)
     }
     
     // if other messages arrive, send them again in 1 second 
@@ -357,30 +364,37 @@ class NetLogoHeadlessActor(val id: Int) extends Actor {
   }
   
   // waiting to load a model and compile a reporter
-  def ready(reporter: org.nlogo.nvm.Procedure, data: Queue[NLGroupChoice]) : Receive = {
+  def ready(reporter: org.nlogo.nvm.Procedure, data: Queue[List[NLGroupChoice]]) : Receive = {
     
-    case GroupChoice(groupChoice) => {
+    case GroupsChoices(groupsChoices) => {
 //      println("HeadlessActor " + id + " handles GroupChoice")
 //      helper ! Update(id, group zip alternatives)
+//      println(groupsChoices.foldLeft("")((e,f) => e + " " + f.choices))
       Future {
-        workspace.runCompiledReporter(workspace.defaultOwner, reporter).asInstanceOf[NLGroupChoice]
+          workspace.runCompiledReporter(workspace.defaultOwner, reporter).asInstanceOf[org.nlogo.api.LogoList]
       } onSuccess {
-        case groupChoice =>
-          (groupChoice.qlAgents, groupChoice.choices, groupChoice.results).zipped.foreach((agent, alt, r) => agent send {_.updated(alt, r)})
+        case groupsChoices =>
+//          println("Success: " + groupsChoices.size)
+          groupsChoices.foreach(ar => {
+            val groupChoice = ar.asInstanceOf[NLGroupChoice]
+//            println(groupChoice.choices + " " + groupChoice.results)
+            (groupChoice.qlAgents, groupChoice.choices, groupChoice.results).zipped.foreach((agent, alt, r) => agent send {_.updated(alt, r)})    
+          })
+        
       }
 //      val result = workspace.runCompiledReporter(workspace.defaultOwner, reporter).asInstanceOf[org.nlogo.api.LogoList]
 //    (qlAgents, alternatives, result.map(_.asInstanceOf[Double]).toList).zipped.foreach((agent, alt, r) => agent send {_.updated(alt, r)})  
-      context.become(ready(reporter, data.enqueue(groupChoice)))
+      context.become(ready(reporter, data.enqueue(groupsChoices)) orElse idle)
     }
     
     case GetGroupChoice => {
-      val (element, newData) = data.dequeue
-      sender ! GroupChoice(element)
-      context.become(ready(reporter, newData))
+//      println("GetGroupChoice: " + id + " " + data.length)
+      val (elements, newData) = data.dequeue
+      sender ! GroupsChoices(elements)
+//      println("GetGroupChoice: " + element)
+      context.become(ready(reporter, newData) orElse idle)
     }
     
-    case anyMessage: Any =>
-      println("NetLogoHeadlessActor: unhandled message in waiting'" + anyMessage + "'")
   }
   
   def receive = idle
@@ -431,23 +445,46 @@ class NetLogoHeadlessActor(val id: Int) extends Actor {
 
 }
 
-//class NetLogoHelperActor extends Actor {
-//  import NetLogoActors._
-//  
-//  def withMap(map: Map[Int, List[(org.nlogo.api.Agent,String)]], maxKey: Int): Receive = {
-//    case GetIdFromHelper => {
-//      val id = maxKey + 1
-//      sender ! IdFromHelper(id)
-//      context.become(withMap(map.updated(id, List[(org.nlogo.api.Agent,String)]()), id))
-//    }
-//    case Update(id, param) => {
-//      println("Update: " + id)
-//      context.become(withMap(map.updated(id, param), maxKey))
-//    }
-//    case GetParam(id) => {
-//      println("GetParam: " + id)
-//      sender ! Param(map.getOrElse(id, List[(org.nlogo.api.Agent,String)]()))
-//    }
+case class NetLogoHeadlessRouter(size: Int) extends RouterConfig {
+ 
+  def routerDispatcher: String = Dispatchers.DefaultDispatcherId
+  def supervisorStrategy: SupervisorStrategy = SupervisorStrategy.defaultStrategy
+ 
+  def createRoute(routeeProps: Props, routeeProvider: RouteeProvider): Route = {
+    
+    val currentRoutees = if (size < 1) 
+      IndexedSeq(routeeProvider.context.system.deadLetters)
+    else
+      (0 until size).map(id => {
+        routeeProvider.context.actorOf(Props(new NetLogoHeadlessActor(id)))
+      }).toIndexedSeq
+ 
+    routeeProvider.registerRoutees(currentRoutees)
+    
+    val next = new AtomicInteger(0)
+
+    def getNext(): ActorRef = { if (size <= 1)
+        currentRoutees(0)
+      else {
+        val nextId = next.get
+        next.set(nextId % size)
+        currentRoutees(nextId)
+      }
+    }
+
+    
+    {
+      case (sender, message) =>
+        message match {
+          case NetLogoActors.GetGroupChoice(id) =>  List(Destination(sender, currentRoutees(id)))
+          case Broadcast(msg) => toAll(sender, currentRoutees)
+          case msg            => List(Destination(sender, getNext()))
+        }
+    }
+
+}
+ 
+}
 //  }
 //  
 //  def receive = withMap(Map[Int, List[(org.nlogo.api.Agent,String)]](), 0)
