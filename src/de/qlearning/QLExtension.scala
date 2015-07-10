@@ -10,7 +10,6 @@ import akka.actor.Props
 import akka.agent.{ Agent => AkkaAgent }
 import akka.dispatch.Await
 import akka.pattern.ask
-import akka.routing.RoundRobinRouter
 import akka.util.Timeout
 import akka.util.duration._
 
@@ -29,16 +28,17 @@ object QLSystem {
   val confFile = "conf/application.conf"
   implicit val system = ActorSystem("QLSystem", ConfigFactory.parseFile(new File(confFile)))
   val config = system.settings.config
-  val defaultWaitDuration = config.getInt("netlogo.timeout_ms") milliseconds
+  val cfgstr = "netlogo"
+  val defaultWaitDuration = config.getInt(cfgstr + ".timeout_ms") milliseconds
   implicit val timeout = Timeout(defaultWaitDuration)
   implicit val ec = system.dispatcher
   
   // create router and supervisor
   // the router is used to execute reward procedures
-  val conHeadlessEnv = config.getInt("netlogo.concurrent-headless-environments")
+  val conHeadlessEnv = config.getInt(cfgstr + ".concurrent-headless-environments")
   val netLogoRouter = system.actorOf(Props().withRouter(NetLogoHeadlessRouter(conHeadlessEnv)))
   // the supervisor controls the simulation
-  val netLogoSuper = system.actorOf(Props(new NetLogoSupervisor(netLogoRouter)))
+  val netLogoSuper = system.actorOf(Props(new NetLogoSupervisor(netLogoRouter, scala.compat.Platform.currentTime.toInt)).withDispatcher("pinned-dispatcher"))
   // this map holds all the data
   val qlDataMap = AkkaAgent(Map[Agent, AkkaAgent[QLAgent]]())
   
@@ -96,6 +96,10 @@ class QLExtension extends DefaultClassManager {
     
 }
 
+//////////////////////////////////////////////
+/// implementations of new NetLogo objects /// 
+//////////////////////////////////////////////
+
 /**
  * a new NetLogo object that is used to represent the group structure 
  * it also specifies the alternatives available to each agent
@@ -118,11 +122,17 @@ case class NLGroupChoice(nlAgents: List[org.nlogo.api.Agent],
                          qlAgents: List[AkkaAgent[QLAgent]], 
                          choices: List[String], 
                          rewards: List[Double]) extends org.nlogo.api.ExtensionObject {
+  require(nlAgents.size == qlAgents.size && qlAgents.size == choices.size)
+  
   def dump(readable: Boolean, exporting: Boolean, reference: Boolean): String = toString
   def getExtensionName: String = QLSystem.EXTENSION_NAME
   def getNLTypeName: String = "NLGroupChoice"
   def recursivelyEqual(obj: AnyRef): Boolean = equals(obj)
 }
+
+/////////////////////////////////////////////////
+/// implementations of reporters and commands /// 
+/////////////////////////////////////////////////
 
 /**
  * the communication of parameters (list of NLGroupChoices) that are set 
@@ -187,7 +197,7 @@ class SetRewards extends DefaultReporter {
   def report(args: Array[Argument], c: Context): AnyRef = {
     val nlGroupChoice =  args(0).get.asInstanceOf[NLGroupChoice]
     val rewards = args(1).getList.map(_.asInstanceOf[Double]).toList
-    return new NLGroupChoice(nlGroupChoice.nlAgents, nlGroupChoice.qlAgents, nlGroupChoice.choices, rewards)
+    return NLGroupChoice(nlGroupChoice.nlAgents, nlGroupChoice.qlAgents, nlGroupChoice.choices, rewards)
   }
 }
   
@@ -234,7 +244,7 @@ class CreateGroup extends DefaultReporter {
     val alternatives = args(1).getList.map(_.asInstanceOf[String]).toList
     val map = QLSystem.qlDataMap.get()
     val qlAgents = agents.map(map(_))   
-    new NLGroup(agents, qlAgents, for (a <- qlAgents) yield (a, alternatives))
+    NLGroup(agents, qlAgents, for (a <- qlAgents) yield (a, alternatives))
   }
 }
 
@@ -251,7 +261,7 @@ class CreateSingleton extends DefaultReporter {
     val agent = args(0).getAgent
     val alternatives = args(1).getList.map(_.asInstanceOf[String]).toList
     val qlAgent = QLSystem.qlDataMap.get()(agent)
-    new NLGroup(List(agent), List(qlAgent), List((qlAgent, alternatives)))
+    NLGroup(List(agent), List(qlAgent), List((qlAgent, alternatives)))
   }
 }
 
@@ -281,7 +291,6 @@ class SetGroupStructure extends DefaultCommand {
 class Start extends DefaultCommand {
   
   override def getAgentClassString = "O"
-  
   override def getSyntax = commandSyntax(Array[Int]())
   
   def perform(args: Array[Argument], c: Context) {
@@ -289,57 +298,41 @@ class Start extends DefaultCommand {
   }
 }
 
+/**
+ * stops the simulation
+ * 
+ * can be restarted
+ */
 class Stop extends DefaultCommand {
     
   override def getAgentClassString = "O"
-  
   override def getSyntax = commandSyntax(Array[Int]())
   
   def perform(args: Array[Argument], c: Context) {
     QLSystem.netLogoSuper ! NetLogoActors.Stop
   }
-    
-}
-
-class DecreaseExperimenting extends DefaultCommand {
-
-  override def getAgentClassString = "O"
-  
-  override def getSyntax = commandSyntax(Array[Int]())
-  
-  def perform(args: Array[Argument], c: Context) {
-//    QLSystem.agentMap.values.foreach(_ ! QLAgent.DecExp)
-    QLSystem.qlDataMap.get.values.foreach(dataAgent => dataAgent send {_.startDecreasing} )
-  }
 }
 
 /**
- * the UpdateGUI Message should be send to nlguiActor after all previous updates have been made
- * because it triggers a complete change of the alteredData-Agent
+ * tells all agent to start decreasing the experimentation
  */
-//class UpdateGUI extends DefaultCommand {
-//  override def getAgentClassString = "O"  
-//  override def getSyntax = commandSyntax(Array[Int]())
-//  def perform(args: Array[Argument], c: Context) {
-//    QLSystem.nlguiActor ! NetLogoActors.UpdateGUI    
-//  }
-//}
+class DecreaseExperimenting extends DefaultCommand {
 
-//class GetAlteredData extends DefaultReporter {
-//  override def getAgentClassString = "O"    
-//  override def getSyntax = reporterSyntax(Array[Int](), ListType)
-//  def report(args: Array[Argument], c: Context): AnyRef = { 
-////    QLSystem.system.scheduler.scheduleOnce(1000.milliseconds, QLSystem.nlguiActor, NetLogoGUIActor.UpdateGUI)
-////    val r = QLSystem.alteredData.await(10.seconds).reverse.map(f => List(f._1, f._2, f._3))
-//    implicit val timeout = Timeout(10 seconds)
-//    val future = QLSystem.nlguiActor ? NetLogoActors.ReturnData
-//    val result = Await.result(future, timeout.duration).asInstanceOf[List[(Agent,String,Double)]]
-//    println("result is here: " +  result.size + " items")
-//    val r = result.reverse.map(f => List(f._1, f._2, f._3))
-//    r.toLogoList
-//  }
-//}
+  override def getAgentClassString = "O"
+  override def getSyntax = commandSyntax(Array[Int]())
+  
+  def perform(args: Array[Argument], c: Context) {
+    QLSystem.qlDataMap.get.values.foreach(_ send {_.startDecreasing} )
+  }
+}
 
+
+/**
+ * returns the q-value of an alternative
+ * is called by an agent
+ * 
+ * this method is non-blocking (not all rewards may have been processed)
+ */
 class GetQValue extends DefaultReporter {
   override def getAgentClassString = "TP"    
   override def getSyntax = reporterSyntax(Array(StringType), NumberType)
@@ -348,6 +341,13 @@ class GetQValue extends DefaultReporter {
     QLSystem.qlDataMap.get()(c.getAgent).get.qValuesMap.getOrElse(key, new QLAgent.QValue(key, 0.0, 0.0)).value.toLogoObject
   }
 }
+
+/**
+ * returns the n of an alternative (number of choices)
+ * is called by an agent
+ * 
+ * this method is non-blocking (not all choices may have been processed)
+ */
 class GetN extends DefaultReporter {
   override def getAgentClassString = "TP"    
   override def getSyntax = reporterSyntax(Array(StringType), NumberType)
@@ -357,6 +357,13 @@ class GetN extends DefaultReporter {
     QLSystem.qlDataMap.get()(c.getAgent).get.qValuesMap.getOrElse(key, new QLAgent.QValue(key, 0.0, 0.0)).n.toLogoObject
   }
 }
+
+/**
+ * returns the total-n (number of choices)
+ * is called by an agent
+ * 
+ * this method is non-blocking (not all choices may have been processed)
+ */
 class GetTotalN extends DefaultReporter {
   override def getAgentClassString = "TP"    
   override def getSyntax = reporterSyntax(Array[Int](), NumberType)
@@ -364,6 +371,13 @@ class GetTotalN extends DefaultReporter {
     QLSystem.qlDataMap.get()(c.getAgent).get.nTotal.toLogoObject
   }
 }
+
+/**
+ * returns the last decision
+ * is called by an agent
+ * 
+ * this method is non-blocking (not all choices may have been processed)
+ */
 class GetLastChoice extends DefaultReporter {
   override def getAgentClassString = "TP"    
   override def getSyntax = reporterSyntax(Array[Int](), StringType)
