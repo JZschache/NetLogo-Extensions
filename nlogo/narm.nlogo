@@ -28,7 +28,7 @@ to-report reward [group-choice]
 end
 
 to-report get-reward [ env-id ]
-  let dec-list ql:get-param-list env-id
+  let dec-list ql:get-group-list env-id
   
   let result map [reward ?] dec-list
   
@@ -168,7 +168,7 @@ mean-2
 mean-2
 0
 100
-17
+78
 1
 1
 NIL
