@@ -1,13 +1,13 @@
 package de.qlearning
 
 import java.util.concurrent.atomic.AtomicInteger
-
 import scala.collection.immutable.Queue
-
 import akka.actor.{Actor,ActorRef,FSM,SupervisorStrategy,Props}
+import akka.agent.{Agent => AkkaAgent}
 import akka.routing.{Broadcast,Route,RouteeProvider,RouterConfig,Destination}
 import akka.dispatch.{Future,Dispatchers}
 import akka.util.duration._
+import de.qlearning.util.PerformanceMeasure
 
 object NetLogoActors {
   
@@ -47,7 +47,10 @@ object NetLogoActors {
  * that the NetLogoSupervisor repeatedly calls the group-procedure, which results in a list of groups that
  * once send GroupChoices to NetLogo ( and the HeadlessActors).
  */
-class NetLogoSupervisor(netLogoRouter: ActorRef, seed: Int) extends Actor with FSM[NetLogoActors.State, NetLogoActors.Data]{
+class NetLogoSupervisor(netLogoRouter: ActorRef, seed: Int,
+    betweenTickPerf: AkkaAgent[PerformanceMeasure],
+    handleGroupPerf: AkkaAgent[PerformanceMeasure],
+    guiInterPerf: AkkaAgent[PerformanceMeasure]) extends Actor with FSM[NetLogoActors.State, NetLogoActors.Data]{
   import NetLogoActors._
   import QLSystem._
   
@@ -55,7 +58,7 @@ class NetLogoSupervisor(netLogoRouter: ActorRef, seed: Int) extends Actor with F
   val nlApp = org.nlogo.app.App.app
   
   val rh = new util.RandomHelper(seed)
-  
+
   val groupRepName = config.getString(cfgstr + ".group-reporter-name")
   val batches = config.getInt(cfgstr + ".batches")
 //  val delayDuration = config.getInt(cfgstr + ".delay-ms") milliseconds
@@ -112,39 +115,51 @@ class NetLogoSupervisor(netLogoRouter: ActorRef, seed: Int) extends Actor with F
     }
       
   }
-    
-  // in this state: the NetLogoSupervisor repeatedly calls the groupReporter
-  // and distributes the NLGroups to the GroupHandlers
+  
+  // in this state: the NetLogoSupervisor uses the batchStructure or the groupReporter
+  // to repeatedly call the handleGroups-function
   when(Supervising) {
-    case Event(Tick, WithGroupReporter(groupReporter)) => {
+    case Event(Tick, data) => {
       
-      val nlgroups = nlApp.workspace.runCompiledReporter(nlApp.owner, groupReporter).asInstanceOf[org.nlogo.api.LogoList].map(_.asInstanceOf[NLGroup]).toList
+      val time1 = scala.compat.Platform.currentTime
+      betweenTickPerf send { _.end(time1) }
+      handleGroupPerf send { _.start(time1)}
       
-      if (batches > 1) {
-    	val batchSize = Math.ceil(nlgroups.size.toDouble / batches.toDouble).toInt
-        var (front, tail) = nlgroups.splitAt(batchSize)
-        handleGroups(front)
-        while (!tail.isEmpty) {
-          val x = tail.splitAt(batchSize)
-          handleGroups(x._1)
-          tail = x._2
+      data match {
+        case WithBatchStructure(batchStructure) =>
+          batchStructure.foreach(batch => handleGroups(batch))
+        case WithGroupReporter(groupReporter) => {
+          val nlgroups = nlApp.workspace.runCompiledReporter(nlApp.owner, groupReporter).asInstanceOf[org.nlogo.api.LogoList].map(_.asInstanceOf[NLGroup]).toList
+          if (batches > 1) {
+            val batchSize = Math.ceil(nlgroups.size.toDouble / batches.toDouble).toInt
+            var (front, tail) = nlgroups.splitAt(batchSize)
+            handleGroups(front)
+            while (!tail.isEmpty) {
+              val x = tail.splitAt(batchSize)
+              handleGroups(x._1)
+              tail = x._2
+            }
+          } else handleGroups(nlgroups) 
         }
-      } else handleGroups(nlgroups) 
-        
-      //speed is a number between -110 (very slow) and 110 (very fast) 
-      val speed = nlApp.workspace.speedSliderPosition()
-      context.system.scheduler.scheduleOnce(((speed - 110) * (-1)).milliseconds, self, Tick)
-      stay
-    }
-    
-    case Event(Tick, WithBatchStructure(batchStructure)) => {
+        case _ => // do nothing
+      }
       
-      batchStructure.foreach(batch => handleGroups(batch))
-        
+      val time2 = scala.compat.Platform.currentTime
+      handleGroupPerf send { _.end(time2)}
+      guiInterPerf send { _.start(time2) }
+      
       //speed is a number between -110 (very slow) and 110 (very fast) 
       val speed = nlApp.workspace.speedSliderPosition()
-      context.system.scheduler.scheduleOnce(((speed - 110) * (-1)).milliseconds, self, Tick)
-      stay
+      if (speed == 110) {
+        self ! Tick
+      } else
+        context.system.scheduler.scheduleOnce(((speed - 110) * (-2)).milliseconds, self, Tick)
+      
+      val time3 = scala.compat.Platform.currentTime
+      guiInterPerf send { _.end(time3) }
+      betweenTickPerf send { _.start(time3) }
+      
+      stay      
     }
     
     case Event(Stop, _) => {
@@ -249,7 +264,7 @@ case class NetLogoHeadlessRouter(size: Int) extends RouterConfig {
         currentRoutees(0)
       else {
         val nextId = next.get
-        next.set(nextId % size)
+        next.set((nextId + 1) % size)
         currentRoutees(nextId)
       }
     }

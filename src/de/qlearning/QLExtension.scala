@@ -19,6 +19,8 @@ import org.nlogo.api.ScalaConversions._
 
 import com.typesafe.config.ConfigFactory
 
+import de.qlearning.util.PerformanceMeasure
+
 
 object QLSystem {
   
@@ -38,7 +40,12 @@ object QLSystem {
   val conHeadlessEnv = config.getInt(cfgstr + ".concurrent-headless-environments")
   val netLogoRouter = system.actorOf(Props().withRouter(NetLogoHeadlessRouter(conHeadlessEnv)))
   // the supervisor controls the simulation
-  val netLogoSuper = system.actorOf(Props(new NetLogoSupervisor(netLogoRouter, scala.compat.Platform.currentTime.toInt)).withDispatcher("pinned-dispatcher"))
+  val betweenTickPerf = AkkaAgent(PerformanceMeasure())
+  val handleGroupPerf = AkkaAgent(PerformanceMeasure())
+  val guiInterPerf = AkkaAgent(PerformanceMeasure())
+  val netLogoSuper = system.actorOf(Props(new NetLogoSupervisor(netLogoRouter, 
+      scala.compat.Platform.currentTime.toInt, betweenTickPerf, 
+      handleGroupPerf, guiInterPerf)).withDispatcher("pinned-dispatcher"))
   // this map holds all the data
   val qlDataMap = AkkaAgent(Map[Agent, AkkaAgent[QLAgent]]())
   
@@ -66,6 +73,7 @@ class QLExtension extends DefaultClassManager {
     manager.addPrimitive("decrease-experimenting", new DecreaseExperimenting)
     manager.addPrimitive("create-singleton", new CreateSingleton)
     manager.addPrimitive("create-group", new CreateGroup)
+    manager.addPrimitive("get-performance", new GetPerformance)
     // agent primitives
     manager.addPrimitive("get-q-value", new GetQValue)
     manager.addPrimitive("get-last-choice", new GetLastChoice)
@@ -214,6 +222,11 @@ class Init extends DefaultCommand {
   override def getSyntax = commandSyntax(Array( TurtlesetType | PatchsetType, NumberType, StringType))
 
   def perform(args: Array[Argument], c: Context) {
+
+    betweenTickPerf send {PerformanceMeasure()}
+    handleGroupPerf send {PerformanceMeasure()}
+    guiInterPerf send {PerformanceMeasure()}
+
     // the groups structure is deleted, schedulers are cancelled, 
     // the NetLogo-model is reloaded and the reward-reporter is recompiled
     netLogoSuper ! NetLogoActors.InitNetLogoActors
@@ -327,6 +340,22 @@ class DecreaseExperimenting extends DefaultCommand {
 }
 
 
+class GetPerformance extends DefaultReporter {
+  override def getAgentClassString = "O"    
+  override def getSyntax = reporterSyntax(Array[Int](StringType), NumberType)
+  def report(args: Array[Argument], c: Context): AnyRef = { 
+    args(0).getString match {
+      case "NLSuperBetweenTick" =>
+        QLSystem.betweenTickPerf.get.average.toLogoObject
+      case "NLSuperHandleGroups" => 
+        QLSystem.handleGroupPerf.get.average.toLogoObject
+      case "NLSuperGuiInter" =>
+        QLSystem.guiInterPerf.get.average.toLogoObject
+    }
+  }
+}
+
+
 /**
  * returns the q-value of an alternative
  * is called by an agent
@@ -385,4 +414,5 @@ class GetLastChoice extends DefaultReporter {
     QLSystem.qlDataMap.get()(c.getAgent).get.lastChoice.toLogoObject
   }
 }
+
 

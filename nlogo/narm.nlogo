@@ -302,6 +302,39 @@ NIL
 1
 11
 
+MONITOR
+912
+508
+1239
+553
+NIL
+ql:get-performance \"NLSuperBetweenTick\"
+17
+1
+11
+
+MONITOR
+911
+560
+1246
+605
+NIL
+ql:get-performance \"NLSuperHandleGroups\"
+17
+1
+11
+
+MONITOR
+910
+609
+1213
+654
+NIL
+ql:get-performance \"NLSuperGuiInter\"
+17
+1
+11
+
 @#$#@#$#@
 ## WHAT IS IT?
 
