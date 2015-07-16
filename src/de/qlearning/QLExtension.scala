@@ -108,14 +108,16 @@ class QLExtension extends DefaultClassManager {
 /// implementations of new NetLogo objects /// 
 //////////////////////////////////////////////
 
+trait hasNLAgents { val nlAgents: List[org.nlogo.api.Agent] }
+
 /**
  * a new NetLogo object that is used to represent the group structure 
  * it also specifies the alternatives available to each agent
  */
 case class NLGroup(nlAgents: List[org.nlogo.api.Agent], 
                    qlAgents: List[AkkaAgent[QLAgent]], 
-                   alternatives: List[(AkkaAgent[QLAgent], List[String])]) extends org.nlogo.api.ExtensionObject {
-  require(nlAgents.size == qlAgents.size && qlAgents.size == alternatives.size)
+                   alternatives: List[List[String]]) extends org.nlogo.api.ExtensionObject with hasNLAgents {
+  require(nlAgents.size == alternatives.size)
   
   def dump(readable: Boolean, exporting: Boolean, reference: Boolean): String = toString
   def getExtensionName: String = QLSystem.EXTENSION_NAME
@@ -126,10 +128,10 @@ case class NLGroup(nlAgents: List[org.nlogo.api.Agent],
 /**
  * a new NetLogo object that is used to share data between Akka and NetLogo
  */
-case class NLGroupChoice(nlAgents: List[org.nlogo.api.Agent],
+case class NLGroupChoice(nlAgents: List[org.nlogo.api.Agent], 
                          qlAgents: List[AkkaAgent[QLAgent]], 
                          choices: List[String], 
-                         rewards: List[Double]) extends org.nlogo.api.ExtensionObject {
+                         rewards: List[Double]) extends org.nlogo.api.ExtensionObject with hasNLAgents {
   require(nlAgents.size == qlAgents.size && qlAgents.size == choices.size)
   
   def dump(readable: Boolean, exporting: Boolean, reference: Boolean): String = toString
@@ -177,8 +179,8 @@ class GetAgents extends DefaultReporter {
   override def getAgentClassString = "O"
   override def getSyntax = reporterSyntax(Array[Int](WildcardType), AgentsetType)
   
-  def report(args: Array[Argument], c: Context): AnyRef = 
-    args(0).get.asInstanceOf[NLGroupChoice].nlAgents.toLogoList
+  def report(args: Array[Argument], c: Context): AnyRef =
+    args(0).get.asInstanceOf[hasNLAgents].nlAgents.toLogoList
 }
 
 /**
@@ -250,14 +252,19 @@ class Init extends DefaultCommand {
 class CreateGroup extends DefaultReporter {
 
   override def getAgentClassString = "OTPL"
-  override def getSyntax = reporterSyntax(Array( TurtlesetType | PatchsetType, ListType), WildcardType)
+  override def getSyntax = reporterSyntax(Array( TurtlesetType | PatchsetType | ListType, ListType), WildcardType)
   
   def report(args: Array[Argument], context: Context): AnyRef = {
-    val agents = args(0).getAgentSet.agents.asScala.toList
+    val agents = try {
+      args(0).getAgentSet.agents.asScala.toList
+    } catch {
+      case _:ExtensionException =>
+        args(0).getList.map(_.asInstanceOf[org.nlogo.api.Agent]).toList
+    }
+    
     val alternatives = args(1).getList.map(_.asInstanceOf[String]).toList
-    val map = QLSystem.qlDataMap.get()
-    val qlAgents = agents.map(map(_))   
-    NLGroup(agents, qlAgents, for (a <- qlAgents) yield (a, alternatives))
+       
+    NLGroup(agents, Nil, for (a <- agents) yield alternatives)
   }
 }
 
@@ -273,8 +280,7 @@ class CreateSingleton extends DefaultReporter {
   def report(args: Array[Argument], context: Context): AnyRef = {
     val agent = args(0).getAgent
     val alternatives = args(1).getList.map(_.asInstanceOf[String]).toList
-    val qlAgent = QLSystem.qlDataMap.get()(agent)
-    NLGroup(List(agent), List(qlAgent), List((qlAgent, alternatives)))
+    NLGroup(List(agent), Nil, List(alternatives))
   }
 }
 
@@ -291,7 +297,13 @@ class SetGroupStructure extends DefaultCommand {
   
   def perform(args: Array[Argument], c: Context) {
     val groupStructure = args(0).getList.map(_.asInstanceOf[NLGroup]).toList
-    netLogoSuper ! SetGroupStructure(groupStructure)
+    
+    // find QLAgents to NLAgents
+    val map = QLSystem.qlDataMap.get()
+    val newGS = groupStructure.mapConserve(nlg => 
+      NLGroup(nlg.nlAgents, nlg.nlAgents.map(map(_)), nlg.alternatives))
+    
+    netLogoSuper ! SetGroupStructure(newGS)
   }
 }
 
@@ -332,10 +344,10 @@ class Stop extends DefaultCommand {
 class DecreaseExperimenting extends DefaultCommand {
 
   override def getAgentClassString = "O"
-  override def getSyntax = commandSyntax(Array[Int]())
+  override def getSyntax = commandSyntax(Array[Int](NumberType))
   
   def perform(args: Array[Argument], c: Context) {
-    QLSystem.qlDataMap.get.values.foreach(_ send {_.startDecreasing} )
+    QLSystem.qlDataMap.get.values.foreach(_ send {_.startDecreasing(args(0).getDoubleValue)} )
   }
 }
 

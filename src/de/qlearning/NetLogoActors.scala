@@ -61,6 +61,7 @@ class NetLogoSupervisor(netLogoRouter: ActorRef, seed: Int,
 
   val groupRepName = config.getString(cfgstr + ".group-reporter-name")
   val batches = config.getInt(cfgstr + ".batches")
+  val updateComName = config.getString(cfgstr + ".update-command-name")
 //  val delayDuration = config.getInt(cfgstr + ".delay-ms") milliseconds
   
   //private message
@@ -68,11 +69,13 @@ class NetLogoSupervisor(netLogoRouter: ActorRef, seed: Int,
   
   // function that sets a future for the decisions of a list of groups
   private def handleGroups(groups: List[NLGroup]) = {
+//    println("groups: " + groups.size)
     // wait for choice of agents until all updates (QValues) have been placed
-    Future.sequence(groups.map(group => Future.sequence(group.alternatives.map(pair => 
+    Future.sequence(groups.map(group => Future.sequence((group.qlAgents zip group.alternatives).map(pair => 
       pair._1.future map {_.choose(pair._2, rh)}
     )))) onSuccess {
       case list =>  {
+//        println("choices: " + list.size)
         val groupsChoices = (groups zip list).map(pair => NLGroupChoice(pair._1.nlAgents, pair._1.qlAgents, pair._2, Nil))
         netLogoRouter ! NLGroupChoicesList(groupsChoices)
       }
@@ -127,6 +130,7 @@ class NetLogoSupervisor(netLogoRouter: ActorRef, seed: Int,
       
       data match {
         case WithBatchStructure(batchStructure) =>
+//          println("WithBatchStructure(batchStructure) ")
           batchStructure.foreach(batch => handleGroups(batch))
         case WithGroupReporter(groupReporter) => {
           val nlgroups = nlApp.workspace.runCompiledReporter(nlApp.owner, groupReporter).asInstanceOf[org.nlogo.api.LogoList].map(_.asInstanceOf[NLGroup]).toList
@@ -147,6 +151,8 @@ class NetLogoSupervisor(netLogoRouter: ActorRef, seed: Int,
       val time2 = scala.compat.Platform.currentTime
       handleGroupPerf send { _.end(time2)}
       guiInterPerf send { _.start(time2) }
+      
+      nlApp.command(updateComName)
       
       //speed is a number between -110 (very slow) and 110 (very fast) 
       val speed = nlApp.workspace.speedSliderPosition()
@@ -193,6 +199,7 @@ class NetLogoHeadlessActor(val id: Int) extends Actor {
 
   val workspace = HeadlessWorkspace.newInstance
   val rewardRepName = config.getString(cfgstr + ".reward-reporter-name")
+  val setupComName = config.getString(cfgstr + ".setup-command-name")
   
   override def postStop() {
     workspace.dispose()
@@ -204,6 +211,7 @@ class NetLogoHeadlessActor(val id: Int) extends Actor {
     case CompileReporter => {
       workspace.modelOpened = false
       workspace.open(org.nlogo.app.App.app.workspace.getModelPath())
+      workspace.command(setupComName)
       context.become(ready(workspace.compileReporter(rewardRepName + " " + id), Queue[List[NLGroupChoice]]()) orElse idle)
     }
 

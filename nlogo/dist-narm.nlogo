@@ -1,6 +1,7 @@
-extensions[ql]
+extensions[ql matrix]
 
-turtles-own[ qv-list n-list total-n ]
+turtles-own[ qv-0 qv-1 n-0 n-1 total-n last-action optimal-action]
+globals[ group-structure means-matrix rel-freq-optimal]
 
 to setup
   clear-all  
@@ -9,45 +10,96 @@ to setup
   set-patch-size 400 / n-patches
   resize-world 0 n-patches 0 n-patches
     
-  create-turtles (2 * n-pairs) [
+  set group-structure []
+    
+  create-turtles n-pairs [
     setxy random-xcor random-ycor
+    
+    ; create a partner
+    let partner 0
+    hatch 1 [ 
+      setxy (1 + [xcor] of myself) (1 + [ycor] of myself)
+      set group-structure lput (ql:create-group (list self myself) (n-values n-alternatives [(word ?)])) group-structure
+      face myself
+      set partner self
+    ]
+    face partner
+    
   ]
   
-  ql:init-environment turtles 2 (n-values n-alternatives [?]) "reward-function" experimenting exploration
+  ql:init turtles experimenting exploration
+  
+  ql:set-group-structure group-structure
+  
+  ql:decrease-experimenting experimenting-decay
   
   ask turtles [    
-    set qv-list ql:qvalues
-    set n-list ql:n-choices-list
-    set total-n ql:n-choice
+    set qv-0 ql:get-q-value "0"
+    set qv-0 ql:get-q-value "1"
+    set n-0 ql:get-n "0"
+    set n-1 ql:get-n "1"
+    set total-n ql:get-total-n
+    set optimal-action one-of [true false]
   ]
   
+  set rel-freq-optimal 0.5
   
   reset-ticks
-  
 end
 
-to-report reward-function [ env-id ]
-  let params ql:env-parameters env-id
-  ifelse (item 1 params) = "0.0" [
-    report 0.0
-  ] [
-    report 0.0
+to setup-all 
+  ; build matrix from input (means)
+  let row-list []
+  let temp means
+  repeat (n-alternatives - 1)  [
+    let line-break position "\n" temp
+    set row-list lput (substring temp 0 line-break) row-list
+    set temp substring temp (line-break + 1) (length temp)
   ]
+  set row-list lput temp row-list
+  set means-matrix matrix:from-row-list (map [read-from-string (word "[ " ? " ]")] row-list)
 end
 
-to update-view
+to-report get-reward [ env-id ]
+  let dec-list ql:get-group-list env-id
+  let result map [reward ?] dec-list
+  report result
+end
+
+to-report reward [group-choice]
+  let agents ql:get-agents group-choice
+  let decisions ql:get-decisions group-choice
+  
+  (foreach agents decisions [ ask ?1 [ set last-action ?2 ] ])
+  (foreach agents [ ask ?1 [ set optimal-action (first decisions) = (last decisions) ] ])
+  
+  let m matrix:get means-matrix (read-from-string first decisions) (read-from-string last decisions)
+  let rewards (map [random-normal m sd ] decisions)
+  let new-object ql:set-rewards group-choice rewards
+  report new-object
+end
+
+to update
+  
+  let optimal 0
   
   ask turtles [
-     ifelse ql:last-choice = "0.0" [
+     ifelse ql:get-last-choice = "0" [
       set color blue
     ][
       set color red
     ]
+    set qv-0 ql:get-q-value "0"
+    set qv-1 ql:get-q-value "1"
+    set n-0 ql:get-n "0"
+    set n-1 ql:get-n "1"
+    set total-n ql:get-total-n
     
-    set qv-list ql:qvalues
-    set n-list ql:n-choices-list
-    set total-n ql:n-choice
+    if optimal-action [ set optimal optimal + 1 ]
+    
   ]
+  
+  set rel-freq-optimal optimal / (2 * n-pairs)
   
   tick
 end
@@ -55,11 +107,11 @@ end
 GRAPHICS-WINDOW
 743
 10
-1165
-453
+1155
+443
 -1
 -1
-12.903225806451612
+2.8368794326241136
 1
 10
 1
@@ -70,9 +122,9 @@ GRAPHICS-WINDOW
 1
 1
 0
-31
+141
 0
-31
+141
 0
 0
 1
@@ -80,24 +132,24 @@ ticks
 30.0
 
 SLIDER
-240
+265
 25
-415
+440
 58
 n-pairs
 n-pairs
 0
-100
-100
-1
+10000
+2190
+10
 1
 NIL
 HORIZONTAL
 
 BUTTON
-525
+450
 25
-675
+600
 58
 NIL
 setup
@@ -112,12 +164,12 @@ NIL
 1
 
 BUTTON
-525
+450
 60
-675
+600
 93
 NIL
-ql:start-choice 
+ql:start
 NIL
 1
 T
@@ -129,12 +181,12 @@ NIL
 1
 
 BUTTON
-525
+450
 95
-675
+600
 128
 NIL
-ql:stop-choice
+ql:stop
 NIL
 1
 T
@@ -148,64 +200,47 @@ NIL
 SLIDER
 15
 25
-185
+215
 58
 experimenting
 experimenting
 0
-1
-0.1
+16
+16
 0.01
 1
 NIL
 HORIZONTAL
 
 SLIDER
-240
+265
 60
-415
+440
 93
 n-alternatives
 n-alternatives
 2
 10
-4
+2
 1
 1
 NIL
 HORIZONTAL
 
 SLIDER
-240
+265
 220
-415
+440
 253
 sd
 sd
 0
 10
-1
+1.2
 0.1
 1
 NIL
 HORIZONTAL
-
-BUTTON
-525
-130
-675
-163
-NIL
-update-view
-NIL
-1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
-1
 
 PLOT
 20
@@ -223,15 +258,69 @@ true
 false
 "" ""
 PENS
-"default" 1.0 0 -16777216 true "" "plot mean [item 0 qv-list] of turtles"
-"pen-1" 1.0 0 -7500403 true "" "plot mean [item 1 qv-list] of turtles"
+"default" 1.0 0 -16777216 true "" "plot mean [qv-0] of turtles"
+"pen-1" 1.0 0 -7500403 true "" "plot mean [qv-1] of turtles"
+
+INPUTBOX
+265
+95
+440
+215
+means
+10 0\n0 10
+1
+1
+String
+
+CHOOSER
+15
+95
+215
+140
+exploration
+exploration
+"epsilon-greedy" "softmax"
+1
+
+MONITOR
+480
+355
+705
+400
+NIL
+[total-n] of turtle 1
+17
+1
+11
+
+MONITOR
+480
+405
+705
+450
+NIL
+[ql:get-n \"0\"] of turtle 1
+17
+1
+11
+
+MONITOR
+480
+455
+705
+500
+NIL
+[ql:get-n \"1\"] of turtle 1
+17
+1
+11
 
 PLOT
 225
 350
 425
 500
-histogram
+plot 1
 NIL
 NIL
 0.0
@@ -242,56 +331,106 @@ true
 false
 "" ""
 PENS
-"default" 1.0 0 -16777216 true "" "histogram [n-list] of turtle 1"
-
-INPUTBOX
-240
-95
-415
-215
-means
-1 2 3 4 \n3 3 1 2\n4 3 3 1\n4 1 1 1 
-1
-1
-String
-
-CHOOSER
-15
-60
-185
-105
-exploration
-exploration
-"epsilon-greedy" "softmax"
-0
-
-BUTTON
-15
-110
-185
-143
-NIL
-ql:dec-exp\n
-NIL
-1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
-1
+"default" 1.0 1 -16777216 true "" "histogram [qv-0] of turtles"
 
 MONITOR
-480
-355
-662
-400
+485
+515
+697
+560
 NIL
-[total-n] of turtle 1
+[last-action] of turtle 1
 17
 1
 11
+
+MONITOR
+495
+575
+742
+620
+NIL
+[optimal-action ] of turtle 1
+17
+1
+11
+
+MONITOR
+275
+575
+417
+620
+NIL
+rel-freq-optimal
+17
+1
+11
+
+MONITOR
+912
+508
+1239
+553
+NIL
+ql:get-performance \"NLSuperBetweenTick\"
+17
+1
+11
+
+MONITOR
+911
+560
+1246
+605
+NIL
+ql:get-performance \"NLSuperHandleGroups\"
+17
+1
+11
+
+MONITOR
+910
+609
+1213
+654
+NIL
+ql:get-performance \"NLSuperGuiInter\"
+17
+1
+11
+
+PLOT
+35
+525
+235
+675
+plot 2
+NIL
+NIL
+0.0
+1.0
+0.5
+1.0
+true
+false
+"" ""
+PENS
+"default" 1.0 0 -16777216 true "" "plot rel-freq-optimal"
+
+SLIDER
+15
+60
+215
+93
+experimenting-decay
+experimenting-decay
+0
+1
+0.99
+0.01
+1
+NIL
+HORIZONTAL
 
 @#$#@#$#@
 ## WHAT IS IT?
