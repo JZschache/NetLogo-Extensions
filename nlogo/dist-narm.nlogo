@@ -1,7 +1,62 @@
 extensions[ql matrix]
 
-turtles-own[ qv-0 qv-1 n-0 n-1 total-n last-action optimal-action]
-globals[ group-structure means-matrix rel-freq-optimal]
+turtles-own[ leader q-values total-n current-exp last-action optimal-action last-strategy]
+globals[ group-structure n-alt-1 n-alt-2 means-1-matrix means-2-matrix optimal-matrix rel-freq-optimal strategies-freq]
+
+to set-game
+  let row-list read-means-matrix 1
+  set means-1-matrix matrix:from-row-list row-list
+  set n-alt-1 length row-list
+  set n-alt-2 length first row-list
+  
+  if (game = "Identical") [
+    set means-2-matrix matrix:copy means-1-matrix
+  ]
+  if (game = "Symmetric" and n-alt-1 = n-alt-2) [
+    set means-2-matrix matrix:transpose means-1-matrix
+  ]
+  if (game = "Matching") [
+    set means-1-matrix matrix:from-row-list [[1 0] [0 1]]
+    set means-2-matrix matrix:from-row-list [[0 1] [1 0]]
+    set n-alt-1 2
+    set n-alt-2 2
+  ]
+  if (game = "BoS") [
+    set means-1-matrix matrix:from-row-list [[1 0] [0 2]]
+    set means-2-matrix matrix:from-row-list [[2 0] [0 1]]
+    set n-alt-1 2
+    set n-alt-2 2
+  ]
+  if (game = "Chicken") [
+    set means-1-matrix matrix:from-row-list [[2 1] [3 0]]
+    set means-2-matrix matrix:from-row-list [[2 3] [1 0]]
+    set n-alt-1 2
+    set n-alt-2 2
+  ]
+  if (game = "Prisoner") [
+    set means-1-matrix matrix:from-row-list [[2 0] [3 1]]
+    set means-2-matrix matrix:from-row-list [[2 3] [0 1]]
+    set n-alt-1 2
+    set n-alt-2 2
+  ]
+  
+  set means-1 ""
+  let c 0
+  repeat n-alt-1 [
+    let row matrix:get-row means-1-matrix c
+    set means-1 (word means-1 (reduce [(word ?1 " " ?2 )] row) "\n")
+    set c c + 1
+  ]
+  
+  set means-2 ""
+  set c 0
+  repeat n-alt-1 [
+    let row matrix:get-row means-2-matrix c
+    set means-2 (word means-2 (reduce [(word ?1 " " ?2 )] row) "\n")
+    set c c + 1
+  ]
+  
+end
 
 to setup
   clear-all  
@@ -10,35 +65,43 @@ to setup
   set-patch-size 400 / n-patches
   resize-world 0 n-patches 0 n-patches
     
+  setup-all
+  
+  set strategies-freq n-values (n-alt-1 * n-alt-2) [? + 1]   
+  
+  set fields ""
+  let c 0
+  repeat n-alt-1 [
+    let line sublist strategies-freq  (c + 0) (c + n-alt-2)
+    set fields (word fields (reduce [(word ?1 " " ?2 )] line) "\n")
+    set c c + n-alt-2
+  ]
+  
   set group-structure []
     
   create-turtles n-pairs [
+    set leader true
     setxy random-xcor random-ycor
-    
     ; create a partner
     let partner 0
     hatch 1 [ 
+      set leader false
       setxy (1 + [xcor] of myself) (1 + [ycor] of myself)
-      set group-structure lput (ql:create-group (list self myself) (n-values n-alternatives [(word ?)])) group-structure
+      set group-structure lput (ql:create-group (list self myself) (list (n-values n-alt-1 [(word ?)]) (n-values n-alt-2 [(word ?)]))) group-structure
       face myself
       set partner self
     ]
-    face partner
-    
+    face partner    
   ]
   
   ql:init turtles experimenting exploration
-  
   ql:set-group-structure group-structure
-  
   ql:decrease-experimenting experimenting-decay
   
   ask turtles [    
-    set qv-0 ql:get-q-value "0"
-    set qv-0 ql:get-q-value "1"
-    set n-0 ql:get-n "0"
-    set n-1 ql:get-n "1"
+    set q-values ql:get-q-values
     set total-n ql:get-total-n
+    set current-exp ql:get-experimenting
     set optimal-action one-of [true false]
   ]
   
@@ -47,17 +110,35 @@ to setup
   reset-ticks
 end
 
-to setup-all 
-  ; build matrix from input (means)
-  let row-list []
-  let temp means
-  repeat (n-alternatives - 1)  [
+to-report read-means-matrix [ nr ]
+  ; build matrix from input (means-nr)
+  let row-string-list []
+  let temp means-1
+  if (nr = 2) [set temp means-2]
+  while [temp != ""] [
     let line-break position "\n" temp
-    set row-list lput (substring temp 0 line-break) row-list
-    set temp substring temp (line-break + 1) (length temp)
+    ifelse line-break = false [ 
+      set row-string-list lput temp row-string-list
+      set temp ""
+    ] [
+      set row-string-list lput (substring temp 0 line-break) row-string-list
+      set temp substring temp (line-break + 1) (length temp)
+    ]
   ]
-  set row-list lput temp row-list
-  set means-matrix matrix:from-row-list (map [read-from-string (word "[ " ? " ]")] row-list)
+  report (map [read-from-string (word "[ " ? " ]")] row-string-list)
+end
+
+to setup-all
+  
+  let row-list read-means-matrix 1
+  set means-1-matrix matrix:from-row-list row-list
+  set n-alt-1 length row-list
+  set n-alt-2 length first row-list
+  set means-2-matrix matrix:from-row-list read-means-matrix 2
+  
+  ; search optimal pairs
+  let maxEntry max (reduce [sentence ?1 ?2 ] row-list)
+  set optimal-matrix matrix:map [ifelse-value (? = maxEntry) [1] [0]] means-1-matrix
 end
 
 to-report get-reward [ env-id ]
@@ -71,47 +152,53 @@ to-report reward [group-choice]
   let decisions ql:get-decisions group-choice
   
   (foreach agents decisions [ ask ?1 [ set last-action ?2 ] ])
-  (foreach agents [ ask ?1 [ set optimal-action (first decisions) = (last decisions) ] ])
-  
-  let m matrix:get means-matrix (read-from-string first decisions) (read-from-string last decisions)
-  let rewards (map [random-normal m sd ] decisions)
+
+  let dec1 (read-from-string first decisions) 
+  let dec2 (read-from-string last decisions)
+  let optimal matrix:get optimal-matrix dec1 dec2
+  (foreach agents [ ask ?1 [ 
+        set optimal-action 1 = optimal 
+        set last-strategy dec1 * n-alt-2 + dec2
+     ]])
+    
+  let m1 matrix:get means-1-matrix dec1 dec2
+  let m2 matrix:get means-2-matrix dec1 dec2
+  let rewards (list (random-normal m1 sd) (random-normal m2 sd))
   let new-object ql:set-rewards group-choice rewards
   report new-object
 end
 
 to update
   
-  let optimal 0
+  let optimal-freq 0
   
   ask turtles [
-     ifelse ql:get-last-choice = "0" [
-      set color blue
-    ][
-      set color red
-    ]
-    set qv-0 ql:get-q-value "0"
-    set qv-1 ql:get-q-value "1"
-    set n-0 ql:get-n "0"
-    set n-1 ql:get-n "1"
-    set total-n ql:get-total-n
+     
+    set q-values ql:get-q-values
+    ;show q-values
     
-    if optimal-action [ set optimal optimal + 1 ]
+    set total-n ql:get-total-n
+    set current-exp ql:get-experimenting
+    
+    if leader [
+      if optimal-action [ set optimal-freq optimal-freq + 1 ]
+    ]
     
   ]
   
-  set rel-freq-optimal optimal / (2 * n-pairs)
+  set rel-freq-optimal optimal-freq / (n-pairs)
   
   tick
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
-743
-10
-1155
-443
+575
+25
+979
+450
 -1
 -1
-2.8368794326241136
+3.007518796992481
 1
 10
 1
@@ -122,9 +209,9 @@ GRAPHICS-WINDOW
 1
 1
 0
-141
+133
 0
-141
+133
 0
 0
 1
@@ -132,25 +219,25 @@ ticks
 30.0
 
 SLIDER
-265
+220
 25
-440
+395
 58
 n-pairs
 n-pairs
 0
 10000
-2190
+1940
 10
 1
 NIL
 HORIZONTAL
 
 BUTTON
-450
-25
-600
-58
+575
+455
+725
+488
 NIL
 setup
 NIL
@@ -164,10 +251,10 @@ NIL
 1
 
 BUTTON
-450
-60
-600
-93
+575
+490
+725
+523
 NIL
 ql:start
 NIL
@@ -181,10 +268,10 @@ NIL
 1
 
 BUTTON
-450
-95
-600
-128
+575
+525
+725
+558
 NIL
 ql:stop
 NIL
@@ -205,69 +292,35 @@ SLIDER
 experimenting
 experimenting
 0
-16
-16
-0.01
-1
-NIL
-HORIZONTAL
-
-SLIDER
-265
-60
-440
-93
-n-alternatives
-n-alternatives
-2
-10
-2
-1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-265
-220
-440
-253
-sd
-sd
-0
-10
-1.2
+30
+16.7
 0.1
 1
 NIL
 HORIZONTAL
 
-PLOT
-20
-350
+SLIDER
 220
-500
-qvalues
+185
+395
+218
+sd
+sd
+0
+10
+1
+0.1
+1
 NIL
-NIL
-0.0
-10.0
-0.0
-10.0
-true
-false
-"" ""
-PENS
-"default" 1.0 0 -16777216 true "" "plot mean [qv-0] of turtles"
-"pen-1" 1.0 0 -7500403 true "" "plot mean [qv-1] of turtles"
+HORIZONTAL
 
 INPUTBOX
-265
-95
-440
-215
-means
-10 0\n0 10
+220
+60
+395
+180
+means-1
+1 -1\n-1 1\n
 1
 1
 String
@@ -283,94 +336,21 @@ exploration
 1
 
 MONITOR
-480
-355
-705
-400
-NIL
-[total-n] of turtle 1
-17
-1
-11
-
-MONITOR
-480
-405
-705
-450
-NIL
-[ql:get-n \"0\"] of turtle 1
-17
-1
-11
-
-MONITOR
-480
-455
-705
-500
-NIL
-[ql:get-n \"1\"] of turtle 1
-17
-1
-11
-
-PLOT
-225
+15
+305
+215
 350
-425
-500
-plot 1
-NIL
-NIL
-0.0
-10.0
-0.0
-10.0
-true
-false
-"" ""
-PENS
-"default" 1.0 1 -16777216 true "" "histogram [qv-0] of turtles"
-
-MONITOR
-485
-515
-697
-560
-NIL
-[last-action] of turtle 1
-17
-1
-11
-
-MONITOR
-495
-575
-742
-620
-NIL
-[optimal-action ] of turtle 1
-17
-1
-11
-
-MONITOR
-275
-575
-417
-620
 NIL
 rel-freq-optimal
-17
+2
 1
 11
 
 MONITOR
-912
-508
-1239
-553
+1005
+25
+1295
+70
 NIL
 ql:get-performance \"NLSuperBetweenTick\"
 17
@@ -378,10 +358,10 @@ ql:get-performance \"NLSuperBetweenTick\"
 11
 
 MONITOR
-911
-560
-1246
-605
+1005
+75
+1295
+120
 NIL
 ql:get-performance \"NLSuperHandleGroups\"
 17
@@ -389,10 +369,10 @@ ql:get-performance \"NLSuperHandleGroups\"
 11
 
 MONITOR
-910
-609
-1213
-654
+1005
+125
+1295
+170
 NIL
 ql:get-performance \"NLSuperGuiInter\"
 17
@@ -400,11 +380,11 @@ ql:get-performance \"NLSuperGuiInter\"
 11
 
 PLOT
-35
-525
-235
-675
-plot 2
+15
+355
+215
+505
+rel-freq-optimal
 NIL
 NIL
 0.0
@@ -424,13 +404,98 @@ SLIDER
 93
 experimenting-decay
 experimenting-decay
-0
+0.9
 1
 0.99
-0.01
+0.001
 1
 NIL
 HORIZONTAL
+
+PLOT
+15
+145
+215
+295
+experimenting
+NIL
+NIL
+0.0
+10.0
+0.0
+1.0
+true
+false
+"" ""
+PENS
+"default" 1.0 0 -16777216 true "set-plot-y-range 0 experimenting" "plot mean [current-exp] of turtles"
+
+INPUTBOX
+220
+235
+395
+350
+fields
+1 2\n3 4\n
+1
+1
+String
+
+PLOT
+220
+355
+420
+505
+strategies
+NIL
+NIL
+0.0
+10.0
+0.0
+10.0
+true
+false
+"" ""
+PENS
+"default" 1.0 1 -16777216 false "set-plot-x-range 0 (n-alt-1 * n-alt-2)" "histogram [last-strategy] of turtles with [leader]"
+
+INPUTBOX
+400
+60
+565
+180
+means-2
+-1 1\n1 -1\n
+1
+1
+String
+
+CHOOSER
+400
+185
+565
+230
+game
+game
+"Identical" "Symmetric" "Matching" "BoS" "Chicken" "Prisoner"
+1
+
+BUTTON
+400
+235
+565
+268
+NIL
+set-game
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
 
 @#$#@#$#@
 ## WHAT IS IT?

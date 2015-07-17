@@ -47,7 +47,7 @@ object NetLogoActors {
  * that the NetLogoSupervisor repeatedly calls the group-procedure, which results in a list of groups that
  * once send GroupChoices to NetLogo ( and the HeadlessActors).
  */
-class NetLogoSupervisor(netLogoRouter: ActorRef, seed: Int,
+class NetLogoSupervisor(netLogoRouter: ActorRef,
     betweenTickPerf: AkkaAgent[PerformanceMeasure],
     handleGroupPerf: AkkaAgent[PerformanceMeasure],
     guiInterPerf: AkkaAgent[PerformanceMeasure]) extends Actor with FSM[NetLogoActors.State, NetLogoActors.Data]{
@@ -57,8 +57,6 @@ class NetLogoSupervisor(netLogoRouter: ActorRef, seed: Int,
   // this command starts the NetLogo desktop environment
   val nlApp = org.nlogo.app.App.app
   
-  val rh = new util.RandomHelper(seed)
-
   val groupRepName = config.getString(cfgstr + ".group-reporter-name")
   val batches = config.getInt(cfgstr + ".batches")
   val updateComName = config.getString(cfgstr + ".update-command-name")
@@ -72,7 +70,7 @@ class NetLogoSupervisor(netLogoRouter: ActorRef, seed: Int,
 //    println("groups: " + groups.size)
     // wait for choice of agents until all updates (QValues) have been placed
     Future.sequence(groups.map(group => Future.sequence((group.qlAgents zip group.alternatives).map(pair => 
-      pair._1.future map {_.choose(pair._2, rh)}
+      pair._1.future map {_.choose(pair._2)}
     )))) onSuccess {
       case list =>  {
 //        println("choices: " + list.size)
@@ -225,6 +223,7 @@ class NetLogoHeadlessActor(val id: Int) extends Actor {
           workspace.runCompiledReporter(workspace.defaultOwner, reporter).asInstanceOf[org.nlogo.api.LogoList]
       } onSuccess {
         case result =>
+//          println("HLresult: " + result)
           result.foreach(ar => {
             val groupChoice = ar.asInstanceOf[NLGroupChoice]
             (groupChoice.qlAgents, groupChoice.choices, groupChoice.rewards).zipped.foreach((agent, alt, r) => agent send {_.updated(alt, r)})    

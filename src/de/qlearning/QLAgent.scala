@@ -33,6 +33,7 @@ object QLAgent {
     new QLAgent(experimenting, Map[String,QValue](), 0.0, "", (exploration match {
         case "epsilon-greedy" => epsGreedy
         case "softmax" => softmax
+//        case "uncertainty" => uncertainty
       }), 1.0)   
 
   
@@ -53,10 +54,21 @@ object QLAgent {
     val qvalues = alternatives.map(alt => qValuesMap.getOrElse(alt, new QValue(alt, 0.0, 0.0)))
     val expForm = qvalues.scanLeft(("".asInstanceOf[String], 0.0))((temp, qva) => (qva.alt, temp._2 + scala.math.exp(qva.value / t))).tail
     val randomValue = rh.uniform.nextDoubleFromTo(0, expForm.last._2)
-    val choice = expForm.find(randomValue < _._2).get._1
-    choice
+    expForm.find(randomValue < _._2).get._1
   }
 
+//  private val uncertainty = (qValuesMap: Map[String,QValue], alternatives: List[String], epsilon: Double, rh: RandomHelper) => {
+//    if (rh.uniform.nextDoubleFromTo(0, 1) < epsilon) {
+//      val qvalues = alternatives.map(alt => qValuesMap.getOrElse(alt, new QValue(alt, 0.0, 0.0)))
+//      val ns = qvalues.scanLeft(("".asInstanceOf[String], 0.0))((temp, qva) => (qva.alt, temp._2 + ( if (qva.n > 0.0) 1.0 / qva.n else 1.0))).tail
+//      val randomValue = rh.uniform.nextDoubleFromTo(0, ns.last._2)
+//      ns.find(randomValue < _._2).get._1
+//    } else {
+//      val maxima = maximum(alternatives.map(alt => qValuesMap.getOrElse(alt, new QValue(alt, 0.0, 0.0))))
+//      if (maxima.length == 1) maxima.head.alt  else rh.randomComponent(maxima).alt
+//    }
+//  }
+  
 }
 
 /**
@@ -72,13 +84,19 @@ case class QLAgent(experimenting: Double, qValuesMap: Map[String,QLAgent.QValue]
                    expDecay: Double) {
   
   def updated(alt:String, reward: Double) : QLAgent = {
+//    println("update: " + alt + " " + reward)
     val newQvalue = qValuesMap.getOrElse(alt, new QLAgent.QValue(alt, 0.0, 0.0)).updated(reward)
-    QLAgent(experimenting * expDecay, qValuesMap.updated(alt, newQvalue), 
+    QLAgent(Math.max(experimenting * expDecay, 0.02), qValuesMap.updated(alt, newQvalue), 
             nTotal + 1.0, alt, choiceAlg, expDecay)
   }
   
-  def choose(alternatives: List[String], rh:RandomHelper): String = 
-    choiceAlg(qValuesMap, alternatives, experimenting, rh)
+  def setAlternatives(alternatives: List[String]) = QLAgent(experimenting,
+      alternatives.map(key => (key -> qValuesMap.getOrElse(key, new QLAgent.QValue(key, 0.0, 0.0)))).toMap,
+      nTotal, lastChoice, choiceAlg, expDecay)
+  
+  def choose(alternatives: List[String]): String = {
+    choiceAlg(qValuesMap, alternatives, experimenting, util.ThreadLocalRandomHelper.current)
+  }
   
   /**
    * after calling this function, the agent successively lowers the  
