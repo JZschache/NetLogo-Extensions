@@ -22,5 +22,7 @@
 	<classpathentry kind="lib" path="lib/mrjadapter-1.2.jar"/>
 	<classpathentry kind="lib" path="lib/gamesolver.jar"/>
 	<classpathentry kind="lib" path="lib/gamut.jar"/>
+	<classpathentry kind="lib" path="extensions/matrix/Jama-1.0.3.jar"/>
+	<classpathentry kind="lib" path="extensions/matrix/matrix.jar"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>
