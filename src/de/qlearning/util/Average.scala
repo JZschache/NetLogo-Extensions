@@ -31,11 +31,24 @@ object Rational {
 	def / (that: Rational) = new Rational(n * that.d, d * that.n)
 	def / (i: Int) = new Rational(n, d * i)
 	  
-	def lessThan(that: Rational) = n * that.d < that.n * d
+	def < (that: Rational) = n * that.d < that.n * d
+	
+	def != (that: Rational) = n * that.d != that.n * d
+	def != (i: Int) = n != d * i
 	  
 	private def gcd(a:Int, b:Int):Int  = if ( b == 0) a else gcd(b, a % b)
 	
 	def getDouble: Double = n.toDouble / d.toDouble
+	
+	def pretty = {
+	  if (n == 0) "0" else {
+	    if(n < 0 && d < 0)
+	      -1 * n + "/" + -1 * d
+	    else
+	      n + "/" + d
+	  }
+	    
+	}
 	
   }
 }
