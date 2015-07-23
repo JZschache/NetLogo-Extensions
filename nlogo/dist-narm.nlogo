@@ -1,41 +1,45 @@
-extensions[ql matrix]
+extensions[ql matrix games]
 
 turtles-own[ leader q-values total-n current-exp last-action optimal-action last-strategy]
 globals[ group-structure n-alt-1 n-alt-2 means-1-matrix means-2-matrix optimal-matrix rel-freq-optimal strategies-freq]
 
 to set-game
-  let row-list read-means-matrix 1
-  set means-1-matrix matrix:from-row-list row-list
-  set n-alt-1 length row-list
-  set n-alt-2 length first row-list
+  let rows-1 read-means-matrix 1
+  let rows-2 read-means-matrix 2
+  
+  let pm1 games:from-row-list rows-1
+  let pm2 games:from-row-list rows-2
+  
+  set n-alt-1 length rows-1
+  set n-alt-2 length first rows-1
   
   if (game = "Identical") [
-    set means-2-matrix matrix:copy means-1-matrix
+    set pm2 pm1
   ]
   if (game = "Symmetric" and n-alt-1 = n-alt-2) [
-    set means-2-matrix matrix:transpose means-1-matrix
+    set pm2 games:pm-transpose pm1
   ]
   if (game = "Matching") [
-    set means-1-matrix matrix:from-row-list [[1 0] [0 1]]
-    set means-2-matrix matrix:from-row-list [[0 1] [1 0]]
+    set pm1 games:from-row-list [[1 0] [0 1]]
+    set pm2 games:from-row-list [[0 1] [1 0]]
     set n-alt-1 2
     set n-alt-2 2
   ]
   if (game = "BoS") [
-    set means-1-matrix matrix:from-row-list [[1 0] [0 2]]
-    set means-2-matrix matrix:from-row-list [[2 0] [0 1]]
+    set pm1 games:from-row-list [[1 0] [0 2]]
+    set pm2 games:from-row-list [[2 0] [0 1]]
     set n-alt-1 2
     set n-alt-2 2
   ]
   if (game = "Chicken") [
-    set means-1-matrix matrix:from-row-list [[2 1] [3 0]]
-    set means-2-matrix matrix:from-row-list [[2 3] [1 0]]
+    set pm1 games:from-row-list [[2 1] [3 0]]
+    set pm2 games:from-row-list [[2 3] [1 0]]
     set n-alt-1 2
     set n-alt-2 2
   ]
   if (game = "Prisoner") [
-    set means-1-matrix matrix:from-row-list [[2 0] [3 1]]
-    set means-2-matrix matrix:from-row-list [[2 3] [0 1]]
+    set pm1 games:from-row-list [[2 0] [3 1]]
+    set pm2 games:from-row-list [[2 3] [0 1]]
     set n-alt-1 2
     set n-alt-2 2
   ]
@@ -43,7 +47,7 @@ to set-game
   set means-1 ""
   let c 0
   repeat n-alt-1 [
-    let row matrix:get-row means-1-matrix c
+    let row games:pm-get-row pm1 c
     set means-1 (word means-1 (reduce [(word ?1 " " ?2 )] row) "\n")
     set c c + 1
   ]
@@ -51,10 +55,12 @@ to set-game
   set means-2 ""
   set c 0
   repeat n-alt-1 [
-    let row matrix:get-row means-2-matrix c
+    let row games:pm-get-row pm2 c
     set means-2 (word means-2 (reduce [(word ?1 " " ?2 )] row) "\n")
     set c c + 1
   ]
+  
+  show games:get-solutions pm1 pm2
   
 end
 
@@ -135,7 +141,6 @@ to setup-all
   set n-alt-1 length row-list
   set n-alt-2 length first row-list
   set means-2-matrix matrix:from-row-list read-means-matrix 2
-  
   ; search optimal pairs
   let maxEntry max (reduce [sentence ?1 ?2 ] row-list)
   set optimal-matrix matrix:map [ifelse-value (? = maxEntry) [1] [0]] means-1-matrix
@@ -192,10 +197,10 @@ to update
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
-575
-25
-979
-450
+820
+20
+1233
+454
 -1
 -1
 3.007518796992481
@@ -234,10 +239,10 @@ NIL
 HORIZONTAL
 
 BUTTON
-575
-455
-725
-488
+820
+460
+970
+493
 NIL
 setup
 NIL
@@ -251,10 +256,10 @@ NIL
 1
 
 BUTTON
-575
-490
-725
-523
+820
+495
+970
+528
 NIL
 ql:start
 NIL
@@ -268,10 +273,10 @@ NIL
 1
 
 BUTTON
-575
-525
-725
-558
+820
+530
+970
+563
 NIL
 ql:stop
 NIL
@@ -320,7 +325,7 @@ INPUTBOX
 395
 180
 means-1
-1 -1\n-1 1\n
+1.0 0.0\n0.0 2.0\n
 1
 1
 String
@@ -347,10 +352,10 @@ rel-freq-optimal
 11
 
 MONITOR
-1005
-25
-1295
-70
+1250
+20
+1540
+65
 NIL
 ql:get-performance \"NLSuperBetweenTick\"
 17
@@ -358,10 +363,10 @@ ql:get-performance \"NLSuperBetweenTick\"
 11
 
 MONITOR
-1005
-75
-1295
-120
+1250
+70
+1540
+115
 NIL
 ql:get-performance \"NLSuperHandleGroups\"
 17
@@ -369,10 +374,10 @@ ql:get-performance \"NLSuperHandleGroups\"
 11
 
 MONITOR
-1005
-125
-1295
-170
+1250
+120
+1540
+165
 NIL
 ql:get-performance \"NLSuperGuiInter\"
 17
@@ -465,7 +470,7 @@ INPUTBOX
 565
 180
 means-2
--1 1\n1 -1\n
+2.0 0.0\n0.0 1.0\n
 1
 1
 String
@@ -477,8 +482,8 @@ CHOOSER
 230
 game
 game
-"Identical" "Symmetric" "Matching" "BoS" "Chicken" "Prisoner"
-1
+"Custom" "Identical" "Symmetric" "Matching" "BoS" "Chicken" "Prisoner"
+4
 
 BUTTON
 400

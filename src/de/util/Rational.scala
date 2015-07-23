@@ -1,5 +1,4 @@
-package de.qlearning.util
-
+package de.util
 
 object Rational {
   
@@ -32,52 +31,48 @@ object Rational {
 	def / (i: Int) = new Rational(n, d * i)
 	  
 	def < (that: Rational) = n * that.d < that.n * d
+	def <= (that: Rational) = n * that.d <= that.n * d
+	def > (that: Rational) = n * that.d > that.n * d
+	def >= (that: Rational) = n * that.d >= that.n * d
 	
 	def != (that: Rational) = n * that.d != that.n * d
 	def != (i: Int) = n != d * i
-	  
+	
+	def == (that: Rational) = n * that.d == that.n * d
+	def == (i: Int) = n == d * i
+	
 	private def gcd(a:Int, b:Int):Int  = if ( b == 0) a else gcd(b, a % b)
 	
 	def getDouble: Double = n.toDouble / d.toDouble
 	
 	def pretty = {
-	  if (n == 0) "0" else {
+	  if (n == 0) "0" else if (d.abs == 1) (n / d).toString else {
 	    if(n < 0 && d < 0)
 	      -1 * n + "/" + -1 * d
 	    else
 	      n + "/" + d
 	  }
-	    
+	}
+	
+	def prettyDouble(decimal:Int) = {
+	  val t = Math.pow(10.0, decimal.toDouble)
+	  ((Math.floor(t * n.toDouble / d.toDouble) / t)).toString
 	}
 	
   }
-}
 
-case class Average(sum: Double = 0.0, count: Double = 0.0){
-  
-  def +(toAdd:Double) = new Average(sum + toAdd, count + 1.0)
-//  def +(toAdd:Average) = new Average(sum + toAdd.sum, count + toAdd.count)
-  def -(toSub:Double) = new Average(sum - toSub, count - 1.0)
-//  def -(toSub:Average) = new Average(sum - toSub.sum, count - toSub.count)
-  def incSum(toAdd:Double) = new Average(sum + toAdd, count)
-  def decSum(toSub:Double) = new Average(sum - toSub, count)
-  
-  def average = if (count > 0.0) (math rint sum / count * 10) / 10 else 0.0
-  
-}
-
-case class PerformanceMeasure(startTime:Long = 0, sum: Double = 0.0, count: Double = 0.0) {
-  
-  def start(time: Long) = PerformanceMeasure(time, sum, count)
-  
-  def end(time: Long) = {
-    if (startTime != 0) {
-      val duration = (time - startTime).toDouble
-      PerformanceMeasure(0, sum + duration, count + 1.0)
-    } else 
-      PerformanceMeasure(0, sum, count)
-  }
-  
-  def average = if (count > 0.0) (math rint sum / count * 100) / 100 else 0.0 
+  //
+//case class Average(sum: Double = 0.0, count: Double = 0.0){
+//  
+//  def +(toAdd:Double) = new Average(sum + toAdd, count + 1.0)
+////  def +(toAdd:Average) = new Average(sum + toAdd.sum, count + toAdd.count)
+//  def -(toSub:Double) = new Average(sum - toSub, count - 1.0)
+////  def -(toSub:Average) = new Average(sum - toSub.sum, count - toSub.count)
+//  def incSum(toAdd:Double) = new Average(sum + toAdd, count)
+//  def decSum(toSub:Double) = new Average(sum - toSub, count)
+//  
+//  def average = if (count > 0.0) (math rint sum / count * 10) / 10 else 0.0
+//  
+//}
   
 }

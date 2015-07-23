@@ -19,7 +19,7 @@ import org.nlogo.api.ScalaConversions._
 
 import com.typesafe.config.ConfigFactory
 
-import de.qlearning.util.PerformanceMeasure
+import de.util.PerformanceMeasure
 
 
 object QLSystem {

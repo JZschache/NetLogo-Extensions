@@ -1,6 +1,6 @@
 package de.qlearning
 
-import de.qlearning.util.RandomHelper
+import de.util.RandomHelper
 
 object QLAgent {
 
@@ -95,7 +95,7 @@ case class QLAgent(experimenting: Double, qValuesMap: Map[String,QLAgent.QValue]
       nTotal, lastChoice, choiceAlg, expDecay)
   
   def choose(alternatives: List[String]): String = {
-    choiceAlg(qValuesMap, alternatives, experimenting, util.ThreadLocalRandomHelper.current)
+    choiceAlg(qValuesMap, alternatives, experimenting, de.util.ThreadLocalRandomHelper.current)
   }
   
   /**

@@ -1,6 +1,4 @@
-package de.qlearning.util
-import scala.collection.generic.CanBuildFrom
-import scala.collection.mutable.ArrayBuffer
+package de.util
 import cern.jet.random.engine.RandomEngine
 import cern.jet.random.Uniform
 import cern.jet.random.engine.MersenneTwister64

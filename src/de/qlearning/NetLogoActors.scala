@@ -7,7 +7,7 @@ import akka.agent.{Agent => AkkaAgent}
 import akka.routing.{Broadcast,Route,RouteeProvider,RouterConfig,Destination}
 import akka.dispatch.{Future,Dispatchers}
 import akka.util.duration._
-import de.qlearning.util.PerformanceMeasure
+import de.util.PerformanceMeasure
 
 object NetLogoActors {
   
