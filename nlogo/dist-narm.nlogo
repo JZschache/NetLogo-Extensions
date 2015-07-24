@@ -60,11 +60,21 @@ to set-game
     set c c + 1
   ]
   
-  show games:get-solutions pm1 pm2
+  set nash-equilibria games:get-solutions-string pm1 pm2
   
+  set strategies-freq n-values (n-alt-1 * n-alt-2) [? + 1]   
+  
+  set fields ""
+  set c 0
+  repeat n-alt-1 [
+    let line sublist strategies-freq  (c + 0) (c + n-alt-2)
+    set fields (word fields (reduce [(word ?1 "   " ?2 )] line) "\n")
+    set c c + n-alt-2
+  ]
 end
 
 to setup
+  
   clear-all  
   
   let n-patches (1 + floor sqrt (n-pairs * 9))
@@ -74,14 +84,6 @@ to setup
   setup-all
   
   set strategies-freq n-values (n-alt-1 * n-alt-2) [? + 1]   
-  
-  set fields ""
-  let c 0
-  repeat n-alt-1 [
-    let line sublist strategies-freq  (c + 0) (c + n-alt-2)
-    set fields (word fields (reduce [(word ?1 " " ?2 )] line) "\n")
-    set c c + n-alt-2
-  ]
   
   set group-structure []
     
@@ -305,10 +307,10 @@ NIL
 HORIZONTAL
 
 SLIDER
-220
-185
-395
-218
+400
+25
+575
+58
 sd
 sd
 0
@@ -325,7 +327,7 @@ INPUTBOX
 395
 180
 means-1
-1.0 0.0\n0.0 2.0\n
+2.0 0.0 4.0\n3.0 1.0 5.0\n4.0 5.0 2.0\n
 1
 1
 String
@@ -437,19 +439,19 @@ PENS
 
 INPUTBOX
 220
-235
-395
-350
+355
+370
+505
 fields
-1 2\n3 4\n
+1   2   3\n4   5   6\n7   8   9\n
 1
 1
 String
 
 PLOT
-220
+375
 355
-420
+575
 505
 strategies
 NIL
@@ -467,29 +469,29 @@ PENS
 INPUTBOX
 400
 60
-565
+575
 180
 means-2
-2.0 0.0\n0.0 1.0\n
+2.0 0.0 4.0\n3.0 1.0 5.0\n4.0 5.0 2.0\n
 1
 1
 String
 
 CHOOSER
-400
-185
-565
-230
+580
+25
+745
+70
 game
 game
 "Custom" "Identical" "Symmetric" "Matching" "BoS" "Chicken" "Prisoner"
-4
+1
 
 BUTTON
-400
-235
-565
-268
+580
+75
+745
+108
 NIL
 set-game
 NIL
@@ -501,6 +503,17 @@ NIL
 NIL
 NIL
 1
+
+INPUTBOX
+220
+185
+575
+350
+nash-equilibria
+   x1   x2   x3   y1   y2   y3\n------------------------------\n    0    0    1    0    1    0\n    0  1/2  1/2  3/4    0  1/4\n    0    1    0    0    0    1\n
+1
+1
+String
 
 @#$#@#$#@
 ## WHAT IS IT?

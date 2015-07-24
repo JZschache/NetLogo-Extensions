@@ -10,8 +10,9 @@ object Rational {
 	require(denom != 0)
 	  
 	private val g = gcd(numer.abs, denom.abs)
-	val n = numer / g
-	val d = denom / g
+	val factor = if(numer < 0 && denom < 0) -1 else 1
+	val n = numer / g * factor
+	val d = if (n == 0) 1 else denom / g * factor
 	
 	def this(number:Int) = this(number, 1)
 	def this(number: Double) = this(Math.floor(number * accuracy).toInt, accuracy)
@@ -46,12 +47,7 @@ object Rational {
 	def getDouble: Double = n.toDouble / d.toDouble
 	
 	def pretty = {
-	  if (n == 0) "0" else if (d.abs == 1) (n / d).toString else {
-	    if(n < 0 && d < 0)
-	      -1 * n + "/" + -1 * d
-	    else
-	      n + "/" + d
-	  }
+	  if (n == 0) "0" else {if (d.abs == 1) (n / d).toString else n + "/" + d}
 	}
 	
 	def prettyDouble(decimal:Int) = {

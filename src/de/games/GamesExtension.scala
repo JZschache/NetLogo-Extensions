@@ -16,6 +16,7 @@ class GamesExtension extends DefaultClassManager {
     manager.addPrimitive("pm-transpose", new PMTranspose)
     manager.addPrimitive("pm-get-row", new PMGetRow)
     manager.addPrimitive("get-solutions", new GetSolutions)
+    manager.addPrimitive("get-solutions-string", new GetSolutionsString)
   }
   
   override def additionalJars: JList[String] = {
@@ -85,28 +86,6 @@ class FromRowList extends DefaultReporter {
   
 }
 
-//class FromColumnList extends DefaultReporter {
-//  
-//  override def getAgentClassString = "O"
-//  override def getSyntax = reporterSyntax(Array[Int](ListType), WildcardType)
-//  
-//  def report(args: Array[Argument], c: Context): AnyRef = {
-//    
-//    val colList = args(0).getList.map(row => 
-//      row.asInstanceOf[LogoList].map(e => new Rational(e.asInstanceOf[Double])).toList).toList
-//    val nrow = colList.first.length
-//    val entries = colList.flatMap(f => f)
-//    
-//    val rowMap = entries.foldLeft(((0 until nrow).map(i =>(i -> List[Rational]())).toMap, 0))((result, entry) => {
-//      (result._1.updated(result._2, entry :: result._1(result._2)) , (result._2 + 1) % nrow)
-//    })._1
-//    val content = (0 until nrow).flatMap(i => rowMap(i).reverse).toList
-//    
-//    new PayoffMatrix(content, nrow, colList.length)
-//    
-//  }
-//  
-//}
 
 class PMTranspose extends DefaultReporter {
   
@@ -166,6 +145,35 @@ class GetSolutions extends DefaultReporter {
     })
     
     result.toLogoList
+  }
+  
+}
+
+class GetSolutionsString extends DefaultReporter {
+  
+  override def getAgentClassString = "O"
+  override def getSyntax = reporterSyntax(Array[Int](WildcardType, WildcardType), ListType)
+  
+  private def lines(n: Int) = (0 until n).foldLeft("")((str, el) => str + "-")
+  private def spaces(n: Int) = (0 until n).foldLeft("")((str, el) => str + " ")
+  
+  def report(args: Array[Argument], c: Context): AnyRef = {
+  
+    val pm1 = args(0).get.asInstanceOf[PayoffMatrix]
+    val pm2 = args(1).get.asInstanceOf[PayoffMatrix]
+    
+    val lhs = new LemkeHowsonSolver(pm1, pm2)
+    val solutions = lhs.run
+    val pretty = solutions.map(_.map(_._2.pretty))
+    val maxLength = pretty.foldLeft(0)((size, p) => Math.max(size, p.foldLeft(0)((s, el) => Math.max(s, el.size))))
+    
+    val header = (1 to pm1.nrow).foldLeft("")((a,b) => a + spaces(maxLength) + "x" + b ) +  
+                 (1 to pm1.ncol).foldLeft("")((a,b) => a + spaces(maxLength) + "y" + b ) + "\n" + 
+                 (1 to pm1.nrow + pm1.ncol).foldLeft("")((a,b) => a + lines(maxLength + 2) ) + "\n"
+    
+    val result = header + pretty.foldLeft("")((st, row) => st + row.foldLeft("")((a,b) => a + spaces(maxLength - b.size + 2) + b ) + "\n")
+    
+    result.toLogoObject
   }
   
 }
