@@ -10,7 +10,7 @@ object Rational {
 	require(denom != 0)
 	  
 	private val g = gcd(numer.abs, denom.abs)
-	val factor = if(numer < 0 && denom < 0) -1 else 1
+	val factor = if((numer > 0 && denom < 0) || (numer < 0 && denom < 0)) -1 else 1
 	val n = numer / g * factor
 	val d = if (n == 0) 1 else denom / g * factor
 	

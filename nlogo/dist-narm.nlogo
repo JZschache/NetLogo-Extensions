@@ -60,17 +60,12 @@ to set-game
     set c c + 1
   ]
   
-  set nash-equilibria games:get-solutions-string pm1 pm2
+  set sample-equilibria games:get-solutions-string pm1 pm2
   
   set strategies-freq n-values (n-alt-1 * n-alt-2) [? + 1]   
   
-  set fields ""
-  set c 0
-  repeat n-alt-1 [
-    let line sublist strategies-freq  (c + 0) (c + n-alt-2)
-    set fields (word fields (reduce [(word ?1 "   " ?2 )] line) "\n")
-    set c c + n-alt-2
-  ]
+  set fields games:get-fields-string pm1 pm2
+  
 end
 
 to setup
@@ -300,7 +295,7 @@ experimenting
 experimenting
 0
 30
-16.7
+0.1
 0.1
 1
 NIL
@@ -327,7 +322,7 @@ INPUTBOX
 395
 180
 means-1
-2.0 0.0 4.0\n3.0 1.0 5.0\n4.0 5.0 2.0\n
+1.0 0.0 3.0 2.0\n0.0 1.0 1.0 2.0\n1.0 2.0 3.0 4.0\n2.0 3.0 6.0 2.0\n
 1
 1
 String
@@ -340,7 +335,7 @@ CHOOSER
 exploration
 exploration
 "epsilon-greedy" "softmax"
-1
+0
 
 MONITOR
 15
@@ -413,7 +408,7 @@ experimenting-decay
 experimenting-decay
 0.9
 1
-0.99
+1
 0.001
 1
 NIL
@@ -440,18 +435,18 @@ PENS
 INPUTBOX
 220
 355
-370
+475
 505
 fields
-1   2   3\n4   5   6\n7   8   9\n
+   1      2      3      4   \n   5      6      7      8   \n   9     10     11     12  N\n  13     14     15 PN  16   \n
 1
 1
 String
 
 PLOT
-375
+510
 355
-575
+710
 505
 strategies
 NIL
@@ -472,7 +467,7 @@ INPUTBOX
 575
 180
 means-2
-2.0 0.0 4.0\n3.0 1.0 5.0\n4.0 5.0 2.0\n
+1.0 0.0 1.0 2.0\n0.0 1.0 2.0 3.0\n3.0 1.0 3.0 6.0\n2.0 2.0 4.0 2.0\n
 1
 1
 String
@@ -485,7 +480,7 @@ CHOOSER
 game
 game
 "Custom" "Identical" "Symmetric" "Matching" "BoS" "Chicken" "Prisoner"
-1
+2
 
 BUTTON
 580
@@ -507,10 +502,10 @@ NIL
 INPUTBOX
 220
 185
-575
-350
-nash-equilibria
-   x1   x2   x3   y1   y2   y3\n------------------------------\n    0    0    1    0    1    0\n    0  1/2  1/2  3/4    0  1/4\n    0    1    0    0    0    1\n
+790
+346
+sample-equilibria
+    x1    x2    x3    x4    y1    y2    y3    y4  |    Ex    Ey  |    mx\n------------------------------------------------------------------------------\n     0     0   4/5   1/5     0     0   2/5   3/5  |  18/5  18/5  |      \n     0     0     0     1     0     0     1     0  |     6     6  |     P\n     0     0     1     0     0     0     0     1  |     4     4  |      \n
 1
 1
 String

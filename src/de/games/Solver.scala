@@ -47,22 +47,26 @@ class LemkeHowsonSolver(pm1: PayoffMatrix, pm2: PayoffMatrix ) {
     
     val result = variables.values.flatMap(v => {
          
-      val solvedTableau1 = solve(v._2, List(tab1, tab2), v._2)
+      val solvedTableau1 = solve(v._2, List(tab1, tab2))
       
       val normSolution =  normalise(solvedTableau1)
       
       normSolution :: normSolution.map(j => {
         val basis = j._1
         val solvedTableau2 = if (basis.isSlack)
-          solve(variables(basis.index)._2, solvedTableau1, variables(basis.index)._2)
+          solve(variables(basis.index)._2, solvedTableau1)
         else
-          solve(variables(basis.index)._1, solvedTableau1, variables(basis.index)._1)
+          solve(variables(basis.index)._1, solvedTableau1)
         normalise(solvedTableau2)
       })
     }).toList
    
+//    println("result:")
+//    result.foreach(r => println(prettyPrint(r)))
      // filter the all zero solutions or solutions with a negative entry
     val filtered = result.filter(el => !(el.forall(_._2 == 0) || el.exists(_._2 < 0)))
+//    println("filtered:")
+//    filtered.foreach(r => println(prettyPrint(r)))
     
     val distinct = filtered.foldLeft(List[List[(Variable, Rational)]]())((result, el) => {
       if (result.exists(p => (p zip el).forall(pair => pair._1._2 == pair._2._2)))
@@ -73,57 +77,72 @@ class LemkeHowsonSolver(pm1: PayoffMatrix, pm2: PayoffMatrix ) {
     distinct
   }
   
+  def prettyPrint(normSol: List[(Variable, Rational)]) = {
+    normSol.foldLeft("")((str, el) => {
+      val p = el._2.pretty
+      str + " | " + el._1.index + ": " + p + (0 until (6 - p.size)).foldLeft("")((str, el) => str + " ")
+    })
+  }
+  
+  object Break extends Exception { }
   /**
    * Finds a solution to the tableau starting with startPivot.
    */
-//  def solve (startPivot: Variable, tableau: List[List[TableauRow]]) = {
-//
-//    var (varOut, newTableau) = step(startPivot, tableau)
-//    var newPivot = if (varOut.isSlack) variables(varOut.index)._2 else variables(varOut.index)._1
-//    
-//    while (newPivot.index != startPivot.index) { // a solution has not been found yet
-//      val pair = step(newPivot, newTableau)
-//      newTableau = pair._2
-//      newPivot = if (pair._1.isSlack) variables(pair._1.index)._2 else variables(pair._1.index)._1
-//    }
-//    newTableau
-//  }
-  
-  def solve (pivot: Variable, tableaus: List[List[TableauRow]], startPivot: Variable):List[List[TableauRow]] = {
-    
-    val tableau = tableaus(pivot.tableauIndex)
-    val clashing = tableau.filter(trow => trow.row(pivot.colIndex) != 0)
-    
-    val clashRow = clashing.tail.foldLeft((clashing.first.row(0) / clashing.first.row(pivot.colIndex), clashing.first))((result, trow) => {
-      val ratio = trow.row(0) / trow.row(pivot.colIndex)
-      if (ratio > result._1) (ratio, trow) else result
-    })._2
+  def solve (startPivot: Variable, tableaus: List[List[TableauRow]]) = {
 
-    val (varOut, newTableau) = step(pivot, clashRow, tableau)
-    val newTableaus = tableaus.updated(pivot.tableauIndex, newTableau)
-    val newPivot = if (varOut.isSlack) variables(varOut.index)._2 else variables(varOut.index)._1
-      
-    if (newPivot.index != startPivot.index) {
-      solve(newPivot, newTableaus, startPivot)
-    } else
-      newTableaus
+    var (varOut, newTableau) = step(startPivot, tableaus)
+    var newPivot = if (varOut.isSlack) variables(varOut.index)._2 else variables(varOut.index)._1
+    var count = 0 
+    try {
+      while (newPivot.index != startPivot.index) { // a solution has not been found yet
+        count = count + 1
+        if (count > 1000)
+          throw Break
+        val pair = step(newPivot, newTableau)
+        newTableau = pair._2
+        newPivot = if (pair._1.isSlack) variables(pair._1.index)._2 else variables(pair._1.index)._1
+      }
+    } catch  {
+      case Break => tableaus
+    } 
+    newTableau
   }
+  
+//  def solve (pivot: Variable, tableaus: List[List[TableauRow]], startPivot: Variable):List[List[TableauRow]] = {
+//    
+//    val tableau = tableaus(pivot.tableauIndex)
+//    val clashing = tableau.filter(trow => trow.row(pivot.colIndex) != 0)
+//    
+//    val clashRow = clashing.tail.foldLeft((clashing.first.row(0) / clashing.first.row(pivot.colIndex), clashing.first))((result, trow) => {
+//      val ratio = trow.row(0) / trow.row(pivot.colIndex)
+//      if (ratio > result._1) (ratio, trow) else result
+//    })._2
+//
+//    val (varOut, newTableau) = step(pivot, clashRow, tableau)
+//    val newTableaus = tableaus.updated(pivot.tableauIndex, newTableau)
+//    val newPivot = if (varOut.isSlack) variables(varOut.index)._2 else variables(varOut.index)._1
+//      
+//    if (newPivot.index != startPivot.index) {
+//      solve(newPivot, newTableaus, startPivot)
+//    } else
+//      newTableaus
+//  }
   
   /**
    * A step of the algorithm.
    * 
    * It returns the variable that is leaving the basis and the new tableaus (one of them has not changes).
    */
-  def step(pivot: Variable, tRowOut: TableauRow, tableau: List[TableauRow]) = {
+  def step(pivot: Variable, tableaus: List[List[TableauRow]]) = {
 
-//    val tableau = tableaus(pivot.tableauIndex)
+    val tableau = tableaus(pivot.tableauIndex)
     
     // tableau row with base-variable that will be removed (min-ratio)
-//    val clashing = tableau.filter(trow => trow.row(pivot.colIndex) != 0)
-//    val tRowOut = clashing.tail.foldLeft((clashing.first.row(0) / clashing.first.row(pivot.colIndex), clashing.first))((result, trow) => {
-//      val ratio = trow.row(0) / trow.row(pivot.colIndex)
-//      if (ratio > result._1) (ratio, trow) else result
-//    })._2
+    val clashing = tableau.filter(trow => trow.row(pivot.colIndex) != 0)
+    val tRowOut = clashing.tail.foldLeft((clashing.first.row(0) / clashing.first.row(pivot.colIndex), clashing.first))((result, trow) => {
+      val ratio = trow.row(0) / trow.row(pivot.colIndex)
+      if (ratio > result._1) (ratio, trow) else result
+    })._2
 
     // changing the clashed row
     val oldFactor = tRowOut.row(pivot.colIndex)
@@ -149,7 +168,7 @@ class LemkeHowsonSolver(pm1: PayoffMatrix, pm2: PayoffMatrix ) {
         } else trow
       }
     }).toList
-    (tRowOut.basis, newTableau)
+    (tRowOut.basis, tableaus.updated(pivot.tableauIndex, newTableau))
   }
 
   /**
