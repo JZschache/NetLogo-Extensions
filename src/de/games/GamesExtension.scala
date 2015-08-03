@@ -249,13 +249,17 @@ class GetFieldsStringWithOptima extends DefaultReporter {
     val lhs = new LemkeHowsonSolver(pm1, pm2)
     val solutions = lhs.run
     
+    println(solutions)
+    
     val pureSolutions = solutions.foldLeft(List[Int]())((result, row) => {
       val idx = row.foldLeft(List[Int]())((t, el) => if (el._2 == 1) el._1.index :: t else t)
+      println(idx)
       if (idx.length == 2)
-        (idx.first - pm1.ncol + 1 + idx.last * pm1.ncol ) :: result
+        (idx.first - pm1.nrow + 1 + idx.last * pm1.ncol ) :: result
       else
         result
     })
+    println(pureSolutions)
     
     val expectations = solutions.map(row => {
       val (x, y) = row.map(_._2).splitAt(pm1.nrow)

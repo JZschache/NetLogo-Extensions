@@ -8,6 +8,8 @@ import akka.routing.{Broadcast,Route,RouteeProvider,RouterConfig,Destination}
 import akka.dispatch.{Future,Dispatchers}
 import akka.util.duration._
 import de.util.PerformanceMeasure
+import org.nlogo.app.ModelSaver
+
 
 object NetLogoActors {
   
@@ -31,6 +33,7 @@ object NetLogoActors {
   case class GetNLGroupChoices(id: Int)
   
 }
+
 
 /**
  * The NetLogoSupervisor is the main Actor of the Extension.
@@ -56,7 +59,7 @@ class NetLogoSupervisor(netLogoRouter: ActorRef,
   
   // this command starts the NetLogo desktop environment
   val nlApp = org.nlogo.app.App.app
-  
+    
   val groupRepName = config.getString(cfgstr + ".group-reporter-name")
   val batches = config.getInt(cfgstr + ".batches")
   val updateComName = config.getString(cfgstr + ".update-command-name")
@@ -80,10 +83,18 @@ class NetLogoSupervisor(netLogoRouter: ActorRef,
     }
   }
   
+  
+  private def doSave(path: String) {
+    
+  }
+  
   startWith(Idle, Uninitialized)
   
   when(Idle) {
     case Event(InitNetLogoActors, _) => {
+      // save changes
+      val ms = new ModelSaver(nlApp)
+      org.nlogo.api.FileIO.writeFile(nlApp.workspace.getModelPath(), ms.save)
       // the NetLogo-model is reloaded and the reward-reporter is recompiled
       netLogoRouter ! Broadcast(CompileReporter)
       // the groups structure is deleted

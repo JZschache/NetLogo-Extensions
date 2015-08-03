@@ -44,19 +44,19 @@ to set-game
     set n-alt-2 2
   ]
   
-  set means-1 ""
+  set means-x ""
   let c 0
   repeat n-alt-1 [
     let row games:pm-get-row pm1 c
-    set means-1 (word means-1 (reduce [(word ?1 " " ?2 )] row) "\n")
+    set means-x (word means-x (reduce [(word ?1 " " ?2 )] row) "\n")
     set c c + 1
   ]
   
-  set means-2 ""
+  set means-y ""
   set c 0
   repeat n-alt-1 [
     let row games:pm-get-row pm2 c
-    set means-2 (word means-2 (reduce [(word ?1 " " ?2 )] row) "\n")
+    set means-y (word means-y (reduce [(word ?1 " " ?2 )] row) "\n")
     set c c + 1
   ]
   
@@ -116,8 +116,8 @@ end
 to-report read-means-matrix [ nr ]
   ; build matrix from input (means-nr)
   let row-string-list []
-  let temp means-1
-  if (nr = 2) [set temp means-2]
+  let temp means-x
+  if (nr = 2) [set temp means-y]
   while [temp != ""] [
     let line-break position "\n" temp
     ifelse line-break = false [ 
@@ -321,8 +321,8 @@ INPUTBOX
 60
 395
 180
-means-1
-1.0 0.0 3.0 2.0\n0.0 1.0 1.0 2.0\n1.0 2.0 3.0 4.0\n2.0 3.0 6.0 2.0\n
+means-x
+2.0 0.0\n3.0 1.0\n1.0 2.0\n
 1
 1
 String
@@ -438,7 +438,7 @@ INPUTBOX
 475
 505
 fields
-   1      2      3      4   \n   5      6      7      8   \n   9     10     11     12  N\n  13     14     15 PN  16   \n
+  1     2   \n  3 P   4   \n  5     6 P \n
 1
 1
 String
@@ -466,8 +466,8 @@ INPUTBOX
 60
 575
 180
-means-2
-1.0 0.0 1.0 2.0\n0.0 1.0 2.0 3.0\n3.0 1.0 3.0 6.0\n2.0 2.0 4.0 2.0\n
+means-y
+2.0 3.0\n0.0 1.0\n3.0 4.0\n
 1
 1
 String
@@ -480,7 +480,7 @@ CHOOSER
 game
 game
 "Custom" "Identical" "Symmetric" "Matching" "BoS" "Chicken" "Prisoner"
-2
+0
 
 BUTTON
 580
@@ -505,7 +505,7 @@ INPUTBOX
 790
 346
 sample-equilibria
-    x1    x2    x3    x4    y1    y2    y3    y4  |    Ex    Ey  |    mx\n------------------------------------------------------------------------------\n     0     0   4/5   1/5     0     0   2/5   3/5  |  18/5  18/5  |      \n     0     0     0     1     0     0     1     0  |     6     6  |     P\n     0     0     1     0     0     0     0     1  |     4     4  |      \n
+ x1 x2 x3 y1 y2  | Ex Ey  | mx\n------------------------------\n  0  0  1  0  1  |  2  4  |  P\n
 1
 1
 String
