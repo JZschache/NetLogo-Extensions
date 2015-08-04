@@ -52,8 +52,10 @@ object Rational {
 	
 	def prettyDouble(decimal:Int) = {
 	  val t = Math.pow(10.0, decimal.toDouble)
-	  ((Math.floor(t * n.toDouble / d.toDouble) / t)).toString
+	  ((Math.floor(t * n.toDouble / d.toDouble) / t))
 	}
+	
+	def floor = Math.floor(n.toDouble / d.toDouble).toInt
 	
   }
 

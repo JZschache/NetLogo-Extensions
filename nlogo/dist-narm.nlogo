@@ -1,70 +1,70 @@
 extensions[ql matrix games]
 
-turtles-own[ leader q-values total-n current-exp last-action optimal-action last-strategy]
-globals[ group-structure n-alt-1 n-alt-2 means-1-matrix means-2-matrix optimal-matrix rel-freq-optimal strategies-freq]
+turtles-own[ leader q-values total-n current-exp optimal-action last-field]
+globals[ group-structure means-1-matrix means-2-matrix optimal-fields rel-freq-optimal]
+
+to-report read-means-matrix [ nr ]
+  let row-string-list []
+  let temp means-x
+  if (nr = 2) [set temp means-y]
+  while [temp != ""] [
+    let line-break position "\n" temp
+    ifelse line-break = false [ 
+      set row-string-list lput temp row-string-list
+      set temp ""
+    ] [
+      set row-string-list lput (substring temp 0 line-break) row-string-list
+      set temp substring temp (line-break + 1) (length temp)
+    ]
+  ]
+  report (map [read-from-string (word "[ " ? " ]")] row-string-list)
+end
+
+to-report write-means-matrix [ matrix n-row ]
+  let strings games:matrix-as-pretty-strings matrix
+  let result ""
+  foreach strings [ set result (word result (reduce [(word ?1 " " ?2 )] ?) "\n") ]
+  report result
+end
+
 
 to set-game
-  let rows-1 read-means-matrix 1
-  let rows-2 read-means-matrix 2
   
-  let pm1 games:from-row-list rows-1
-  let pm2 games:from-row-list rows-2
+  let rows1 (read-means-matrix 1)
+  let rows2 (read-means-matrix 2)
   
-  set n-alt-1 length rows-1
-  set n-alt-2 length first rows-1
+  let pm1 games:matrix-from-row-list rows1
+  let pm2 games:matrix-from-row-list rows2
   
-  if (game = "Identical") [
-    set pm2 pm1
-  ]
-  if (game = "Symmetric" and n-alt-1 = n-alt-2) [
-    set pm2 games:pm-transpose pm1
-  ]
-  if (game = "Matching") [
-    set pm1 games:from-row-list [[1 0] [0 1]]
-    set pm2 games:from-row-list [[0 1] [1 0]]
-    set n-alt-1 2
-    set n-alt-2 2
-  ]
-  if (game = "BoS") [
-    set pm1 games:from-row-list [[1 0] [0 2]]
-    set pm2 games:from-row-list [[2 0] [0 1]]
-    set n-alt-1 2
-    set n-alt-2 2
-  ]
-  if (game = "Chicken") [
-    set pm1 games:from-row-list [[2 1] [3 0]]
-    set pm2 games:from-row-list [[2 3] [1 0]]
-    set n-alt-1 2
-    set n-alt-2 2
-  ]
-  if (game = "Prisoner") [
-    set pm1 games:from-row-list [[2 0] [3 1]]
-    set pm2 games:from-row-list [[2 3] [0 1]]
-    set n-alt-1 2
-    set n-alt-2 2
+  let game 0
+  
+  ifelse (game-name = "Custom") [
+    set game games:two-persons-game pm1 pm2
+  ] [
+    ifelse (game-name = "CopyMeansX") [
+      set pm2 pm1
+      set game games:two-persons-game pm1 pm2
+    ] [ 
+      ifelse (game-name = "TransposeMeansX" and (length rows1) = (length first rows1) ) [
+        set pm2 games:matrix-transpose pm1
+        set game games:two-persons-game pm1 pm2
+      ] [ ; use gamut    
+        set game games:two-persons-gamut-game game-name n-alt-x n-alt-y
+      ]
+    ]
   ]
   
-  set means-x ""
-  let c 0
-  repeat n-alt-1 [
-    let row games:pm-get-row pm1 c
-    set means-x (word means-x (reduce [(word ?1 " " ?2 )] row) "\n")
-    set c c + 1
-  ]
+  set pm1 games:game-matrix game 1
+  set pm2 games:game-matrix game 2
+  let m games:matrix-as-pretty-strings pm1
+  set n-alt-x length m
+  set n-alt-y length first m
   
-  set means-y ""
-  set c 0
-  repeat n-alt-1 [
-    let row games:pm-get-row pm2 c
-    set means-y (word means-y (reduce [(word ?1 " " ?2 )] row) "\n")
-    set c c + 1
-  ]
+  set means-x write-means-matrix pm1 n-alt-x
+  set means-y write-means-matrix pm2 n-alt-x
   
-  set sample-equilibria games:get-solutions-string pm1 pm2
-  
-  set strategies-freq n-values (n-alt-1 * n-alt-2) [? + 1]   
-  
-  set fields games:get-fields-string pm1 pm2
+  set sample-equilibria games:get-solutions-string-with-expect game
+  set fields games:get-fields-string game
   
 end
 
@@ -78,8 +78,6 @@ to setup
     
   setup-all
   
-  set strategies-freq n-values (n-alt-1 * n-alt-2) [? + 1]   
-  
   set group-structure []
     
   create-turtles n-pairs [
@@ -90,7 +88,7 @@ to setup
     hatch 1 [ 
       set leader false
       setxy (1 + [xcor] of myself) (1 + [ycor] of myself)
-      set group-structure lput (ql:create-group (list self myself) (list (n-values n-alt-1 [(word ?)]) (n-values n-alt-2 [(word ?)]))) group-structure
+      set group-structure lput (ql:create-group (list self myself) (list (n-values n-alt-x [(word ?)]) (n-values n-alt-y [(word ?)]))) group-structure
       face myself
       set partner self
     ]
@@ -113,34 +111,22 @@ to setup
   reset-ticks
 end
 
-to-report read-means-matrix [ nr ]
-  ; build matrix from input (means-nr)
-  let row-string-list []
-  let temp means-x
-  if (nr = 2) [set temp means-y]
-  while [temp != ""] [
-    let line-break position "\n" temp
-    ifelse line-break = false [ 
-      set row-string-list lput temp row-string-list
-      set temp ""
-    ] [
-      set row-string-list lput (substring temp 0 line-break) row-string-list
-      set temp substring temp (line-break + 1) (length temp)
-    ]
-  ]
-  report (map [read-from-string (word "[ " ? " ]")] row-string-list)
-end
+
 
 to setup-all
   
-  let row-list read-means-matrix 1
-  set means-1-matrix matrix:from-row-list row-list
-  set n-alt-1 length row-list
-  set n-alt-2 length first row-list
-  set means-2-matrix matrix:from-row-list read-means-matrix 2
-  ; search optimal pairs
-  let maxEntry max (reduce [sentence ?1 ?2 ] row-list)
-  set optimal-matrix matrix:map [ifelse-value (? = maxEntry) [1] [0]] means-1-matrix
+  let rows1 read-means-matrix 1
+  set means-1-matrix matrix:from-row-list rows1
+  set n-alt-x length rows1
+  set n-alt-y length first rows1
+  let rows2 (read-means-matrix 2)
+  set means-2-matrix matrix:from-row-list rows2
+  
+  let pm1 games:matrix-from-row-list rows1
+  let pm2 games:matrix-from-row-list rows2
+  
+  let game games:two-persons-game pm1 pm2
+  set optimal-fields games:game-pure-optima game
 end
 
 to-report get-reward [ env-id ]
@@ -153,14 +139,14 @@ to-report reward [group-choice]
   let agents ql:get-agents group-choice
   let decisions ql:get-decisions group-choice
   
-  (foreach agents decisions [ ask ?1 [ set last-action ?2 ] ])
-
   let dec1 (read-from-string first decisions) 
   let dec2 (read-from-string last decisions)
-  let optimal matrix:get optimal-matrix dec1 dec2
+  
+  let field dec1 * n-alt-y + dec2 
+  let optimal item field optimal-fields
   (foreach agents [ ask ?1 [ 
-        set optimal-action 1 = optimal 
-        set last-strategy dec1 * n-alt-2 + dec2
+        set optimal-action optimal 
+        set last-field field
      ]])
     
   let m1 matrix:get means-1-matrix dec1 dec2
@@ -196,11 +182,11 @@ end
 GRAPHICS-WINDOW
 820
 20
-1233
-454
+1234
+455
 -1
 -1
-3.007518796992481
+4.2105263157894735
 1
 10
 1
@@ -211,9 +197,9 @@ GRAPHICS-WINDOW
 1
 1
 0
-133
+95
 0
-133
+95
 0
 0
 1
@@ -229,7 +215,7 @@ n-pairs
 n-pairs
 0
 10000
-1940
+1000
 10
 1
 NIL
@@ -322,7 +308,7 @@ INPUTBOX
 395
 180
 means-x
-2.0 0.0\n3.0 1.0\n1.0 2.0\n
+ 0 10  0\n 0  0 10\n10  0  0\n
 1
 1
 String
@@ -435,20 +421,20 @@ PENS
 INPUTBOX
 220
 355
-475
+765
 505
 fields
-  1     2   \n  3 P   4   \n  5     6 P \n
+| 1: ( 0, 0)   | 2: (10, 0) P | 3: ( 0,10) P |\n| 4: ( 0,10) P | 5: ( 0, 0)   | 6: (10, 0) P |\n| 7: (10, 0) P | 8: ( 0,10) P | 9: ( 0, 0)   |\n
 1
 1
 String
 
 PLOT
+15
 510
-355
-710
-505
-strategies
+215
+660
+fields-histogram
 NIL
 NIL
 0.0
@@ -459,7 +445,7 @@ true
 false
 "" ""
 PENS
-"default" 1.0 1 -16777216 false "set-plot-x-range 0 (n-alt-1 * n-alt-2)" "histogram [last-strategy] of turtles with [leader]"
+"default" 1.0 1 -16777216 false "set-plot-x-range 0 (n-alt-x * n-alt-y)" "histogram [last-field] of turtles with [leader]"
 
 INPUTBOX
 400
@@ -467,7 +453,7 @@ INPUTBOX
 575
 180
 means-y
-2.0 3.0\n0.0 1.0\n3.0 4.0\n
+ 0  0 10\n10  0  0\n 0 10  0\n
 1
 1
 String
@@ -475,18 +461,18 @@ String
 CHOOSER
 580
 25
-745
+765
 70
-game
-game
-"Custom" "Identical" "Symmetric" "Matching" "BoS" "Chicken" "Prisoner"
-0
+game-name
+game-name
+"Custom" "CopyMeansX" "TransposeMeansX" "BattleOfTheSexes" "Chicken" "CollaborationGame" "CoordinationGame" "DispersionGame" "GrabTheDollar" "GuessTwoThirdsAve" "HawkAndDove" "MajorityVoting" "MatchingPennies" "PrisonersDilemma" "RandomGame" "RandomZeroSum" "RockPaperScissors" "ShapleysGame"
+16
 
 BUTTON
 580
-75
-745
-108
+145
+765
+178
 NIL
 set-game
 NIL
@@ -502,13 +488,43 @@ NIL
 INPUTBOX
 220
 185
-790
+765
 346
 sample-equilibria
- x1 x2 x3 y1 y2  | Ex Ey  | mx\n------------------------------\n  0  0  1  0  1  |  2  4  |  P\n
+    x1    x2    x3    y1    y2    y3  |    Ex    Ey  |    mx\n------------------------------------------------------------------\n   1/3   1/3   1/3   1/3   1/3   1/3  |  10/3  10/3  |     P\n
 1
 1
 String
+
+SLIDER
+580
+75
+765
+108
+n-alt-x
+n-alt-x
+1
+10
+3
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+580
+110
+765
+143
+n-alt-y
+n-alt-y
+1
+10
+3
+1
+1
+NIL
+HORIZONTAL
 
 @#$#@#$#@
 ## WHAT IS IT?

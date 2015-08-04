@@ -139,36 +139,40 @@ class LemkeHowsonSolver(pm1: PayoffMatrix, pm2: PayoffMatrix ) {
     
     // tableau row with base-variable that will be removed (min-ratio)
     val clashing = tableau.filter(trow => trow.row(pivot.colIndex) != 0)
-    val tRowOut = clashing.tail.foldLeft((clashing.first.row(0) / clashing.first.row(pivot.colIndex), clashing.first))((result, trow) => {
-      val ratio = trow.row(0) / trow.row(pivot.colIndex)
-      if (ratio > result._1) (ratio, trow) else result
-    })._2
+//    if (clashing.isEmpty) {
+//      (pivot, tableaus)
+//    } else {
+      val tRowOut = clashing.tail.foldLeft((clashing.first.row(0) / clashing.first.row(pivot.colIndex), clashing.first))((result, trow) => {
+        val ratio = trow.row(0) / trow.row(pivot.colIndex)
+        if (ratio > result._1) (ratio, trow) else result
+      })._2
 
-    // changing the clashed row
-    val oldFactor = tRowOut.row(pivot.colIndex)
-    val newClashRow = (0 until tRowOut.row.length).map(i => 
-      if ( i == tRowOut.basis.colIndex) 
-        1 / oldFactor
-      else if (i == pivot.colIndex)
-        new Rational(0)
-      else
-        tRowOut.row(i) / oldFactor * (-1)
-    ).toList
-  
-    // update all rows
-    val tRowOutIndex = tableau.indexOf(tRowOut)
-    val newTableau = (0 until tableau.length).map(j => {
-      if (j == tRowOutIndex) TableauRow(newClashRow, pivot) else {
-        val trow = tableau(j)
-        if (trow.row(pivot.colIndex) != 0) {
-          val oldFactor = trow.row(pivot.colIndex)
-          val newRow = (0 until trow.row.length).map(i => 
-            if (i == pivot.colIndex) new Rational(0) else trow.row(i) + oldFactor * newClashRow(i)).toList
-          TableauRow(newRow, trow.basis)
-        } else trow
-      }
-    }).toList
-    (tRowOut.basis, tableaus.updated(pivot.tableauIndex, newTableau))
+      // changing the clashed row
+      val oldFactor = tRowOut.row(pivot.colIndex)
+      val newClashRow = (0 until tRowOut.row.length).map(i => 
+        if ( i == tRowOut.basis.colIndex) 
+          1 / oldFactor
+        else if (i == pivot.colIndex)
+          new Rational(0)
+        else
+          tRowOut.row(i) / oldFactor * (-1)
+      ).toList
+    
+      // update all rows
+      val tRowOutIndex = tableau.indexOf(tRowOut)
+      val newTableau = (0 until tableau.length).map(j => {
+        if (j == tRowOutIndex) TableauRow(newClashRow, pivot) else {
+          val trow = tableau(j)
+          if (trow.row(pivot.colIndex) != 0) {
+            val oldFactor = trow.row(pivot.colIndex)
+            val newRow = (0 until trow.row.length).map(i => 
+              if (i == pivot.colIndex) new Rational(0) else trow.row(i) + oldFactor * newClashRow(i)).toList
+            TableauRow(newRow, trow.basis)
+          } else trow
+        } 
+      }).toList
+      (tRowOut.basis, tableaus.updated(pivot.tableauIndex, newTableau))
+//    }
   }
 
   /**
