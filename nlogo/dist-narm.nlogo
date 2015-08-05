@@ -308,7 +308,7 @@ INPUTBOX
 395
 180
 means-x
- 0 10  0\n 0  0 10\n10  0  0\n
+ 1  0\n10  0\n
 1
 1
 String
@@ -424,7 +424,7 @@ INPUTBOX
 765
 505
 fields
-| 1: ( 0, 0)   | 2: (10, 0) P | 3: ( 0,10) P |\n| 4: ( 0,10) P | 5: ( 0, 0)   | 6: (10, 0) P |\n| 7: (10, 0) P | 8: ( 0,10) P | 9: ( 0, 0)   |\n
+| 1: ( 1, 1) P | 2: ( 0,10) P |\n| 3: (10, 0) P | 4: ( 0, 0)   |\n
 1
 1
 String
@@ -453,7 +453,7 @@ INPUTBOX
 575
 180
 means-y
- 0  0 10\n10  0  0\n 0 10  0\n
+ 1 10\n 0  0\n
 1
 1
 String
@@ -466,7 +466,7 @@ CHOOSER
 game-name
 game-name
 "Custom" "CopyMeansX" "TransposeMeansX" "BattleOfTheSexes" "Chicken" "CollaborationGame" "CoordinationGame" "DispersionGame" "GrabTheDollar" "GuessTwoThirdsAve" "HawkAndDove" "MajorityVoting" "MatchingPennies" "PrisonersDilemma" "RandomGame" "RandomZeroSum" "RockPaperScissors" "ShapleysGame"
-16
+0
 
 BUTTON
 580
@@ -491,7 +491,7 @@ INPUTBOX
 765
 346
 sample-equilibria
-    x1    x2    x3    y1    y2    y3  |    Ex    Ey  |    mx\n------------------------------------------------------------------\n   1/3   1/3   1/3   1/3   1/3   1/3  |  10/3  10/3  |     P\n
+x1x2y1y2  |ExEy  |mx\n------------------\n
 1
 1
 String
@@ -505,7 +505,7 @@ n-alt-x
 n-alt-x
 1
 10
-3
+2
 1
 1
 NIL
@@ -520,7 +520,7 @@ n-alt-y
 n-alt-y
 1
 10
-3
+2
 1
 1
 NIL

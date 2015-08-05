@@ -120,8 +120,11 @@ class PayoffMatrix(val content: List[Rational], val nrow:Int, val ncol:Int) exte
    */
   def getTableau(basis: List[Variable], transpose: Boolean): List[TableauRow] = {
     val rowList = getRowList(transpose)
-    (rowList zip basis).map(pair => 
-      TableauRow(List[Rational](1) ++ (0 until rowList.length).map(_ => new Rational(0)) ++ pair._1.map(e => e * -1), pair._2)
+    val length = rowList.length
+    val identity = (0 until length).map(i => (0 until length).map(j => if (j == i) new Rational(1) else new Rational(0)))
+    (rowList, identity, basis).zip.map(triple => 
+      TableauRow(List[Rational](1) ++ (0 until length).map(_ => new Rational(0)) ++ 
+                 triple._1.map(e => e * -1) ++ triple._2, triple._3)
     ).toList
   }
   

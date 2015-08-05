@@ -46,20 +46,27 @@ class LemkeHowsonSolver(pm1: PayoffMatrix, pm2: PayoffMatrix ) {
   def run() = {
     
     val result = variables.values.flatMap(v => {
-         
+      
       val solvedTableau1 = solve(v._2, List(tab1, tab2))
       
-      val normSolution =  normalise(solvedTableau1)
+      if (solvedTableau1 != null){
+        val normSolution =  normalise(solvedTableau1)
       
-      normSolution :: normSolution.map(j => {
-        val basis = j._1
-        val solvedTableau2 = if (basis.isSlack)
-          solve(variables(basis.index)._2, solvedTableau1)
-        else
-          solve(variables(basis.index)._1, solvedTableau1)
-        normalise(solvedTableau2)
-      })
-    }).toList
+        normSolution :: normSolution.map(j => {
+          val basis = j._1
+          val solvedTableau2 = if (basis.isSlack) {
+            solve(variables(basis.index)._2, solvedTableau1)
+          } else {
+            solve(variables(basis.index)._1, solvedTableau1)
+          }
+          if (solvedTableau2 != null)
+            normalise(solvedTableau2)
+          else
+            null
+        })
+      } else
+        List(null)
+      }).toList.filter(_ != null)
    
 //    println("result:")
 //    result.foreach(r => println(prettyPrint(r)))
@@ -91,21 +98,27 @@ class LemkeHowsonSolver(pm1: PayoffMatrix, pm2: PayoffMatrix ) {
   def solve (startPivot: Variable, tableaus: List[List[TableauRow]]) = {
 
     var (varOut, newTableau) = step(startPivot, tableaus)
-    var newPivot = if (varOut.isSlack) variables(varOut.index)._2 else variables(varOut.index)._1
-    var count = 0 
-    try {
-      while (newPivot.index != startPivot.index) { // a solution has not been found yet
-        count = count + 1
-        if (count > 1000)
-          throw Break
-        val pair = step(newPivot, newTableau)
-        newTableau = pair._2
-        newPivot = if (pair._1.isSlack) variables(pair._1.index)._2 else variables(pair._1.index)._1
+
+    if (varOut != null){
+      var newPivot = if (varOut.isSlack) variables(varOut.index)._2 else variables(varOut.index)._1
+      var count = 0 
+      try {
+        while (newPivot.index != startPivot.index) { // a solution has not been found yet
+          count = count + 1
+          val pair = step(newPivot, newTableau)
+          if (pair._1 == null || count > 1000){
+            throw Break
+          }
+          newTableau = pair._2
+          newPivot = if (pair._1.isSlack) variables(pair._1.index)._2 else variables(pair._1.index)._1
+        }
+        newTableau
+      } catch  {
+        case Break => 
+          null
       }
-    } catch  {
-      case Break => tableaus
-    } 
-    newTableau
+    } else
+      null
   }
   
 //  def solve (pivot: Variable, tableaus: List[List[TableauRow]], startPivot: Variable):List[List[TableauRow]] = {
@@ -135,18 +148,40 @@ class LemkeHowsonSolver(pm1: PayoffMatrix, pm2: PayoffMatrix ) {
    */
   def step(pivot: Variable, tableaus: List[List[TableauRow]]) = {
 
+    
     val tableau = tableaus(pivot.tableauIndex)
     
+    val firstPertubationIndex = tableau.first.row.length - tableau.length
+    val lastPertubationIndex = tableau.first.row.length - 1
+      
+    def ratioVector(trow: TableauRow) = {
+      List(trow.row(0) / trow.row(pivot.colIndex)) ++ (firstPertubationIndex to lastPertubationIndex).map(i => trow.row(i) / trow.row(pivot.colIndex))
+    }
+    def isGreater(first: List[Rational], second: List[Rational]) = {
+      
+    }
+    
+    
     // tableau row with base-variable that will be removed (min-ratio)
-    val clashing = tableau.filter(trow => trow.row(pivot.colIndex) != 0)
-//    if (clashing.isEmpty) {
-//      (pivot, tableaus)
-//    } else {
-      val tRowOut = clashing.tail.foldLeft((clashing.first.row(0) / clashing.first.row(pivot.colIndex), clashing.first))((result, trow) => {
-        val ratio = trow.row(0) / trow.row(pivot.colIndex)
-        if (ratio > result._1) (ratio, trow) else result
+    var clashing = tableau.filter(trow => trow.row(pivot.colIndex) < 0)
+    if (clashing.isEmpty) {
+      println("clashing is empty")
+      clashing = tableau.filter(trow => trow.row(pivot.colIndex) > 0)
+    }
+    if (clashing.isEmpty) {
+      println("also no strictly positive entries")
+      (null, null)
+    } else {
+      
+      val minRows = clashing.tail.foldLeft((ratioVector(clashing.first), List(clashing.first)))((result, trow) => {
+        val ratioV = ratioVector(trow)
+        if (ratio > result._1) (ratio, List(trow)) 
+        else if (ratio == result._1) (ratio, trow :: result._2) 
+        else result
       })._2
 
+      val tRowOut = minRows.first
+      
       // changing the clashed row
       val oldFactor = tRowOut.row(pivot.colIndex)
       val newClashRow = (0 until tRowOut.row.length).map(i => 
@@ -172,7 +207,7 @@ class LemkeHowsonSolver(pm1: PayoffMatrix, pm2: PayoffMatrix ) {
         } 
       }).toList
       (tRowOut.basis, tableaus.updated(pivot.tableauIndex, newTableau))
-//    }
+    }
   }
 
   /**
