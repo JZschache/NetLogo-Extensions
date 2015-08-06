@@ -308,7 +308,7 @@ INPUTBOX
 395
 180
 means-x
- 1  0\n10  0\n
+ 7  0\n10  0\n
 1
 1
 String
@@ -394,7 +394,7 @@ experimenting-decay
 experimenting-decay
 0.9
 1
-1
+0.989
 0.001
 1
 NIL
@@ -424,7 +424,7 @@ INPUTBOX
 765
 505
 fields
-| 1: ( 1, 1) P | 2: ( 0,10) P |\n| 3: (10, 0) P | 4: ( 0, 0)   |\n
+| 1: ( 7, 7) P | 2: ( 0,10) PN|\n| 3: (10, 0) PN| 4: ( 0, 0)  N|\n
 1
 1
 String
@@ -453,7 +453,7 @@ INPUTBOX
 575
 180
 means-y
- 1 10\n 0  0\n
+ 7 10\n 0  0\n
 1
 1
 String
@@ -491,7 +491,7 @@ INPUTBOX
 765
 346
 sample-equilibria
-x1x2y1y2  |ExEy  |mx\n------------------\n
+  x1  x2  y1  y2  |  Ex  Ey  |  mx\n------------------------------------\n   0   1   1   0  |  10   0  |   P\n   0   1   0   1  |   0   0  |    \n   1   0   0   1  |   0  10  |   P\n
 1
 1
 String

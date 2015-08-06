@@ -121,10 +121,15 @@ class PayoffMatrix(val content: List[Rational], val nrow:Int, val ncol:Int) exte
   def getTableau(basis: List[Variable], transpose: Boolean): List[TableauRow] = {
     val rowList = getRowList(transpose)
     val length = rowList.length
-    val identity = (0 until length).map(i => (0 until length).map(j => if (j == i) new Rational(1) else new Rational(0)))
-    (rowList, identity, basis).zip.map(triple => 
+    // for lexicographic comparison ( if ever needed again)
+//    val identity = (0 until length).map(i => (0 until length).map(j => if (j == i) new Rational(1) else new Rational(0)))
+//    (rowList, identity, basis).zip.map(triple => 
+//      TableauRow(List[Rational](1) ++ (0 until length).map(_ => new Rational(0)) ++ 
+//                 triple._1.map(e => e * -1) ++ triple._2, triple._3)
+//    ).toList
+    (rowList, basis).zip.map(pair => 
       TableauRow(List[Rational](1) ++ (0 until length).map(_ => new Rational(0)) ++ 
-                 triple._1.map(e => e * -1) ++ triple._2, triple._3)
+                 pair._1.map(e => e * -1), pair._2)
     ).toList
   }
   
@@ -158,6 +163,8 @@ class TwoPersonsGame(val pm1: PayoffMatrix, val pm2: PayoffMatrix) extends Exten
   
   val lhs = new LemkeHowsonSolver(pm1, pm2)
   val solutions = lhs.run
+  
+  //TODO: calculate pure solutions separately and return only mixed solutions by default and pure solutions in field list
   
 }
 
