@@ -30,7 +30,8 @@ object QLAgent {
    * convenient constructor of the QLAgent
    */
   def apply(exploration: String, experimenting: Double) = 
-    new QLAgent(experimenting, Map[String,QValue](), 0.0, "", (exploration match {
+//    new QLAgent(experimenting, Map[String,QValue](), 0.0, "", (exploration match {
+    new QLAgent(experimenting, Map[String,QValue](), "", (exploration match {
         case "epsilon-greedy" => epsGreedy
         case "softmax" => softmax
 //        case "uncertainty" => uncertainty
@@ -79,7 +80,8 @@ object QLAgent {
  *  it is used to update the Q-values and to get a decision from the agent
  */ 
 case class QLAgent(experimenting: Double, qValuesMap: Map[String,QLAgent.QValue], 
-                   nTotal: Double, lastChoice: String, 
+//                   nTotal: Double, lastChoice: String, 
+                   lastChoice: String,
                    choiceAlg: (Map[String,QLAgent.QValue], List[String], Double, RandomHelper) => String,
                    expDecay: Double) {
   
@@ -87,12 +89,14 @@ case class QLAgent(experimenting: Double, qValuesMap: Map[String,QLAgent.QValue]
 //    println("update: " + alt + " " + reward)
     val newQvalue = qValuesMap.getOrElse(alt, new QLAgent.QValue(alt, 0.0, 0.0)).updated(reward)
     QLAgent(experimenting * expDecay, qValuesMap.updated(alt, newQvalue), 
-            nTotal + 1.0, alt, choiceAlg, expDecay)
+            alt, choiceAlg, expDecay)
+//            nTotal + 1.0, alt, choiceAlg, expDecay)
   }
   
   def setAlternatives(alternatives: List[String]) = QLAgent(experimenting,
       alternatives.map(key => (key -> qValuesMap.getOrElse(key, new QLAgent.QValue(key, 0.0, 0.0)))).toMap,
-      nTotal, lastChoice, choiceAlg, expDecay)
+//      nTotal, lastChoice, choiceAlg, expDecay)
+      lastChoice, choiceAlg, expDecay)
   
   def choose(alternatives: List[String]): String = {
     choiceAlg(qValuesMap, alternatives, experimenting, de.util.ThreadLocalRandomHelper.current)
@@ -103,6 +107,7 @@ case class QLAgent(experimenting: Double, qValuesMap: Map[String,QLAgent.QValue]
    * level of experimenting.
    */
   def startDecreasing(experimentingDecay: Double) : QLAgent = 
-    QLAgent(experimenting, qValuesMap, nTotal, lastChoice, choiceAlg, experimentingDecay)
+    QLAgent(experimenting, qValuesMap, lastChoice, choiceAlg, experimentingDecay)
+//    QLAgent(experimenting, qValuesMap, nTotal, lastChoice, choiceAlg, experimentingDecay)
     
 }

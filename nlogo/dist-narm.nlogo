@@ -193,8 +193,8 @@ end
 GRAPHICS-WINDOW
 785
 15
-1198
-449
+1201
+452
 -1
 -1
 6.25
@@ -292,7 +292,7 @@ experimenting
 experimenting
 0
 30
-0.1
+0.2
 0.1
 1
 NIL
@@ -319,7 +319,7 @@ INPUTBOX
 395
 180
 means-x
-3 0\n1 7\n
+10  3\n 4  1\n
 1
 1
 String
@@ -332,7 +332,7 @@ CHOOSER
 exploration
 exploration
 "epsilon-greedy" "softmax"
-0
+1
 
 MONITOR
 15
@@ -405,7 +405,7 @@ experimenting-decay
 experimenting-decay
 0.9
 1
-0.999
+0.99
 0.001
 1
 NIL
@@ -435,7 +435,7 @@ INPUTBOX
 770
 560
 fields
-| 1: ( 3, 6) P | 2: ( 0,10) P |\n| 3: ( 1, 3)   | 4: ( 7, 2) P |\n
+| 1: (10, 1) P | 2: ( 3, 4) PN|\n| 3: ( 4, 2) P | 4: ( 1, 0)   |\n
 1
 1
 String
@@ -464,7 +464,7 @@ INPUTBOX
 575
 180
 means-y
- 6 10\n 3  2\n
+1 4\n2 0\n
 1
 1
 String
@@ -502,7 +502,7 @@ INPUTBOX
 765
 346
 sample-equilibria
-    x1    x2    y1    y2  |    Ex    Ey  |    mx\n------------------------------------------------------\n   1/5   4/5   7/9   2/9  |   7/3  18/5  |      \n
+ x1 x2 y1 y2  | Ex Ey  | mx\n---------------------------\n
 1
 1
 String
@@ -540,7 +540,7 @@ HORIZONTAL
 PLOT
 270
 605
-470
+815
 755
 diff
 NIL

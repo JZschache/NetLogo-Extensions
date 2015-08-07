@@ -26,31 +26,37 @@ object QLSystem {
   
   // name of NetLogo extension
   val EXTENSION_NAME = "ql"
-  
+  // path of configuration file
   val confFile = "conf/application.conf"
+    
+  // starting the ActorSystem
   implicit val system = ActorSystem("QLSystem", ConfigFactory.parseFile(new File(confFile)))
+  
   val config = system.settings.config
   val cfgstr = "netlogo"
+  // the timeout is used to wait for NetLogo, especially: GetNLGroupChoices from HeadlessEnvironments, but also: init, clearAll 
   val defaultWaitDuration = config.getInt(cfgstr + ".timeout_ms") milliseconds
   implicit val timeout = Timeout(defaultWaitDuration)
-  implicit val ec = system.dispatcher
   
-  // create router and supervisor
-  // the router is used to execute reward procedures
+  // a number of headless instances of NetLogo are loaded in the background
+  // they are used to simultaneousely execute reward procedures
+  // a router is used to distribute jobs to the headless instances
   val conHeadlessEnv = config.getInt(cfgstr + ".concurrent-headless-environments")
   val netLogoRouter = system.actorOf(Props().withRouter(NetLogoHeadlessRouter(conHeadlessEnv)))
-  // the supervisor controls the simulation
+  
+  // three AkkaAgents measure performance of the program
   val betweenTickPerf = AkkaAgent(PerformanceMeasure())
   val handleGroupPerf = AkkaAgent(PerformanceMeasure())
   val guiInterPerf = AkkaAgent(PerformanceMeasure())
+  
+  // the supervisor controls the simulation
   val netLogoSuper = system.actorOf(Props(new NetLogoSupervisor(netLogoRouter, 
       betweenTickPerf, handleGroupPerf, guiInterPerf)).withDispatcher("pinned-dispatcher"))
-  // this map holds all the data
+      
+  // this map connects an NetLogo-agent (turtle / patch) to a QLAgent that performs the learning 
+  // it therefore also holds all data about the agents
   val qlDataMap = AkkaAgent(Map[Agent, AkkaAgent[QLAgent]]())
-  
-  def init() {
-   // empty  
-  }
+
 }
 
 /**
@@ -74,11 +80,8 @@ class QLExtension extends DefaultClassManager {
     manager.addPrimitive("create-group", new CreateGroup)
     manager.addPrimitive("get-performance", new GetPerformance)
     // agent primitives
-    manager.addPrimitive("get-q-values", new GetQValues)
-//    manager.addPrimitive("get-last-choice", new GetLastChoice)
-    manager.addPrimitive("get-total-n", new GetTotalN)
+    manager.addPrimitive("get-data", new GetData)
     manager.addPrimitive("get-experimenting", new GetExperimenting)
-//    manager.addPrimitive("get-ns", new GetNs)
   }
   
   override def additionalJars: JList[String] = {
@@ -374,12 +377,13 @@ class GetPerformance extends DefaultReporter {
 
 
 /**
- * returns the q-value of an alternative
+ * returns a list of triples ('name of alternative', 'q-value', n'), one for each alternative
+ * 
  * is called by an agent
  * 
  * this method is non-blocking (not all rewards may have been processed)
  */
-class GetQValues extends DefaultReporter {
+class GetData extends DefaultReporter {
   override def getAgentClassString = "TP"    
   override def getSyntax = reporterSyntax(Array[Int](), NumberType)
   def report(args: Array[Argument], c: Context): AnyRef = {
@@ -390,38 +394,8 @@ class GetQValues extends DefaultReporter {
 }
 
 /**
- * returns the n of an alternative (number of choices)
- * is called by an agent
+ * returns the current experimenting parameter
  * 
- * this method is non-blocking (not all choices may have been processed)
- */
-//class GetNs extends DefaultReporter {
-//  override def getAgentClassString = "TP"    
-//  override def getSyntax = reporterSyntax(Array[Int](), NumberType)
-//  def report(args: Array[Argument], c: Context): AnyRef = {
-////    val key = args(0).getString
-////    QLSystem.qlDataMap(c.getAgent).get.nMap.getOrElse(key, 0.0).toDouble.toLogoObject
-//    QLSystem.qlDataMap.get()(c.getAgent).get.qValuesMap.elements.map(pair => Array(pair._1, pair._2.n)).toLogoObject
-////    QLSystem.qlDataMap.get()(c.getAgent).get.qValuesMap.getOrElse(key, new QLAgent.QValue(key, 0.0, 0.0)).n.toLogoObject
-//  }
-//}
-
-/**
- * returns the total-n (number of choices)
- * is called by an agent
- * 
- * this method is non-blocking (not all choices may have been processed)
- */
-class GetTotalN extends DefaultReporter {
-  override def getAgentClassString = "TP"    
-  override def getSyntax = reporterSyntax(Array[Int](), NumberType)
-  def report(args: Array[Argument], c: Context): AnyRef = { 
-    QLSystem.qlDataMap.get()(c.getAgent).get.nTotal.toLogoObject
-  }
-}
-
-/**
- * returns the experimenting parameter
  * is called by an agent
  * 
  * this method is non-blocking (not all choices may have been processed)
@@ -433,19 +407,3 @@ class GetExperimenting extends DefaultReporter {
     QLSystem.qlDataMap.get()(c.getAgent).get.experimenting.toLogoObject
   }
 }
-
-/**
- * returns the last decision
- * is called by an agent
- * 
- * this method is non-blocking (not all choices may have been processed)
- */
-//class GetLastChoice extends DefaultReporter {
-//  override def getAgentClassString = "TP"    
-//  override def getSyntax = reporterSyntax(Array[Int](), StringType)
-//  def report(args: Array[Argument], c: Context): AnyRef = { 
-//    QLSystem.qlDataMap.get()(c.getAgent).get.lastChoice.toLogoObject
-//  }
-//}
-
-

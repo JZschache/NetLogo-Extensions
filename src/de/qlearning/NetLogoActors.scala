@@ -57,7 +57,6 @@ class NetLogoSupervisor(netLogoRouter: ActorRef,
   import NetLogoActors._
   import QLSystem._
   
-  // this command starts the NetLogo desktop environment
   val nlApp = org.nlogo.app.App.app
     
   val groupRepName = config.getString(cfgstr + ".group-reporter-name")
