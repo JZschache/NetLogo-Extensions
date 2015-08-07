@@ -22,6 +22,12 @@ object Solver {
   }
 }
 
+class PureSolutions(p1: PayoffMatrix, p2: PayoffMatrix ) {
+  
+  
+  
+}
+
 case class Variable(index:Int, isSlack: Boolean, colIndex:Int, tableauIndex: Int)
 case class TableauRow(row: List[Rational], basis: Variable)
 case class Tableau(_1:List[TableauRow], _2:List[TableauRow]) {

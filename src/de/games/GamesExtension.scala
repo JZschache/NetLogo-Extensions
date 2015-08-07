@@ -21,7 +21,7 @@ object GamesExtension {
    */
   def printSolutions(game: TwoPersonsGame, withExpectations: Boolean, optimalInd:String =  "P"): String = {
     
-    val expectations = game.solutions.map(row => {
+    val expectations = game.mixedSolutions.map(row => {
       val (x, y) = row.map(_._2).splitAt(game.pm1.nrow)
       val ex = (x zip game.pm1.getExpectations(y, false)).foldLeft(new Rational(0))((r, pair) => r + pair._1 * pair._2)
       val ey = (y zip game.pm2.getExpectations(x, true)).foldLeft(new Rational(0))((r, pair) => r + pair._1 * pair._2)
@@ -31,10 +31,10 @@ object GamesExtension {
     val pureExpectations = game.pm1.content zip game.pm2.content
     val mpf = new MaximalPairFinder(expectations ++ pureExpectations)
     
-    val prettySol = game.solutions.map(_.map(_._2.pretty))
+    val prettySol = game.mixedSolutions.map(_.map(_._2.pretty))
     val prettyExp = expectations.map(p => (p._1.pretty, p._2.pretty))
     
-    val maxLengthSol = prettySol.foldLeft(0)((size, p) => Math.max(size, p.foldLeft(0)((s, el) => Math.max(s, el.size))))
+    val maxLengthSol = Math.max(1, prettySol.foldLeft(0)((size, p) => Math.max(size, p.foldLeft(0)((s, el) => Math.max(s, el.size)))))
     val maxLength = if (withExpectations) 
                       Math.max(maxLengthSol, prettyExp.foldLeft(0)((size, p) => Math.max(size, Math.max(p._1.size, p._2.size))))
                     else
@@ -70,7 +70,7 @@ class GamesExtension extends DefaultClassManager {
     manager.addPrimitive("two-persons-game", new GetTwoPersonsGame)
     manager.addPrimitive("two-persons-gamut-game", new GetTwoPersonsGamutGame)
     manager.addPrimitive("game-matrix", new GetGameMatrix)
-    manager.addPrimitive("game-solutions", new GetGameSolutions)
+    manager.addPrimitive("game-pure-solutions", new GetGamePureSolutions)
     manager.addPrimitive("game-pure-optima", new GetGamePureOptima)
     manager.addPrimitive("get-solutions-string", new GetSolutionsString)
     manager.addPrimitive("get-solutions-string-with-expect", new GetSolutionsStringWithExpectations)
@@ -103,31 +103,33 @@ class PayoffMatrix(val content: List[Rational], val nrow:Int, val ncol:Int) exte
     
   def getRow(row:Int): List[Rational] = content.drop(row * ncol).take(ncol)
   
-  def getRowList(transpose: Boolean): List[List[Rational]] = if (transpose) {
-    val rm = content.foldLeft(((0 until ncol).map(i =>(i -> List[Rational]())).toMap, 0))((result, entry) => {
-      (result._1.updated(result._2, entry :: result._1(result._2)) , (result._2 + 1) % ncol)
-    })._1
-    (0 until ncol).map(i => rm(i).reverse).toList
-  } else {
+  def getRowList: List[List[Rational]] = {
     (0 until nrow).foldLeft((content, List[List[Rational]]()))((pair, _) => {
       val (row, rest) = pair._1.splitAt(ncol)
       (rest, row :: pair._2)
     })._2.reverse
   }
   
+  def getColumnList: List[List[Rational]] = { 
+    val rm = content.foldLeft(((0 until ncol).map(i =>(i -> List[Rational]())).toMap, 0))((result, entry) => {
+      (result._1.updated(result._2, entry :: result._1(result._2)) , (result._2 + 1) % ncol)
+    })._1
+    (0 until ncol).map(i => rm(i).reverse).toList
+  }
+  
   /**
    * needed by the LemkeHowsonSolver
    */
   def getTableau(basis: List[Variable], transpose: Boolean): List[TableauRow] = {
-    val rowList = getRowList(transpose)
-    val length = rowList.length
+    val list = if (transpose) getColumnList else getRowList
+    val length = list.length
     // for lexicographic comparison ( if ever needed again)
 //    val identity = (0 until length).map(i => (0 until length).map(j => if (j == i) new Rational(1) else new Rational(0)))
 //    (rowList, identity, basis).zip.map(triple => 
 //      TableauRow(List[Rational](1) ++ (0 until length).map(_ => new Rational(0)) ++ 
 //                 triple._1.map(e => e * -1) ++ triple._2, triple._3)
 //    ).toList
-    (rowList, basis).zip.map(pair => 
+    (list, basis).zip.map(pair => 
       TableauRow(List[Rational](1) ++ (0 until length).map(_ => new Rational(0)) ++ 
                  pair._1.map(e => e * -1), pair._2)
     ).toList
@@ -137,8 +139,8 @@ class PayoffMatrix(val content: List[Rational], val nrow:Int, val ncol:Int) exte
    * calculates the expected payoff of each row given the probabilities x of the columns
    */
   def getExpectations(x: List[Rational], transpose: Boolean) = {
-    val rowList = getRowList(transpose)
-    rowList.map(row => (row zip x).foldLeft(new Rational(0))((r, pair) => {
+    val list = if (transpose) getColumnList else getRowList
+    list.map(row => (row zip x).foldLeft(new Rational(0))((r, pair) => {
       r + pair._1 * pair._2
     }))
   }
@@ -161,10 +163,32 @@ class TwoPersonsGame(val pm1: PayoffMatrix, val pm2: PayoffMatrix) extends Exten
   def getNLTypeName: String = "TwoPersonGame"
   def recursivelyEqual(obj: AnyRef): Boolean = equals(obj)
   
-  val lhs = new LemkeHowsonSolver(pm1, pm2)
-  val solutions = lhs.run
   
-  //TODO: calculate pure solutions separately and return only mixed solutions by default and pure solutions in field list
+  val lhs = new LemkeHowsonSolver(pm1, pm2)
+  private val sampleSolutions = lhs.run
+  
+  val mixedSolutions = sampleSolutions.filter(sol => {
+    2 != sol.foldLeft(0)((t, el) => if (el._2 == 1) 1 + t else t)
+  })
+  
+  // calculate all pure solutions separately
+  private val isMaxima1 = pm1.getColumnList.map(column => {
+    val maxEntry = column.reduce((a,b) => if (a > b) a else b)
+    column.map(_ == maxEntry)
+  })
+  private val isMaxima1Trans = isMaxima1.foldLeft((0 until pm1.nrow).map(i => List[Boolean]()))((result, entry) => {
+    (result zip entry).map(pair => pair._2 :: pair._1)
+  }).map(row => row.reverse).toList
+  private val isMaxima2 = pm2.getRowList.map(row => {
+    val maxEntry = row.reduce((a,b) => if (a > b) a else b)
+    row.map(_ == maxEntry)
+  })
+  
+  val isPureSolution = (isMaxima1Trans zip isMaxima2).map(pair => {
+    (pair._1 zip pair._2).map(p => p._1 & p._2)
+  })
+  
+ 
   
 }
 
@@ -195,7 +219,7 @@ class GetMatrixTranspose extends DefaultReporter {
   
   def report(args: Array[Argument], c: Context): AnyRef = {
     val pm = args(0).get.asInstanceOf[PayoffMatrix]
-    new PayoffMatrix(pm.getRowList(true).flatten, pm.ncol, pm.nrow)
+    new PayoffMatrix(pm.getRowList.flatten, pm.ncol, pm.nrow)
   }
 }
 
@@ -263,14 +287,14 @@ class GetGameMatrix extends DefaultReporter {
   }
 }
 
-class GetGameSolutions extends DefaultReporter {
+class GetGamePureSolutions extends DefaultReporter {
   
   override def getAgentClassString = "O"
   override def getSyntax = reporterSyntax(Array[Int](WildcardType), ListType)
   
   def report(args: Array[Argument], c: Context): AnyRef = {
     val game = args(0).get.asInstanceOf[TwoPersonsGame]
-    game.solutions.toLogoList
+    game.isPureSolution.flatten.toLogoList
   }
 }
 
@@ -327,14 +351,7 @@ class GetFieldsString extends DefaultReporter {
     val pureExpectations = game.pm1.content zip game.pm2.content
     val mpf = new MaximalPairFinder(pureExpectations)
     val isMaxima = mpf.maximaIndices
-    
-    val pureSolutionsIdx = game.solutions.foldLeft(List[Int]())((result, row) => {
-      val idx = row.foldLeft(List[Int]())((t, el) => if (el._2 == 1) el._1.index :: t else t)
-      if (idx.length == 2)
-        (idx.first - game.pm1.nrow + 1 + idx.last * game.pm1.ncol ) :: result
-      else
-        result
-    })
+    val isSolution = game.isPureSolution.flatten
     
     val maxLengthNr = game.pm1.content.length.toString().length()
     val maxLengthEntries = (game.pm1.content ++ game.pm2.content).map(_.floor).max.toString().length()
@@ -344,7 +361,7 @@ class GetFieldsString extends DefaultReporter {
       spaces(maxLengthNr + 1 - i.toString.length()) + i + ": (" + 
       spaces(maxLengthEntries - x.floor.toString.length()) + x.floor + "," + 
       spaces(maxLengthEntries - y.floor.toString().length()) + y.floor + ") " + 
-      (if (isMaxima(i - 1)) "P" else " ") + (if (pureSolutionsIdx.contains(i)) "N" else " ")
+      (if (isMaxima(i - 1)) "P" else " ") + (if (isSolution(i - 1)) "N" else " ")
     })
     
     val result = stringList.foldLeft(("", 1))((r, el) => if (r._2 == game.pm1.ncol) (r._1 + "|" + el + "|\n", 1 ) else (r._1 + "|" + el , r._2 + 1))._1

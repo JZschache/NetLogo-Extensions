@@ -1,6 +1,6 @@
 extensions[ql matrix games]
 
-turtles-own[ leader q-values total-n current-exp optimal-action last-field]
+turtles-own[ leader av-list n-list total-n current-exp diff optimal-action last-field]
 globals[ group-structure means-1-matrix means-2-matrix optimal-fields rel-freq-optimal]
 
 to-report read-means-matrix [ nr ]
@@ -88,7 +88,7 @@ to setup
     hatch 1 [ 
       set leader false
       setxy (1 + [xcor] of myself) (1 + [ycor] of myself)
-      set group-structure lput (ql:create-group (list self myself) (list (n-values n-alt-x [(word ?)]) (n-values n-alt-y [(word ?)]))) group-structure
+      set group-structure lput (ql:create-group (list myself self) (list (n-values n-alt-x [(word ?)]) (n-values n-alt-y [(word ?)]))) group-structure
       face myself
       set partner self
     ]
@@ -100,8 +100,8 @@ to setup
   ql:decrease-experimenting experimenting-decay
   
   ask turtles [    
-    set q-values ql:get-q-values
-    set total-n ql:get-total-n
+    ;set q-values ql:get-q-values
+    ;set total-n ql:get-total-n
     set current-exp ql:get-experimenting
     set optimal-action one-of [true false]
   ]
@@ -162,11 +162,22 @@ to update
   
   ask turtles [
      
-    set q-values ql:get-q-values
-    ;show q-values
+    let q-triples ql:get-q-values
+    let n-alt n-alt-y
+    if leader [ set n-alt n-alt-x ]
     
-    set total-n ql:get-total-n
+    set av-list map [ (item 1 (item ? q-triples)) ] (n-values n-alt [ ? ])
+    set n-list map [ (item 2 (item ? q-triples)) ] (n-values n-alt [ ? ])
+    set total-n sum n-list
     set current-exp ql:get-experimenting
+
+    set diff 0
+    if (total-n > 0) [
+      let zipped (map [ (list ?1 ?2) ] av-list n-list)
+      let filtered filter [ (item 1 ?) / total-n > experimenting ] zipped
+      let avs map [ (item 0 ?) ] filtered
+      if (length avs > 1) [ set diff standard-deviation avs]
+    ]
     
     if leader [
       if optimal-action [ set optimal-freq optimal-freq + 1 ]
@@ -180,13 +191,13 @@ to update
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
-820
-20
-1234
-455
+785
+15
+1198
+449
 -1
 -1
-4.2105263157894735
+6.25
 1
 10
 1
@@ -197,9 +208,9 @@ GRAPHICS-WINDOW
 1
 1
 0
-95
+64
 0
-95
+64
 0
 0
 1
@@ -215,7 +226,7 @@ n-pairs
 n-pairs
 0
 10000
-1000
+450
 10
 1
 NIL
@@ -223,9 +234,9 @@ HORIZONTAL
 
 BUTTON
 820
-460
+500
 970
-493
+533
 NIL
 setup
 NIL
@@ -240,9 +251,9 @@ NIL
 
 BUTTON
 820
-495
+535
 970
-528
+568
 NIL
 ql:start
 NIL
@@ -257,9 +268,9 @@ NIL
 
 BUTTON
 820
-530
+570
 970
-563
+603
 NIL
 ql:stop
 NIL
@@ -308,7 +319,7 @@ INPUTBOX
 395
 180
 means-x
- 7  0\n10  0\n
+3 0\n1 7\n
 1
 1
 String
@@ -377,7 +388,7 @@ NIL
 NIL
 0.0
 1.0
-0.5
+0.0
 1.0
 true
 false
@@ -394,7 +405,7 @@ experimenting-decay
 experimenting-decay
 0.9
 1
-0.989
+0.999
 0.001
 1
 NIL
@@ -421,10 +432,10 @@ PENS
 INPUTBOX
 220
 355
-765
-505
+770
+560
 fields
-| 1: ( 7, 7) P | 2: ( 0,10) PN|\n| 3: (10, 0) PN| 4: ( 0, 0)  N|\n
+| 1: ( 3, 6) P | 2: ( 0,10) P |\n| 3: ( 1, 3)   | 4: ( 7, 2) P |\n
 1
 1
 String
@@ -453,7 +464,7 @@ INPUTBOX
 575
 180
 means-y
- 7 10\n 0  0\n
+ 6 10\n 3  2\n
 1
 1
 String
@@ -466,7 +477,7 @@ CHOOSER
 game-name
 game-name
 "Custom" "CopyMeansX" "TransposeMeansX" "BattleOfTheSexes" "Chicken" "CollaborationGame" "CoordinationGame" "DispersionGame" "GrabTheDollar" "GuessTwoThirdsAve" "HawkAndDove" "MajorityVoting" "MatchingPennies" "PrisonersDilemma" "RandomGame" "RandomZeroSum" "RockPaperScissors" "ShapleysGame"
-0
+14
 
 BUTTON
 580
@@ -491,7 +502,7 @@ INPUTBOX
 765
 346
 sample-equilibria
-  x1  x2  y1  y2  |  Ex  Ey  |  mx\n------------------------------------\n   0   1   1   0  |  10   0  |   P\n   0   1   0   1  |   0   0  |    \n   1   0   0   1  |   0  10  |   P\n
+    x1    x2    y1    y2  |    Ex    Ey  |    mx\n------------------------------------------------------\n   1/5   4/5   7/9   2/9  |   7/3  18/5  |      \n
 1
 1
 String
@@ -525,6 +536,24 @@ n-alt-y
 1
 NIL
 HORIZONTAL
+
+PLOT
+270
+605
+470
+755
+diff
+NIL
+NIL
+0.0
+10.0
+0.0
+10.0
+true
+false
+"" ""
+PENS
+"default" 0.1 1 -16777216 true "" "histogram [diff] of turtles"
 
 @#$#@#$#@
 ## WHAT IS IT?

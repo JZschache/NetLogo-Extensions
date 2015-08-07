@@ -86,7 +86,7 @@ case class QLAgent(experimenting: Double, qValuesMap: Map[String,QLAgent.QValue]
   def updated(alt:String, reward: Double) : QLAgent = {
 //    println("update: " + alt + " " + reward)
     val newQvalue = qValuesMap.getOrElse(alt, new QLAgent.QValue(alt, 0.0, 0.0)).updated(reward)
-    QLAgent(Math.max(experimenting * expDecay, 0.02), qValuesMap.updated(alt, newQvalue), 
+    QLAgent(experimenting * expDecay, qValuesMap.updated(alt, newQvalue), 
             nTotal + 1.0, alt, choiceAlg, expDecay)
   }
   
