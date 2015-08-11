@@ -80,22 +80,18 @@ object QLAgent {
  *  it is used to update the Q-values and to get a decision from the agent
  */ 
 case class QLAgent(experimenting: Double, qValuesMap: Map[String,QLAgent.QValue], 
-//                   nTotal: Double, lastChoice: String, 
                    lastChoice: String,
                    choiceAlg: (Map[String,QLAgent.QValue], List[String], Double, RandomHelper) => String,
                    expDecay: Double) {
   
   def updated(alt:String, reward: Double) : QLAgent = {
-//    println("update: " + alt + " " + reward)
     val newQvalue = qValuesMap.getOrElse(alt, new QLAgent.QValue(alt, 0.0, 0.0)).updated(reward)
     QLAgent(experimenting * expDecay, qValuesMap.updated(alt, newQvalue), 
             alt, choiceAlg, expDecay)
-//            nTotal + 1.0, alt, choiceAlg, expDecay)
   }
   
   def setAlternatives(alternatives: List[String]) = QLAgent(experimenting,
       alternatives.map(key => (key -> qValuesMap.getOrElse(key, new QLAgent.QValue(key, 0.0, 0.0)))).toMap,
-//      nTotal, lastChoice, choiceAlg, expDecay)
       lastChoice, choiceAlg, expDecay)
   
   def choose(alternatives: List[String]): String = {
@@ -108,6 +104,5 @@ case class QLAgent(experimenting: Double, qValuesMap: Map[String,QLAgent.QValue]
    */
   def startDecreasing(experimentingDecay: Double) : QLAgent = 
     QLAgent(experimenting, qValuesMap, lastChoice, choiceAlg, experimentingDecay)
-//    QLAgent(experimenting, qValuesMap, nTotal, lastChoice, choiceAlg, experimentingDecay)
     
 }

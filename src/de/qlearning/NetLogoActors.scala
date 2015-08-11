@@ -213,7 +213,7 @@ class NetLogoHeadlessActor(val id: Int) extends Actor {
     workspace.dispose()
   }
   
-  // not read to handle any requests (list of GroupChoices)
+  // not ready to handle any requests (list of GroupChoices)
   def idle: Receive = {
     
     case CompileReporter => {

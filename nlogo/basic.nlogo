@@ -1,58 +1,61 @@
 extensions[ql]
 
-turtles-own[qv1 qv2]
-
-globals[group-structure]
+turtles-own[qv1 qv2 explore]
 
 to setup
   clear-all
-  
-  ; create a world with at least 9 patches per turtle
-  let n-patches (1 + floor sqrt (n-turtles * 9))
-  resize-world 0 n-patches 0 n-patches
-  set-patch-size 400 / n-patches
-  
   create-turtles n-turtles [
     setxy random-xcor random-ycor
   ]
-   
-  ql:init turtles experimenting "epsilon-greedy"
-  
-  set group-structure [ql:create-singleton self (list "forward" "turn right")] of turtles
-  
+  ql:init turtles exploration-rate "epsilon-greedy"
+  let group-structure [ql:create-singleton self (list "forward" "turn right")] of turtles  
+  ql:set-group-structure group-structure
   reset-ticks
 end
 
-to-report get-reward [ env-id ]
-  let params ql:get-decisions env-id
-  let first-and-only (item 0 params)
-  ifelse (item 1 first-and-only) = "forward" [
-    ask (item 0 first-and-only) [fd 1]
-    report (list forward-reward)
+to setup-all
+  ; empty  
+end
+
+to-report get-rewards [ env-id ]
+  let group-list ql:get-group-list env-id
+  let result map [reward ?] group-list
+  report result
+end
+
+to-report reward [singleton-choice]
+  let agent first ql:get-agents singleton-choice
+  let decision first ql:get-decisions singleton-choice
+  ifelse decision = "forward" [
+    ask agent [fd 1]
+    report ql:set-rewards singleton-choice (list forward-reward)
   ] [
-    ask (item 0 first-and-only) [right 90]
-    report (list right-reward)
+    ask agent [right 90]
+    report ql:set-rewards singleton-choice (list right-reward)
   ]
 end
 
-to-report get-groups 
-  report group-structure
-end
-
-to update-view
-  wait 1
+to update
   ask turtles [
-    set qv1 ql:get-q-value "forward"
-    set qv2 ql:get-q-value "turn right"
+    foreach ql:get-data set-q-value
+    set explore ql:get-exploration-rate
   ]
   tick 
 end
+
+to set-q-value [data-entry]
+  ifelse ((item 0 data-entry) = "forward") [ 
+    set qv1 (item 1 data-entry) 
+  ] [
+    set qv2 (item 1 data-entry) 
+  ]
+end
 @#$#@#$#@
 GRAPHICS-WINDOW
-743
-10
-1164
-452
+360
+20
+782
+463
 -1
 -1
 12.903225806451612
@@ -78,7 +81,7 @@ ticks
 SLIDER
 65
 20
-237
+235
 53
 n-turtles
 n-turtles
@@ -91,9 +94,9 @@ NIL
 HORIZONTAL
 
 BUTTON
-515
+240
 20
-625
+350
 53
 NIL
 setup
@@ -108,9 +111,9 @@ NIL
 1
 
 BUTTON
-515
+240
 55
-625
+350
 88
 NIL
 ql:start
@@ -126,14 +129,14 @@ NIL
 
 SLIDER
 65
-115
-237
-148
+90
+235
+123
 forward-reward
 forward-reward
 0
 100
-50
+17
 1
 1
 NIL
@@ -141,9 +144,9 @@ HORIZONTAL
 
 SLIDER
 65
-150
-237
-183
+125
+235
+158
 right-reward
 right-reward
 0
@@ -155,9 +158,9 @@ NIL
 HORIZONTAL
 
 BUTTON
-515
+240
 90
-625
+350
 123
 NIL
 ql:stop
@@ -174,10 +177,10 @@ NIL
 SLIDER
 65
 55
-237
+235
 88
-experimenting
-experimenting
+exploration-rate
+exploration-rate
 0
 1
 0.05
@@ -186,14 +189,33 @@ experimenting
 NIL
 HORIZONTAL
 
-BUTTON
-515
-125
-625
-158
+PLOT
+65
+165
+350
+315
+mean of qv1 and qv2
 NIL
-update-view
-T
+NIL
+0.0
+10.0
+0.0
+10.0
+true
+true
+"" ""
+PENS
+"qv1" 1.0 0 -16777216 true "" "plot mean [qv1] of turtles"
+"qv2" 1.0 0 -7500403 true "" "plot mean [qv2] of turtles"
+
+BUTTON
+65
+330
+350
+363
+NIL
+ql:decay-exploration 0.99
+NIL
 1
 T
 OBSERVER
@@ -203,43 +225,13 @@ NIL
 NIL
 1
 
-PLOT
-273
-352
-473
-502
-plot 1
-NIL
-NIL
-0.0
-10.0
-0.0
-10.0
-true
-false
-"" ""
-PENS
-"default" 1.0 0 -16777216 true "" "plot mean [qv1] of turtles"
-"pen-1" 1.0 0 -7500403 true "" "plot mean [qv2] of turtles"
-
 MONITOR
-321
-539
-471
-584
+70
+380
+282
+425
 NIL
-[qv1] of turtle 1
-17
-1
-11
-
-MONITOR
-525
-561
-675
-606
-NIL
-[qv2] of turtle 1
+mean [explore] of turtles
 17
 1
 11

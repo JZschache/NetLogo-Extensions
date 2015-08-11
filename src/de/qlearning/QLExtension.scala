@@ -75,13 +75,13 @@ class QLExtension extends DefaultClassManager {
     manager.addPrimitive("get-agents", new GetAgents)
     manager.addPrimitive("get-decisions", new GetDecisions)
     manager.addPrimitive("set-rewards", new SetRewards)
-    manager.addPrimitive("decrease-experimenting", new DecreaseExperimenting)
+    manager.addPrimitive("decay-exploration", new DecreaseExperimenting)
     manager.addPrimitive("create-singleton", new CreateSingleton)
     manager.addPrimitive("create-group", new CreateGroup)
     manager.addPrimitive("get-performance", new GetPerformance)
     // agent primitives
     manager.addPrimitive("get-data", new GetData)
-    manager.addPrimitive("get-experimenting", new GetExperimenting)
+    manager.addPrimitive("get-exploration-rate", new GetExperimenting)
   }
   
   override def additionalJars: JList[String] = {
@@ -180,7 +180,7 @@ class GetGroupList extends DefaultReporter {
 class GetAgents extends DefaultReporter {
   
   override def getAgentClassString = "O"
-  override def getSyntax = reporterSyntax(Array[Int](WildcardType), AgentsetType)
+  override def getSyntax = reporterSyntax(Array[Int](WildcardType), ListType)
   
   def report(args: Array[Argument], c: Context): AnyRef =
     args(0).get.asInstanceOf[hasNLAgents].nlAgents.toLogoList
@@ -255,17 +255,16 @@ class Init extends DefaultCommand {
 class CreateGroup extends DefaultReporter {
 
   override def getAgentClassString = "OTPL"
-  override def getSyntax = reporterSyntax(Array( TurtlesetType | PatchsetType | ListType, ListType), WildcardType)
+  override def getSyntax = reporterSyntax(Array( ListType), WildcardType)
   
   def report(args: Array[Argument], context: Context): AnyRef = {
-    val agents = try {
-      args(0).getAgentSet.agents.asScala.toList
-    } catch {
-      case _:ExtensionException =>
-        args(0).getList.map(_.asInstanceOf[org.nlogo.api.Agent]).toList
-    }
     
-    val alternatives = args(1).getList.map(_.asInstanceOf[LogoList].map(_.asInstanceOf[String]).toList).toList
+    val (agents, alternatives) = args(0).getList.map(entry => {
+      val ll = entry.asInstanceOf[LogoList]
+      val agent = ll.first.asInstanceOf[org.nlogo.api.Agent]
+      val alt = ll.butFirst.first.asInstanceOf[LogoList].map(s => s.asInstanceOf[String]).toList
+      (agent, alt)
+    }).toList.unzip
        
     NLGroup(agents, Nil, alternatives)
   }
@@ -385,7 +384,7 @@ class GetPerformance extends DefaultReporter {
  */
 class GetData extends DefaultReporter {
   override def getAgentClassString = "TP"    
-  override def getSyntax = reporterSyntax(Array[Int](), NumberType)
+  override def getSyntax = reporterSyntax(Array[Int](), ListType)
   def report(args: Array[Argument], c: Context): AnyRef = {
 //    val key = args(0).getString
 //    QLSystem.qlDataMap.get()(c.getAgent).get.qValuesMap.getOrElse(key, new QLAgent.QValue(key, 0.0, 0.0)).value.toLogoObject
