@@ -1,81 +1,59 @@
 extensions[ql]
-
 patches-own[ qv1 qv2 ]
-
-globals[ group-structure ]
 
 to setup
   clear-all
-
   set-patch-size 400 / n-patches  
   resize-world 0 n-patches 0 n-patches
-    
   ql:init patches experimenting "epsilon-greedy"
-  
-  ql:set-group-structure [ql:create-singleton self (n-values n-alternatives [(word ?)])] of patches
-  
-  
+  let alternatives ["0" "1"]
+  let groups [ql:create-group (list (list self alternatives))] of patches
+  ql:set-group-structure groups
   reset-ticks
 end
 
+to setup-all
+  ; empty
+end
+
+to-report get-rewards [ headless-id ]
+  let group-list ql:get-group-list headless-id
+  report map [reward ?] group-list
+end
+
 to-report reward [group-choice]
-  let decisions ql:get-decisions group-choice
-  ;show decisions
-  let rewards (map [ifelse-value (? = "0") [ random-normal mean-1 sd ] [ random-normal mean-2 sd ]] decisions)
-  ;show rewards
-  let new-object ql:set-rewards group-choice rewards
-  report new-object
-end
-
-to-report get-reward [ env-id ]
-  let dec-list ql:get-group-list env-id
-  
-  let result map [reward ?] dec-list
-  
-  ;let decisions ql:get-decisions dec-object
-  ;show decisions
-  ;let rewards (map [ifelse-value (? = "0") [ random-normal mean-1 sd ] [ random-normal mean-2 sd ]] decisions)
-  ;show rewards
-  ;let new-object ql:set-rewards dec-object rewards
-  ;show "return result"
-  report result
-  ;let first-and-only (item 0 params)
-  ;ifelse (item 1 first-and-only) = "0" [
-  ;  report (list random-normal mean-1 sd)
-  ;] [
-  ;  report (list random-normal mean-2 sd)
-  ;]
-  ;report map [ifelse-value ((item 1 ?) = "0") [ random-normal mean-1 sd ] [ random-normal mean-2 sd ]] params
-end
-
-;to-report get-groups 
-;  report [ql:create-singleton self (n-values n-alternatives [(word ?)])] of patches
-;  report n-values 100 [ ql:create-group n-of 100 patches (n-values n-alternatives [(word ?)])]
-;end
-
-to update-view
-  
-  ask patches [
-     ifelse ql:get-last-choice = "0" [
-      set pcolor blue
-    ][
-      set pcolor red
-    ]
-    set qv1 ql:get-q-value "0"
-    set qv2 ql:get-q-value "1"
+  let agent first ql:get-agents group-choice
+  let decision first ql:get-decisions group-choice
+  ifelse decision = "0" [
+    ask agent [set pcolor blue]
+    report ql:set-rewards group-choice (list random-normal mean-1 sd)
+  ] [
+    ask agent [set pcolor red]
+    report ql:set-rewards group-choice (list random-normal mean-2 sd)
   ]
-  
+end
+
+to update
+  ask patches [ foreach ql:get-data set-q-value ]
   tick
+end
+
+to set-q-value [data-entry]
+  ifelse ((item 0 data-entry) = "0") [ 
+    set qv1 (item 1 data-entry) 
+  ] [
+    set qv2 (item 1 data-entry) 
+  ]
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
-743
-10
-1157
-445
+355
+35
+769
+470
 -1
 -1
-4.040404040404041
+4.0
 1
 10
 1
@@ -86,9 +64,9 @@ GRAPHICS-WINDOW
 1
 1
 0
-99
+100
 0
-99
+100
 0
 0
 1
@@ -96,25 +74,25 @@ ticks
 30.0
 
 SLIDER
+50
+35
+222
 68
-21
-240
-54
 n-patches
 n-patches
 0
 100
-99
+100
 1
 1
-NIL
+^2
 HORIZONTAL
 
 BUTTON
-463
-37
-579
-70
+230
+35
+350
+68
 NIL
 setup
 NIL
@@ -128,10 +106,10 @@ NIL
 1
 
 BUTTON
-464
-80
-616
-113
+230
+70
+350
+103
 NIL
 ql:start
 NIL
@@ -145,10 +123,10 @@ NIL
 1
 
 SLIDER
-63
-264
-235
-297
+50
+140
+222
+173
 mean-1
 mean-1
 0
@@ -160,25 +138,25 @@ NIL
 HORIZONTAL
 
 SLIDER
-63
-300
-235
-333
+50
+175
+222
+208
 mean-2
 mean-2
 0
 100
-78
+75
 1
 1
 NIL
 HORIZONTAL
 
 BUTTON
-464
-116
-616
-149
+230
+106
+350
+139
 NIL
 ql:stop
 NIL
@@ -192,73 +170,41 @@ NIL
 1
 
 SLIDER
-66
-67
-238
-100
+50
+70
+222
+103
 experimenting
 experimenting
 0
 1
-0.1
+0.05
 0.01
 1
 NIL
 HORIZONTAL
 
 SLIDER
-63
-225
-235
-258
-n-alternatives
-n-alternatives
-2
-10
-2
-1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-237
-226
-409
-259
+50
+105
+222
+138
 sd
 sd
 0
 100
-26.8
+10
 0.1
 1
 NIL
 HORIZONTAL
 
-BUTTON
-484
-207
-604
-240
-NIL
-update-view
-T
-1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
-1
-
 PLOT
-128
-490
-328
-640
-qvalues
+50
+215
+350
+365
+means of qv1 and qv2
 NIL
 NIL
 0.0
@@ -266,47 +212,17 @@ NIL
 0.0
 10.0
 true
-false
-"" ""
-PENS
-"default" 1.0 0 -16777216 true "" "plot mean [qv1] of patches"
-"pen-1" 1.0 0 -7500403 true "" "plot mean [qv2] of patches"
-
-PLOT
-395
-510
-595
-660
-qvalue 0 0
-NIL
-NIL
-0.0
-10.0
-0.0
-10.0
 true
-false
 "" ""
 PENS
-"default" 1.0 0 -16777216 true "" "plot [qv1] of patch 0 0"
-"pen-1" 1.0 0 -7500403 true "" "plot [qv2] of patch 0 0"
+"qv1" 1.0 0 -16777216 true "" "plot mean [qv1] of patches"
+"qv2" 1.0 0 -7500403 true "" "plot mean [qv2] of patches"
 
 MONITOR
-430
-384
-677
-429
-NIL
-[ql:get-total-n] of patch 0 0
-17
-1
-11
-
-MONITOR
-912
-508
-1239
-553
+50
+370
+350
+415
 NIL
 ql:get-performance \"NLSuperBetweenTick\"
 17
@@ -314,10 +230,10 @@ ql:get-performance \"NLSuperBetweenTick\"
 11
 
 MONITOR
-911
-560
-1246
-605
+49
+422
+349
+467
 NIL
 ql:get-performance \"NLSuperHandleGroups\"
 17
@@ -325,10 +241,10 @@ ql:get-performance \"NLSuperHandleGroups\"
 11
 
 MONITOR
-910
-609
-1213
-654
+48
+471
+348
+516
 NIL
 ql:get-performance \"NLSuperGuiInter\"
 17
@@ -696,5 +612,5 @@ Line -7500403 true 150 150 90 180
 Line -7500403 true 150 150 210 180
 
 @#$#@#$#@
-0
+1
 @#$#@#$#@

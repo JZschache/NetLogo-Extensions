@@ -8,8 +8,9 @@ to setup
     setxy random-xcor random-ycor
   ]
   ql:init turtles exploration-rate "epsilon-greedy"
-  let group-structure [ql:create-singleton self (list "forward" "turn right")] of turtles  
-  ql:set-group-structure group-structure
+  let alternatives (list "forward" "turn right")
+  let groups [ql:create-group (list (list self alternatives))] of turtles  
+  ql:set-group-structure groups
   reset-ticks
 end
 
@@ -17,21 +18,21 @@ to setup-all
   ; empty  
 end
 
-to-report get-rewards [ env-id ]
-  let group-list ql:get-group-list env-id
+to-report get-rewards [ headless-id ]
+  let group-list ql:get-group-list headless-id
   let result map [reward ?] group-list
   report result
 end
 
-to-report reward [singleton-choice]
-  let agent first ql:get-agents singleton-choice
-  let decision first ql:get-decisions singleton-choice
+to-report reward [group-choice]
+  let agent first ql:get-agents group-choice
+  let decision first ql:get-decisions group-choice
   ifelse decision = "forward" [
     ask agent [fd 1]
-    report ql:set-rewards singleton-choice (list forward-reward)
+    report ql:set-rewards group-choice (list forward-reward)
   ] [
     ask agent [right 90]
-    report ql:set-rewards singleton-choice (list right-reward)
+    report ql:set-rewards group-choice (list right-reward)
   ]
 end
 

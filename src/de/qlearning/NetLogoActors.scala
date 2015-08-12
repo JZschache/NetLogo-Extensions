@@ -82,11 +82,6 @@ class NetLogoSupervisor(netLogoRouter: ActorRef,
     }
   }
   
-  
-  private def doSave(path: String) {
-    
-  }
-  
   startWith(Idle, Uninitialized)
   
   when(Idle) {

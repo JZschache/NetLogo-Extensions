@@ -76,7 +76,7 @@ class QLExtension extends DefaultClassManager {
     manager.addPrimitive("get-decisions", new GetDecisions)
     manager.addPrimitive("set-rewards", new SetRewards)
     manager.addPrimitive("decay-exploration", new DecreaseExperimenting)
-    manager.addPrimitive("create-singleton", new CreateSingleton)
+//    manager.addPrimitive("create-singleton", new CreateSingleton)
     manager.addPrimitive("create-group", new CreateGroup)
     manager.addPrimitive("get-performance", new GetPerformance)
     // agent primitives
@@ -274,17 +274,17 @@ class CreateGroup extends DefaultReporter {
  * takes a single agent and a list of alternatives
  * returns an object of type NLGroup (with only one agent)
  */
-class CreateSingleton extends DefaultReporter {
-  
-  override def getAgentClassString = "OTPL"
-  override def getSyntax = reporterSyntax(Array( TurtleType | PatchType, ListType), WildcardType)
-  
-  def report(args: Array[Argument], context: Context): AnyRef = {
-    val agent = args(0).getAgent
-    val alternatives = args(1).getList.map(_.asInstanceOf[String]).toList
-    NLGroup(List(agent), Nil, List(alternatives))
-  }
-}
+//class CreateSingleton extends DefaultReporter {
+//  
+//  override def getAgentClassString = "OTPL"
+//  override def getSyntax = reporterSyntax(Array( TurtleType | PatchType, ListType), WildcardType)
+//  
+//  def report(args: Array[Argument], context: Context): AnyRef = {
+//    val agent = args(0).getAgent
+//    val alternatives = args(1).getList.map(_.asInstanceOf[String]).toList
+//    NLGroup(List(agent), Nil, List(alternatives))
+//  }
+//}
 
 /**
  * takes a list of objects of type NLGroup 
