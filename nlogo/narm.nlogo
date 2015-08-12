@@ -34,7 +34,7 @@ to-report reward [group-choice]
 end
 
 to update
-  ask patches [ foreach ql:get-data set-q-value ]
+  ;ask patches [ foreach ql:get-data set-q-value ]
   tick
 end
 
@@ -49,11 +49,11 @@ end
 GRAPHICS-WINDOW
 355
 35
-769
-470
+767
+468
 -1
 -1
-4.0
+2.6315789473684212
 1
 10
 1
@@ -64,9 +64,9 @@ GRAPHICS-WINDOW
 1
 1
 0
-100
+152
 0
-100
+152
 0
 0
 1
@@ -81,8 +81,8 @@ SLIDER
 n-patches
 n-patches
 0
-100
-100
+200
+152
 1
 1
 ^2
@@ -247,6 +247,72 @@ MONITOR
 516
 NIL
 ql:get-performance \"NLSuperGuiInter\"
+17
+1
+11
+
+MONITOR
+45
+535
+352
+580
+NIL
+ql:get-performance \"HeadlessIdlePerf\"
+17
+1
+11
+
+MONITOR
+45
+585
+457
+630
+NIL
+ql:get-performance \"HeadlessHandleGroupChoicePerf\"
+17
+1
+11
+
+MONITOR
+45
+635
+387
+680
+NIL
+ql:get-performance \"HeadlessAnswerNLPerf\"
+17
+1
+11
+
+MONITOR
+140
+710
+472
+755
+NIL
+ql:get-performance \"MailboxNLGroupsList\"
+17
+1
+11
+
+MONITOR
+880
+710
+1252
+755
+NIL
+ql:get-performance \"MailboxGetNLGroupChoices\"
+17
+1
+11
+
+MONITOR
+490
+705
+872
+750
+NIL
+ql:get-performance \"MailboxNLGroupChoicesList\"
 17
 1
 11

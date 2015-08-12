@@ -49,9 +49,18 @@ object QLSystem {
   val handleGroupPerf = AkkaAgent(PerformanceMeasure())
   val guiInterPerf = AkkaAgent(PerformanceMeasure())
   
+  val headlessIdlePerf = AkkaAgent(PerformanceMeasure())
+  val headlessHandleGroupChoicePerf = AkkaAgent(PerformanceMeasure())
+  val headlessAnswerNLPerf = AkkaAgent(PerformanceMeasure())
+  
+  val mailboxNLGroupsList = AkkaAgent(0)
+  val mailboxNLGroupChoicesList = AkkaAgent(0)
+  val mailboxGetNLGroupChoices = AkkaAgent(0)
+  
+  val maxQueueLength = AkkaAgent(0)
+  
   // the supervisor controls the simulation
-  val netLogoSuper = system.actorOf(Props(new NetLogoSupervisor(netLogoRouter, 
-      betweenTickPerf, handleGroupPerf, guiInterPerf)).withDispatcher("pinned-dispatcher"))
+  val netLogoSuper = system.actorOf(Props(new NetLogoSupervisor(netLogoRouter)))//.withDispatcher("pinned-dispatcher"))
       
   // this map connects an NetLogo-agent (turtle / patch) to a QLAgent that performs the learning 
   // it therefore also holds all data about the agents
@@ -161,15 +170,26 @@ class GetGroupList extends DefaultReporter {
   override def getSyntax = reporterSyntax(Array[Int](NumberType), ListType)
   
   def report(args: Array[Argument], c: Context): AnyRef = {
+    
+    val time1 = scala.compat.Platform.currentTime
+    headlessAnswerNLPerf send { _.start(time1)}
+    
+    QLSystem.mailboxGetNLGroupChoices send { _ + 1 }
+    
     val future = (netLogoRouter ? GetNLGroupChoices(args(0).getIntValue)).mapTo[NLGroupChoicesList]
     // we have to block because NetLogo is waiting for a result
     val result = try {
       Await.result(future, defaultWaitDuration).list
     } catch {
       case e: java.util.concurrent.TimeoutException =>
+        
         println("Timeout when waiting for HeadlessEnvironment with id: " + args(0).getIntValue)
         Nil
     }
+    
+    val time2 = scala.compat.Platform.currentTime
+    headlessAnswerNLPerf send { _.end(time2) }
+      
     result.toLogoList
   }
 }
@@ -228,10 +248,19 @@ class Init extends DefaultCommand {
 
   def perform(args: Array[Argument], c: Context) {
 
-    betweenTickPerf send {PerformanceMeasure()}
-    handleGroupPerf send {PerformanceMeasure()}
-    guiInterPerf send {PerformanceMeasure()}
+    betweenTickPerf update PerformanceMeasure()
+    handleGroupPerf update PerformanceMeasure()
+    guiInterPerf update PerformanceMeasure()
 
+    headlessIdlePerf update PerformanceMeasure()
+    headlessHandleGroupChoicePerf update PerformanceMeasure()
+    headlessAnswerNLPerf update PerformanceMeasure()
+    
+    mailboxNLGroupsList update 0
+    mailboxNLGroupChoicesList update 0
+    mailboxGetNLGroupChoices update 0
+  
+    
     // the groups structure is deleted, schedulers are cancelled, 
     // the NetLogo-model is reloaded and the reward-reporter is recompiled
     netLogoSuper ! NetLogoActors.InitNetLogoActors
@@ -370,6 +399,21 @@ class GetPerformance extends DefaultReporter {
         QLSystem.handleGroupPerf.get.average.toLogoObject
       case "NLSuperGuiInter" =>
         QLSystem.guiInterPerf.get.average.toLogoObject
+      case "HeadlessIdlePerf" => 
+        QLSystem.headlessIdlePerf.get.average.toLogoObject
+      case "HeadlessHandleGroupChoicePerf" => 
+        QLSystem.headlessHandleGroupChoicePerf.get.average.toLogoObject
+      case "HeadlessAnswerNLPerf" => 
+        QLSystem.headlessAnswerNLPerf.get.average.toLogoObject
+      case "MailboxNLGroupsList" =>
+        QLSystem.mailboxNLGroupsList.get.toLogoObject
+      case "MailboxNLGroupChoicesList" =>
+        QLSystem.mailboxNLGroupChoicesList.get.toLogoObject
+      case "MailboxGetNLGroupChoices" => 
+        QLSystem.mailboxGetNLGroupChoices.get.toLogoObject
+      case "MaxQueueLength" =>
+        QLSystem.maxQueueLength.get.toLogoObject
+      
     }
   }
 }

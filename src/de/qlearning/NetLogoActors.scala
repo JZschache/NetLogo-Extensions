@@ -21,16 +21,20 @@ object NetLogoActors {
   sealed trait Data
   case object Uninitialized extends Data
   case object Initialized extends Data
-  case class WithBatchStructure(batches: List[List[NLGroup]]) extends Data
-  case class WithGroupReporter(groupReporter: org.nlogo.nvm.Procedure) extends Data
+  case class WithBatchStructure(batches: List[List[NLGroup]], speed: Double) extends Data
+  case class WithGroupReporter(groupReporter: org.nlogo.nvm.Procedure, speed: Double) extends Data
   //messages
   case object InitNetLogoActors
   case class SetGroupStructure(structure: List[NLGroup])
   case object Start
   case object Stop
   case object CompileReporter
+  case class NLGroupsList(list: List[NLGroup])
   case class NLGroupChoicesList(list: List[NLGroupChoice])
   case class GetNLGroupChoices(id: Int)
+  
+  case object SlowDown
+  case object SpeedUp
   
 }
 
@@ -50,12 +54,14 @@ object NetLogoActors {
  * that the NetLogoSupervisor repeatedly calls the group-procedure, which results in a list of groups that
  * once send GroupChoices to NetLogo ( and the HeadlessActors).
  */
-class NetLogoSupervisor(netLogoRouter: ActorRef,
-    betweenTickPerf: AkkaAgent[PerformanceMeasure],
-    handleGroupPerf: AkkaAgent[PerformanceMeasure],
-    guiInterPerf: AkkaAgent[PerformanceMeasure]) extends Actor with FSM[NetLogoActors.State, NetLogoActors.Data]{
+class NetLogoSupervisor(netLogoRouter: ActorRef) extends Actor with FSM[NetLogoActors.State, NetLogoActors.Data]{
   import NetLogoActors._
-  import QLSystem._
+  import QLSystem.config
+  import QLSystem.cfgstr
+  import QLSystem.timeout
+//  import QLSystem.system
+  
+  implicit val ec = context.dispatcher
   
   val nlApp = org.nlogo.app.App.app
     
@@ -69,14 +75,13 @@ class NetLogoSupervisor(netLogoRouter: ActorRef,
   
   // function that sets a future for the decisions of a list of groups
   private def handleGroups(groups: List[NLGroup]) = {
-//    println("groups: " + groups.size)
     // wait for choice of agents until all updates (QValues) have been placed
     Future.sequence(groups.map(group => Future.sequence((group.qlAgents zip group.alternatives).map(pair => 
       pair._1.future map {_.choose(pair._2)}
     )))) onSuccess {
       case list =>  {
-//        println("choices: " + list.size)
         val groupsChoices = (groups zip list).map(pair => NLGroupChoice(pair._1.nlAgents, pair._1.qlAgents, pair._2, Nil))
+        
         netLogoRouter ! NLGroupChoicesList(groupsChoices)
       }
     }
@@ -102,7 +107,7 @@ class NetLogoSupervisor(netLogoRouter: ActorRef,
         val (front, tail) = pair._1.splitAt(batchSize)  
         (tail, front :: pair._2)
       }._2
-      stay using WithBatchStructure(batchStructure)
+      stay using WithBatchStructure(batchStructure, 0.0)
     }
     
     // start without fixed GroupStructure
@@ -111,11 +116,11 @@ class NetLogoSupervisor(netLogoRouter: ActorRef,
     case Event(Start, Initialized) => {
       val groupReporter = nlApp.workspace.compileReporter(groupRepName)
       self ! Tick
-      goto(Supervising) using WithGroupReporter(groupReporter)
+      goto(Supervising) using WithGroupReporter(groupReporter, 0.0)
     }
     
     // start with fixed GroupStructure
-    case Event(Start, WithBatchStructure(batchStructure)) => {
+    case Event(Start, WithBatchStructure(batchStructure, speed)) => {
       self ! Tick
       goto(Supervising)
     }
@@ -125,48 +130,84 @@ class NetLogoSupervisor(netLogoRouter: ActorRef,
   // in this state: the NetLogoSupervisor uses the batchStructure or the groupReporter
   // to repeatedly call the handleGroups-function
   when(Supervising) {
-    case Event(Tick, data) => {
+    case Event(Tick, WithBatchStructure(batchStructure, speed)) => {
       
       val time1 = scala.compat.Platform.currentTime
-      betweenTickPerf send { _.end(time1) }
-      handleGroupPerf send { _.start(time1)}
+      QLSystem.betweenTickPerf send { _.end(time1) }
+      QLSystem.handleGroupPerf send { _.start(time1)}
       
-      data match {
-        case WithBatchStructure(batchStructure) =>
-//          println("WithBatchStructure(batchStructure) ")
-          batchStructure.foreach(batch => handleGroups(batch))
-        case WithGroupReporter(groupReporter) => {
-          val nlgroups = nlApp.workspace.runCompiledReporter(nlApp.owner, groupReporter).asInstanceOf[org.nlogo.api.LogoList].map(_.asInstanceOf[NLGroup]).toList
-          if (batches > 1) {
-            val batchSize = Math.ceil(nlgroups.size.toDouble / batches.toDouble).toInt
-            var (front, tail) = nlgroups.splitAt(batchSize)
-            handleGroups(front)
-            while (!tail.isEmpty) {
-              val x = tail.splitAt(batchSize)
-              handleGroups(x._1)
-              tail = x._2
-            }
-          } else handleGroups(nlgroups) 
-        }
-        case _ => // do nothing
-      }
+      batchStructure.foreach(batch => {
+        QLSystem.mailboxNLGroupsList send { _ + 1}
+        netLogoRouter ! NLGroupsList(batch)
+      })
       
       val time2 = scala.compat.Platform.currentTime
-      handleGroupPerf send { _.end(time2)}
-      guiInterPerf send { _.start(time2) }
+      QLSystem.handleGroupPerf send { _.end(time2)}
+      QLSystem.guiInterPerf send { _.start(time2) }
       
       nlApp.command(updateComName)
       
-      //speed is a number between -110 (very slow) and 110 (very fast) 
-      val speed = nlApp.workspace.speedSliderPosition()
-      if (speed == 110) {
-        self ! Tick
-      } else
-        context.system.scheduler.scheduleOnce(((speed - 110) * (-2)).milliseconds, self, Tick)
+      //speedSliderPosition is a number between -110 (very slow) and 110 (very fast) 
+      val guiSpeed = (nlApp.workspace.speedSliderPosition() - 110.0) * (-1.0)
+      val max = Math.max(guiSpeed, speed)
+      
+//      if (max == 0.0) {
+//        self ! Tick
+//      } else
+        context.system.scheduler.scheduleOnce(max.milliseconds, self, Tick)
       
       val time3 = scala.compat.Platform.currentTime
-      guiInterPerf send { _.end(time3) }
-      betweenTickPerf send { _.start(time3) }
+      QLSystem.guiInterPerf send { _.end(time3) }
+      QLSystem.betweenTickPerf send { _.start(time3) }
+      
+      stay 
+    }
+    
+    case Event(SlowDown, WithBatchStructure(batchStructure, speed)) => {
+      println("slowing down: " + (speed + 1000.0))
+      stay using WithBatchStructure(batchStructure, speed + 1000.0)
+    }
+    
+    case Event(SpeedUp, WithBatchStructure(batchStructure, speed)) => {
+      println("speeding up: " + Math.max(0.0, speed - 1000.0))
+      stay using WithBatchStructure(batchStructure, Math.max(0.0, speed - 1000.0))
+    }
+    
+    case Event(Tick, WithGroupReporter(groupReporter, speed)) => {
+      
+      val time1 = scala.compat.Platform.currentTime
+      QLSystem.betweenTickPerf send { _.end(time1) }
+      QLSystem.handleGroupPerf send { _.start(time1)}
+      
+      val nlgroups = nlApp.workspace.runCompiledReporter(nlApp.owner, groupReporter).asInstanceOf[org.nlogo.api.LogoList].map(_.asInstanceOf[NLGroup]).toList
+      if (batches > 1) {
+        val batchSize = Math.ceil(nlgroups.size.toDouble / batches.toDouble).toInt
+        var (front, tail) = nlgroups.splitAt(batchSize)
+        handleGroups(front)
+        while (!tail.isEmpty) {
+          val x = tail.splitAt(batchSize)
+          handleGroups(x._1)
+          tail = x._2
+        }
+      } else handleGroups(nlgroups) 
+      
+      val time2 = scala.compat.Platform.currentTime
+      QLSystem.handleGroupPerf send { _.end(time2)}
+      QLSystem.guiInterPerf send { _.start(time2) }
+      
+      nlApp.command(updateComName)
+      
+      //speedSliderPosition is a number between -110 (very slow) and 110 (very fast) 
+      val guiSpeed = (nlApp.workspace.speedSliderPosition() - 110) * (-2)
+      
+//      if (speed == 110) {
+//        self ! Tick
+//      } else
+        context.system.scheduler.scheduleOnce(((guiSpeed - 110) * (-2)).milliseconds, self, Tick)
+      
+      val time3 = scala.compat.Platform.currentTime
+      QLSystem.guiInterPerf send { _.end(time3) }
+      QLSystem.betweenTickPerf send { _.start(time3) }
       
       stay      
     }
@@ -215,15 +256,53 @@ class NetLogoHeadlessActor(val id: Int) extends Actor {
       workspace.modelOpened = false
       workspace.open(org.nlogo.app.App.app.workspace.getModelPath())
       workspace.command(setupComName)
-      context.become(ready(workspace.compileReporter(rewardRepName + " " + id), Queue[List[NLGroupChoice]]()) orElse idle)
+      context.become(ready(workspace.compileReporter(rewardRepName + " " + id), Queue[List[NLGroupChoice]](), 0) orElse idle)
     }
 
   }
   
   // waiting to load a model and compile a reporter
-  def ready(reporter: org.nlogo.nvm.Procedure, data: Queue[List[NLGroupChoice]]) : Receive = {
+  def ready(reporter: org.nlogo.nvm.Procedure, data: Queue[List[NLGroupChoice]], nlGroupsCount: Int) : Receive = {
+    
+    case NLGroupsList(groups) => {
+      
+      if (nlGroupsCount > 3)
+        netLogoSuper ! SlowDown
+      
+      QLSystem.mailboxNLGroupsList send { _ - 1}
+      
+      val time1 = scala.compat.Platform.currentTime
+      headlessIdlePerf send { _.end(time1) }
+      headlessHandleGroupChoicePerf send { _.start(time1)}
+      
+      Future.sequence(groups.map(group => Future.sequence((group.qlAgents zip group.alternatives).map(pair => 
+        pair._1.future map {_.choose(pair._2)}
+      )))) onSuccess {
+        case list =>  {
+          val groupsChoices = (groups zip list).map(pair => NLGroupChoice(pair._1.nlAgents, pair._1.qlAgents, pair._2, Nil))
+          QLSystem.mailboxNLGroupChoicesList send { _ + 1}
+          self ! NLGroupChoicesList(groupsChoices)
+        }
+      }
+      
+      val time2 = scala.compat.Platform.currentTime
+      headlessHandleGroupChoicePerf send { _.end(time2) }
+      headlessIdlePerf send { _.start(time2)}
+      
+      context.become(ready(reporter, data, nlGroupsCount + 1) orElse idle)
+    }
     
     case NLGroupChoicesList(list) => {
+      
+      if (nlGroupsCount == 1) // last one
+        netLogoSuper ! SpeedUp
+      
+      QLSystem.mailboxNLGroupChoicesList send { _ - 1}
+     
+      val time1 = scala.compat.Platform.currentTime
+      headlessIdlePerf send { _.end(time1) }
+      headlessHandleGroupChoicePerf send { _.start(time1)}
+      
       Future {
           workspace.runCompiledReporter(workspace.defaultOwner, reporter).asInstanceOf[org.nlogo.api.LogoList]
       } onSuccess {
@@ -234,13 +313,30 @@ class NetLogoHeadlessActor(val id: Int) extends Actor {
             (groupChoice.qlAgents, groupChoice.choices, groupChoice.rewards).zipped.foreach((agent, alt, r) => agent send {_.updated(alt, r)})    
           })
       }
-      context.become(ready(reporter, data.enqueue(list)) orElse idle)
+      
+      val time2 = scala.compat.Platform.currentTime
+      headlessHandleGroupChoicePerf send { _.end(time2) }
+      headlessIdlePerf send { _.start(time2)}
+      
+      QLSystem.maxQueueLength update data.length + 1
+      
+      context.become(ready(reporter, data.enqueue(list), nlGroupsCount - 1) orElse idle)
     }
     
     case GetNLGroupChoices(_) => {
+      
+      QLSystem.mailboxGetNLGroupChoices send { _ - 1 }
+      
+      val time1 = scala.compat.Platform.currentTime
+      headlessIdlePerf send { _.end(time1) }
+            
       val (elements, newData) = data.dequeue
-      sender ! NLGroupChoicesList(elements)
-      context.become(ready(reporter, newData) orElse idle)
+      sender ! 	NLGroupChoicesList(elements)
+      
+      val time2 = scala.compat.Platform.currentTime
+      headlessIdlePerf send { _.start(time2)}
+      
+      context.become(ready(reporter, newData, nlGroupsCount) orElse idle)
     }
     
   }
@@ -256,7 +352,8 @@ class NetLogoHeadlessActor(val id: Int) extends Actor {
  */
 case class NetLogoHeadlessRouter(size: Int) extends RouterConfig {
  
-  def routerDispatcher: String = Dispatchers.DefaultDispatcherId
+//  def routerDispatcher: String = Dispatchers.DefaultDispatcherId
+  def routerDispatcher: String = "pinned-dispatcher"
   def supervisorStrategy: SupervisorStrategy = SupervisorStrategy.defaultStrategy
  
   def createRoute(routeeProps: Props, routeeProvider: RouteeProvider): Route = {
@@ -265,7 +362,7 @@ case class NetLogoHeadlessRouter(size: Int) extends RouterConfig {
       IndexedSeq(routeeProvider.context.system.deadLetters)
     else
       (0 until size).map(id => {
-        routeeProvider.context.actorOf(Props(new NetLogoHeadlessActor(id)))
+        routeeProvider.context.actorOf(Props(new NetLogoHeadlessActor(id)).withDispatcher("pinned-dispatcher"))
       }).toIndexedSeq
  
     routeeProvider.registerRoutees(currentRoutees)
@@ -285,9 +382,14 @@ case class NetLogoHeadlessRouter(size: Int) extends RouterConfig {
     {
       case (sender, message) =>
         message match {
-          case NetLogoActors.GetNLGroupChoices(id) =>  List(Destination(sender, currentRoutees(id)))
+          case NetLogoActors.GetNLGroupChoices(id) =>  {
+           List(Destination(sender, currentRoutees(id)))
+          }
           case Broadcast(msg) => toAll(sender, currentRoutees)
-          case msg            => List(Destination(sender, getNext()))
+          case NetLogoActors.NLGroupsList(_) => {
+            List(Destination(sender, getNext()))
+          }
+          case msg => List(Destination(sender, getNext()))
         }
     }
 
