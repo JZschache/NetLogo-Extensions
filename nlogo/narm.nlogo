@@ -1,5 +1,5 @@
 extensions[ql]
-patches-own[ qv1 qv2 ]
+patches-own[ qv-0 qv-1 explore n-0 n-1]
 
 to setup
   clear-all
@@ -34,26 +34,17 @@ to-report reward [group-choice]
 end
 
 to update
-  ;ask patches [ foreach ql:get-data set-q-value ]
   tick
-end
-
-to set-q-value [data-entry]
-  ifelse ((item 0 data-entry) = "0") [ 
-    set qv1 (item 1 data-entry) 
-  ] [
-    set qv2 (item 1 data-entry) 
-  ]
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
 355
 35
-767
-468
+769
+470
 -1
 -1
-2.6315789473684212
+4.0
 1
 10
 1
@@ -64,9 +55,9 @@ GRAPHICS-WINDOW
 1
 1
 0
-152
+100
 0
-152
+100
 0
 0
 1
@@ -82,7 +73,7 @@ n-patches
 n-patches
 0
 200
-152
+100
 1
 1
 ^2
@@ -204,7 +195,7 @@ PLOT
 215
 350
 365
-means of qv1 and qv2
+means of qv-1 and qv-2
 NIL
 NIL
 0.0
@@ -215,8 +206,8 @@ true
 true
 "" ""
 PENS
-"qv1" 1.0 0 -16777216 true "" "plot mean [qv1] of patches"
-"qv2" 1.0 0 -7500403 true "" "plot mean [qv2] of patches"
+"qv-1" 1.0 0 -16777216 true "" "plot mean [qv-0] of patches"
+"qv-2" 1.0 0 -7500403 true "" "plot mean [qv-1] of patches"
 
 MONITOR
 50
@@ -253,31 +244,75 @@ ql:get-performance \"NLSuperGuiInter\"
 
 MONITOR
 45
-535
-352
-580
+570
+440
+615
 NIL
-ql:get-performance \"HeadlessIdlePerf\"
+ql:get-performance \"HeadlessIdlePerf 1\"
 17
 1
 11
 
 MONITOR
 45
-585
-457
-630
+620
+440
+665
 NIL
-ql:get-performance \"HeadlessHandleGroupChoicePerf\"
+ql:get-performance \"HeadlessHandleNLGroupPerf 1\"
 17
 1
 11
 
 MONITOR
 45
-635
-387
-680
+670
+440
+715
+NIL
+ql:get-performance \"HeadlessHandleNLGroupChoicePerf 1\"
+17
+1
+11
+
+MONITOR
+445
+570
+840
+615
+NIL
+ql:get-performance \"HeadlessIdlePerf 2\"
+17
+1
+11
+
+MONITOR
+445
+670
+840
+715
+NIL
+ql:get-performance \"HeadlessHandleNLGroupChoicePerf 2\"
+17
+1
+11
+
+MONITOR
+445
+620
+840
+665
+NIL
+ql:get-performance \"HeadlessHandleNLGroupPerf 2\"
+17
+1
+11
+
+MONITOR
+45
+520
+345
+565
 NIL
 ql:get-performance \"HeadlessAnswerNLPerf\"
 17
@@ -285,34 +320,67 @@ ql:get-performance \"HeadlessAnswerNLPerf\"
 11
 
 MONITOR
-140
-710
-472
-755
+845
+570
+1235
+615
 NIL
-ql:get-performance \"MailboxNLGroupsList\"
+ql:get-performance \"HeadlessIdlePerf 3\"
 17
 1
 11
 
 MONITOR
-880
-710
-1252
-755
+1240
+570
+1630
+615
 NIL
-ql:get-performance \"MailboxGetNLGroupChoices\"
+ql:get-performance \"HeadlessIdlePerf 4\"
 17
 1
 11
 
 MONITOR
-490
-705
-872
-750
+845
+620
+1235
+665
 NIL
-ql:get-performance \"MailboxNLGroupChoicesList\"
+ql:get-performance \"HeadlessHandleNLGroupPerf 3\"
+17
+1
+11
+
+MONITOR
+1240
+620
+1630
+665
+NIL
+ql:get-performance \"HeadlessHandleNLGroupPerf 4\"
+17
+1
+11
+
+MONITOR
+845
+670
+1235
+715
+NIL
+ql:get-performance \"HeadlessHandleNLGroupChoicePerf 3\"
+17
+1
+11
+
+MONITOR
+1240
+670
+1630
+715
+NIL
+ql:get-performance \"HeadlessHandleNLGroupChoicePerf 4\"
 17
 1
 11

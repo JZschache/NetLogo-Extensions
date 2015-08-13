@@ -49,15 +49,17 @@ object QLSystem {
   val handleGroupPerf = AkkaAgent(PerformanceMeasure())
   val guiInterPerf = AkkaAgent(PerformanceMeasure())
   
-  val headlessIdlePerf = AkkaAgent(PerformanceMeasure())
-  val headlessHandleGroupChoicePerf = AkkaAgent(PerformanceMeasure())
+  val headlessIdlePerf = AkkaAgent(Map[Int,PerformanceMeasure]().withDefault(id => PerformanceMeasure()))
+  val headlessHandleNLGroupPerf = AkkaAgent(Map[Int,PerformanceMeasure]().withDefault(id => PerformanceMeasure()))
+  val headlessHandleNLGroupChoicePerf = AkkaAgent(Map[Int,PerformanceMeasure]().withDefault(id => PerformanceMeasure()))
+  
   val headlessAnswerNLPerf = AkkaAgent(PerformanceMeasure())
-  
-  val mailboxNLGroupsList = AkkaAgent(0)
-  val mailboxNLGroupChoicesList = AkkaAgent(0)
-  val mailboxGetNLGroupChoices = AkkaAgent(0)
-  
-  val maxQueueLength = AkkaAgent(0)
+//  
+//  val mailboxNLGroupsList = AkkaAgent(0)
+//  val mailboxNLGroupChoicesList = AkkaAgent(0)
+//  val mailboxGetNLGroupChoices = AkkaAgent(0)
+//  
+//  val maxQueueLength = AkkaAgent(0)
   
   // the supervisor controls the simulation
   val netLogoSuper = system.actorOf(Props(new NetLogoSupervisor(netLogoRouter)))//.withDispatcher("pinned-dispatcher"))
@@ -77,21 +79,20 @@ class QLExtension extends DefaultClassManager {
   override def load(manager: PrimitiveManager) {
     // observer primitives
     manager.addPrimitive("init", new Init)
-    manager.addPrimitive("set-group-structure", new SetGroupStructure)
+    manager.addPrimitive("create-group", new CreateGroup)
+    manager.addPrimitive("set-group-structure", new NewGroupStructure)
     manager.addPrimitive("start", new Start)
     manager.addPrimitive("stop", new Stop)
+    manager.addPrimitive("decay-exploration", new DecreaseExperimenting)
+    
     manager.addPrimitive("get-group-list", new GetGroupList)
     manager.addPrimitive("get-agents", new GetAgents)
     manager.addPrimitive("get-decisions", new GetDecisions)
     manager.addPrimitive("set-rewards", new SetRewards)
-    manager.addPrimitive("decay-exploration", new DecreaseExperimenting)
-//    manager.addPrimitive("create-singleton", new CreateSingleton)
-    manager.addPrimitive("create-group", new CreateGroup)
+    
     manager.addPrimitive("get-performance", new GetPerformance)
-    // agent primitives
-    manager.addPrimitive("get-data", new GetData)
-    manager.addPrimitive("get-exploration-rate", new GetExperimenting)
   }
+    
   
   override def additionalJars: JList[String] = {
     val list : java.util.List[String] =  new java.util.ArrayList[String]
@@ -164,17 +165,14 @@ case class NLGroupChoice(nlAgents: List[org.nlogo.api.Agent],
  */
 class GetGroupList extends DefaultReporter {
   import QLSystem._
-  import NetLogoActors.{GetNLGroupChoices, NLGroupChoicesList}
+  import NetLogoHeadlessActor.{GetNLGroupChoices, NLGroupChoicesList}
   
   override def getAgentClassString = "O"
   override def getSyntax = reporterSyntax(Array[Int](NumberType), ListType)
   
   def report(args: Array[Argument], c: Context): AnyRef = {
     
-    val time1 = scala.compat.Platform.currentTime
-    headlessAnswerNLPerf send { _.start(time1)}
-    
-    QLSystem.mailboxGetNLGroupChoices send { _ + 1 }
+    headlessAnswerNLPerf send { _.start(scala.compat.Platform.currentTime)}
     
     val future = (netLogoRouter ? GetNLGroupChoices(args(0).getIntValue)).mapTo[NLGroupChoicesList]
     // we have to block because NetLogo is waiting for a result
@@ -187,8 +185,7 @@ class GetGroupList extends DefaultReporter {
         Nil
     }
     
-    val time2 = scala.compat.Platform.currentTime
-    headlessAnswerNLPerf send { _.end(time2) }
+    headlessAnswerNLPerf send { _.end(scala.compat.Platform.currentTime) }
       
     result.toLogoList
   }
@@ -252,25 +249,24 @@ class Init extends DefaultCommand {
     handleGroupPerf update PerformanceMeasure()
     guiInterPerf update PerformanceMeasure()
 
-    headlessIdlePerf update PerformanceMeasure()
-    headlessHandleGroupChoicePerf update PerformanceMeasure()
-    headlessAnswerNLPerf update PerformanceMeasure()
-    
-    mailboxNLGroupsList update 0
-    mailboxNLGroupChoicesList update 0
-    mailboxGetNLGroupChoices update 0
+    headlessIdlePerf update Map[Int,PerformanceMeasure]().withDefault(id => PerformanceMeasure()) 
+    headlessHandleNLGroupPerf update Map[Int,PerformanceMeasure]().withDefault(id => PerformanceMeasure())
+    headlessHandleNLGroupChoicePerf update Map[Int,PerformanceMeasure]().withDefault(id => PerformanceMeasure())
   
-    
+    headlessAnswerNLPerf update PerformanceMeasure()
+      
     // the groups structure is deleted, schedulers are cancelled, 
     // the NetLogo-model is reloaded and the reward-reporter is recompiled
-    netLogoSuper ! NetLogoActors.InitNetLogoActors
+    netLogoSuper ! NetLogoSupervisor.InitNetLogoActors
     
-    val newNLAgents = args(0).getAgentSet.agents.asScala
+    val newNLAgents = args(0).getAgentSet.agents.asScala.toList
     val experimenting = args(1).getDoubleValue
     val exploration = args(2).getString
- 
+
     // create a QLData-object that holds all the information about the Q-learning process
-    qlDataMap send { newNLAgents.map(_ -> AkkaAgent(QLAgent(exploration, experimenting))).toMap}
+    qlDataMap send { newNLAgents.map(a => {
+      a -> AkkaAgent(QLAgent(exploration, experimenting, a.asInstanceOf[org.nlogo.agent.Agent]))
+    }).toMap }
     // must wait for new agents to be set
     qlDataMap.await
   }
@@ -288,58 +284,34 @@ class CreateGroup extends DefaultReporter {
   
   def report(args: Array[Argument], context: Context): AnyRef = {
     
-    val (agents, alternatives) = args(0).getList.map(entry => {
+    val (nlAgents, qlAgents, alternatives) = args(0).getList.map(entry => {
       val ll = entry.asInstanceOf[LogoList]
-      val agent = ll.first.asInstanceOf[org.nlogo.api.Agent]
+      val nlAgent = ll.first.asInstanceOf[org.nlogo.api.Agent]
       val alt = ll.butFirst.first.asInstanceOf[LogoList].map(s => s.asInstanceOf[String]).toList
-      (agent, alt)
-    }).toList.unzip
+      
+      // find QLAgent to NLAgent
+      val qlAgent = QLSystem.qlDataMap.get().apply(nlAgent)
+      qlAgent send { _.setAlternatives(alt) }
+      
+      (nlAgent, qlAgent, alt)
+    }).toList.unzip3
        
-    NLGroup(agents, Nil, alternatives)
+    NLGroup(nlAgents, qlAgents, alternatives)
   }
 }
-
-/**
- * takes a single agent and a list of alternatives
- * returns an object of type NLGroup (with only one agent)
- */
-//class CreateSingleton extends DefaultReporter {
-//  
-//  override def getAgentClassString = "OTPL"
-//  override def getSyntax = reporterSyntax(Array( TurtleType | PatchType, ListType), WildcardType)
-//  
-//  def report(args: Array[Argument], context: Context): AnyRef = {
-//    val agent = args(0).getAgent
-//    val alternatives = args(1).getList.map(_.asInstanceOf[String]).toList
-//    NLGroup(List(agent), Nil, List(alternatives))
-//  }
-//}
 
 /**
  * takes a list of objects of type NLGroup 
  * this list is taken as fixed group structure in the simulation run
  */
-class SetGroupStructure extends DefaultCommand {
-  import QLSystem.netLogoSuper
-  import NetLogoActors.SetGroupStructure
+class NewGroupStructure extends DefaultCommand {
   
   override def getAgentClassString = "O"
   override def getSyntax = commandSyntax(Array(ListType))
   
   def perform(args: Array[Argument], c: Context) {
     val groupStructure = args(0).getList.map(_.asInstanceOf[NLGroup]).toList
-    
-    // find QLAgents to NLAgents
-    val map = QLSystem.qlDataMap.get()
-    val newGS = groupStructure.mapConserve(nlg => {
-      val qlAgents = nlg.nlAgents.map(map(_))
-      (qlAgents zip nlg.alternatives) foreach {pair =>
-        pair._1 send { _.setAlternatives(pair._2) }
-      }
-      NLGroup(nlg.nlAgents, qlAgents, nlg.alternatives)
-    })
-    
-    netLogoSuper ! SetGroupStructure(newGS)
+    QLSystem.netLogoSuper ! NetLogoSupervisor.SetGroupStructure(groupStructure)
   }
 }
 
@@ -355,7 +327,7 @@ class Start extends DefaultCommand {
   override def getSyntax = commandSyntax(Array[Int]())
   
   def perform(args: Array[Argument], c: Context) {
-    QLSystem.netLogoSuper ! NetLogoActors.Start
+    QLSystem.netLogoSuper ! NetLogoSupervisor.Start
   }
 }
 
@@ -370,7 +342,7 @@ class Stop extends DefaultCommand {
   override def getSyntax = commandSyntax(Array[Int]())
   
   def perform(args: Array[Argument], c: Context) {
-    QLSystem.netLogoSuper ! NetLogoActors.Stop
+    QLSystem.netLogoSuper ! NetLogoSupervisor.Stop
   }
 }
 
@@ -399,54 +371,36 @@ class GetPerformance extends DefaultReporter {
         QLSystem.handleGroupPerf.get.average.toLogoObject
       case "NLSuperGuiInter" =>
         QLSystem.guiInterPerf.get.average.toLogoObject
-      case "HeadlessIdlePerf" => 
-        QLSystem.headlessIdlePerf.get.average.toLogoObject
-      case "HeadlessHandleGroupChoicePerf" => 
-        QLSystem.headlessHandleGroupChoicePerf.get.average.toLogoObject
-      case "HeadlessAnswerNLPerf" => 
+      case "HeadlessIdlePerf 1" => 
+        QLSystem.headlessIdlePerf.get.apply(0).average.toLogoObject
+      case "HeadlessIdlePerf 2" => 
+        QLSystem.headlessIdlePerf.get.apply(1).average.toLogoObject
+      case "HeadlessIdlePerf 3" => 
+        QLSystem.headlessIdlePerf.get.apply(2).average.toLogoObject
+      case "HeadlessIdlePerf 4" => 
+        QLSystem.headlessIdlePerf.get.apply(3).average.toLogoObject
+      case "HeadlessHandleNLGroupPerf 1" => 
+        QLSystem.headlessHandleNLGroupPerf.get.apply(0).average.toLogoObject
+      case "HeadlessHandleNLGroupPerf 2" => 
+        QLSystem.headlessHandleNLGroupPerf.get.apply(1).average.toLogoObject
+      case "HeadlessHandleNLGroupPerf 3" => 
+        QLSystem.headlessHandleNLGroupPerf.get.apply(2).average.toLogoObject
+      case "HeadlessHandleNLGroupPerf 4" => 
+        QLSystem.headlessHandleNLGroupPerf.get.apply(3).average.toLogoObject
+      case "HeadlessHandleNLGroupChoicePerf 1" => 
+        QLSystem.headlessHandleNLGroupChoicePerf.get.apply(0).average.toLogoObject
+      case "HeadlessHandleNLGroupChoicePerf 2" => 
+        QLSystem.headlessHandleNLGroupChoicePerf.get.apply(1).average.toLogoObject
+      case "HeadlessHandleNLGroupChoicePerf 3" => 
+        QLSystem.headlessHandleNLGroupChoicePerf.get.apply(2).average.toLogoObject
+      case "HeadlessHandleNLGroupChoicePerf 4" => 
+        QLSystem.headlessHandleNLGroupChoicePerf.get.apply(3).average.toLogoObject
+      case "HeadlessAnswerNLPerf" =>
         QLSystem.headlessAnswerNLPerf.get.average.toLogoObject
-      case "MailboxNLGroupsList" =>
-        QLSystem.mailboxNLGroupsList.get.toLogoObject
-      case "MailboxNLGroupChoicesList" =>
-        QLSystem.mailboxNLGroupChoicesList.get.toLogoObject
-      case "MailboxGetNLGroupChoices" => 
-        QLSystem.mailboxGetNLGroupChoices.get.toLogoObject
-      case "MaxQueueLength" =>
-        QLSystem.maxQueueLength.get.toLogoObject
-      
+        
     }
   }
 }
 
 
-/**
- * returns a list of triples ('name of alternative', 'q-value', n'), one for each alternative
- * 
- * is called by an agent
- * 
- * this method is non-blocking (not all rewards may have been processed)
- */
-class GetData extends DefaultReporter {
-  override def getAgentClassString = "TP"    
-  override def getSyntax = reporterSyntax(Array[Int](), ListType)
-  def report(args: Array[Argument], c: Context): AnyRef = {
-//    val key = args(0).getString
-//    QLSystem.qlDataMap.get()(c.getAgent).get.qValuesMap.getOrElse(key, new QLAgent.QValue(key, 0.0, 0.0)).value.toLogoObject
-    QLSystem.qlDataMap.get()(c.getAgent).get.qValuesMap.elements.map(pair => Array(pair._1, pair._2.value, pair._2.n)).toSeq.toLogoObject
-  }
-}
 
-/**
- * returns the current experimenting parameter
- * 
- * is called by an agent
- * 
- * this method is non-blocking (not all choices may have been processed)
- */
-class GetExperimenting extends DefaultReporter {
-  override def getAgentClassString = "TP"    
-  override def getSyntax = reporterSyntax(Array[Int](), NumberType)
-  def report(args: Array[Argument], c: Context): AnyRef = { 
-    QLSystem.qlDataMap.get()(c.getAgent).get.experimenting.toLogoObject
-  }
-}
