@@ -385,6 +385,17 @@ ql:get-performance \"HeadlessHandleNLGroupChoicePerf 4\"
 1
 11
 
+MONITOR
+820
+60
+1067
+105
+NIL
+ql:get-performance \"TickPerf\"
+17
+1
+11
+
 @#$#@#$#@
 ## WHAT IS IT?
 

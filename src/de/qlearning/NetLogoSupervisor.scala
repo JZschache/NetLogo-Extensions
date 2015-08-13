@@ -24,16 +24,21 @@ object NetLogoSupervisor {
     def remainingBatches: List[List[NLGroup]]
     def headlessIds: List[Int]
     def updateCommand: org.nlogo.nvm.Procedure
+    def tickCount : Int
     def copy(remainingBatches: List[List[NLGroup]], headlessIds: List[Int]): InitializedTrait
+    def copy(tickCount: Int): InitializedTrait
   }
-  case class Initialized(override val remainingBatches: List[List[NLGroup]], override val  headlessIds: List[Int], override val updateCommand: org.nlogo.nvm.Procedure) extends InitializedTrait {
-    override def copy(batches: List[List[NLGroup]], ids: List[Int]) = Initialized(batches, ids, updateCommand)
+  case class Initialized(override val remainingBatches: List[List[NLGroup]], override val  headlessIds: List[Int], override val updateCommand: org.nlogo.nvm.Procedure, override val tickCount : Int) extends InitializedTrait {
+    override def copy(batches: List[List[NLGroup]], ids: List[Int]) = Initialized(batches, ids, updateCommand, tickCount)
+    override def copy(count: Int) = Initialized(remainingBatches, headlessIds, updateCommand, count)
   }
-  case class WithGroupStructure(groups: List[List[NLGroup]], override val remainingBatches: List[List[NLGroup]], override val  headlessIds: List[Int], override val updateCommand: org.nlogo.nvm.Procedure) extends InitializedTrait {
-    override def copy(batches: List[List[NLGroup]], ids: List[Int]) = WithGroupStructure(groups, batches, ids, updateCommand)
+  case class WithGroupStructure(groups: List[List[NLGroup]], override val remainingBatches: List[List[NLGroup]], override val  headlessIds: List[Int], override val updateCommand: org.nlogo.nvm.Procedure, override val tickCount : Int) extends InitializedTrait {
+    override def copy(batches: List[List[NLGroup]], ids: List[Int]) = WithGroupStructure(groups, batches, ids, updateCommand, tickCount)
+    override def copy(count: Int) = WithGroupStructure(groups, remainingBatches, headlessIds, updateCommand, count)
   }
-  case class WithGroupReporter(groupReporter: org.nlogo.nvm.Procedure, override val remainingBatches: List[List[NLGroup]], override val  headlessIds: List[Int], override val updateCommand: org.nlogo.nvm.Procedure) extends InitializedTrait {
-    override def copy(batches: List[List[NLGroup]], ids: List[Int]) = WithGroupReporter(groupReporter, batches, ids, updateCommand)
+  case class WithGroupReporter(groupReporter: org.nlogo.nvm.Procedure, override val remainingBatches: List[List[NLGroup]], override val  headlessIds: List[Int], override val updateCommand: org.nlogo.nvm.Procedure, override val tickCount : Int) extends InitializedTrait {
+    override def copy(batches: List[List[NLGroup]], ids: List[Int]) = WithGroupReporter(groupReporter, batches, ids, updateCommand, tickCount)
+    override def copy(count: Int) = WithGroupReporter(groupReporter, remainingBatches, headlessIds, updateCommand, count)
   }
   //messages
   case object InitNetLogoActors
@@ -106,23 +111,25 @@ class NetLogoSupervisor(netLogoRouter: ActorRef) extends Actor with FSM[NetLogoS
       // recompile the update command
       val updateCommand = nlApp.workspace.compileCommands(updateComName)
       // the groups structure is deleted
-      stay using Initialized(Nil, Nil, updateCommand)
+      stay using Initialized(Nil, Nil, updateCommand, 0)
     }
       
     // SetGroupStructure message only works if Initialized
-    case Event(SetGroupStructure(structure: List[NLGroup]), Initialized(remainingBatches, headlessIds, updateCommand)) => {
-      stay using WithGroupStructure(cutToBatches(structure), remainingBatches, headlessIds, updateCommand)
+    case Event(SetGroupStructure(structure: List[NLGroup]), Initialized(remainingBatches, headlessIds, updateCommand, tickCount)) => {
+      stay using WithGroupStructure(cutToBatches(structure), remainingBatches, headlessIds, updateCommand, tickCount)
     }
     
     // start without fixed GroupStructure
     // the group-reporter is called repeatedly in order to get a list NLGroups 
-    case Event(Start, Initialized(remainingBatches, headlessIds, updateCommand)) => {
+    case Event(Start, Initialized(remainingBatches, headlessIds, updateCommand, tickCount)) => {
       val groupReporter = nlApp.workspace.compileReporter(groupRepName)
-      goto(Supervising) using WithGroupReporter(groupReporter, remainingBatches, headlessIds, updateCommand)
+      tickPerf send { _.start(scala.compat.Platform.currentTime)}
+      goto(Supervising) using WithGroupReporter(groupReporter, remainingBatches, headlessIds, updateCommand, tickCount)
     }
     
     // start with fixed GroupStructure
-    case Event(Start, WithGroupStructure(_,_,_,_)) => {
+    case Event(Start, WithGroupStructure(_,_,_,_,_)) => {
+      tickPerf send { _.start(scala.compat.Platform.currentTime)}
       goto(Supervising)
     }
     
@@ -156,12 +163,12 @@ class NetLogoSupervisor(netLogoRouter: ActorRef) extends Actor with FSM[NetLogoS
       val batches = if (d.remainingBatches.isEmpty) {
         self ! UpdateNetLogo
         d match {
-          case WithGroupStructure(groups, remainingBatches, headlessIds,_) => groups
-          case WithGroupReporter(groupReporter,remainingBatches, headlessIds,_) => {
+          case WithGroupStructure(groups, remainingBatches, headlessIds,_,_) => groups
+          case WithGroupReporter(groupReporter,remainingBatches, headlessIds,_,_) => {
             val logolist = nlApp.workspace.runCompiledReporter(nlApp.owner, groupReporter).asInstanceOf[org.nlogo.api.LogoList]
             cutToBatches(logolist.map(_.asInstanceOf[NLGroup]).toList)
           }
-          case Initialized(_,_,_) => // should not happen 
+          case Initialized(_,_,_,_) => // should not happen 
             Nil
         }
       } else {
@@ -187,11 +194,20 @@ class NetLogoSupervisor(netLogoRouter: ActorRef) extends Actor with FSM[NetLogoS
       
       nlApp.workspace.runCompiledCommands(nlApp.owner, d.updateCommand)
       
+      val nextTick = if (d.tickCount == 99) {
+        val time = scala.compat.Platform.currentTime
+        tickPerf send { _.end(time)}
+        tickPerf send { _.start(time)}
+        0
+      } else {
+        d.tickCount + 1
+      }
+      
       val time2 = scala.compat.Platform.currentTime
       QLSystem.guiInterPerf send { _.end(time2) }
       QLSystem.betweenTickPerf send { _.start(time2) }
       
-      stay
+      stay using d.copy(nextTick)
     }
     
     case Event(Stop, _) => {

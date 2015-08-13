@@ -54,6 +54,9 @@ object QLSystem {
   val headlessHandleNLGroupChoicePerf = AkkaAgent(Map[Int,PerformanceMeasure]().withDefault(id => PerformanceMeasure()))
   
   val headlessAnswerNLPerf = AkkaAgent(PerformanceMeasure())
+  
+  val tickPerf = AkkaAgent(PerformanceMeasure()) 
+  
 //  
 //  val mailboxNLGroupsList = AkkaAgent(0)
 //  val mailboxNLGroupChoicesList = AkkaAgent(0)
@@ -255,6 +258,8 @@ class Init extends DefaultCommand {
   
     headlessAnswerNLPerf update PerformanceMeasure()
       
+    tickPerf update PerformanceMeasure()
+    
     // the groups structure is deleted, schedulers are cancelled, 
     // the NetLogo-model is reloaded and the reward-reporter is recompiled
     netLogoSuper ! NetLogoSupervisor.InitNetLogoActors
@@ -364,40 +369,31 @@ class GetPerformance extends DefaultReporter {
   override def getAgentClassString = "O"    
   override def getSyntax = reporterSyntax(Array[Int](StringType), NumberType)
   def report(args: Array[Argument], c: Context): AnyRef = { 
-    args(0).getString match {
-      case "NLSuperBetweenTick" =>
-        QLSystem.betweenTickPerf.get.average.toLogoObject
-      case "NLSuperHandleGroups" => 
-        QLSystem.handleGroupPerf.get.average.toLogoObject
-      case "NLSuperGuiInter" =>
-        QLSystem.guiInterPerf.get.average.toLogoObject
-      case "HeadlessIdlePerf 1" => 
-        QLSystem.headlessIdlePerf.get.apply(0).average.toLogoObject
-      case "HeadlessIdlePerf 2" => 
-        QLSystem.headlessIdlePerf.get.apply(1).average.toLogoObject
-      case "HeadlessIdlePerf 3" => 
-        QLSystem.headlessIdlePerf.get.apply(2).average.toLogoObject
-      case "HeadlessIdlePerf 4" => 
-        QLSystem.headlessIdlePerf.get.apply(3).average.toLogoObject
-      case "HeadlessHandleNLGroupPerf 1" => 
-        QLSystem.headlessHandleNLGroupPerf.get.apply(0).average.toLogoObject
-      case "HeadlessHandleNLGroupPerf 2" => 
-        QLSystem.headlessHandleNLGroupPerf.get.apply(1).average.toLogoObject
-      case "HeadlessHandleNLGroupPerf 3" => 
-        QLSystem.headlessHandleNLGroupPerf.get.apply(2).average.toLogoObject
-      case "HeadlessHandleNLGroupPerf 4" => 
-        QLSystem.headlessHandleNLGroupPerf.get.apply(3).average.toLogoObject
-      case "HeadlessHandleNLGroupChoicePerf 1" => 
-        QLSystem.headlessHandleNLGroupChoicePerf.get.apply(0).average.toLogoObject
-      case "HeadlessHandleNLGroupChoicePerf 2" => 
-        QLSystem.headlessHandleNLGroupChoicePerf.get.apply(1).average.toLogoObject
-      case "HeadlessHandleNLGroupChoicePerf 3" => 
-        QLSystem.headlessHandleNLGroupChoicePerf.get.apply(2).average.toLogoObject
-      case "HeadlessHandleNLGroupChoicePerf 4" => 
-        QLSystem.headlessHandleNLGroupChoicePerf.get.apply(3).average.toLogoObject
-      case "HeadlessAnswerNLPerf" =>
-        QLSystem.headlessAnswerNLPerf.get.average.toLogoObject
-        
+    val s = args(0).getString
+    val strings = s.split(' ')
+    if (strings.size == 2)  {
+      val id = strings(1).toInt - 1
+      strings(0) match {
+        case "HeadlessIdlePerf" => 
+          QLSystem.headlessIdlePerf.get.apply(id).average.toLogoObject
+        case "HeadlessHandleNLGroupPerf" => 
+          QLSystem.headlessHandleNLGroupPerf.get.apply(id).average.toLogoObject
+        case "HeadlessHandleNLGroupChoicePerf" => 
+          QLSystem.headlessHandleNLGroupChoicePerf.get.apply(id).average.toLogoObject
+      }
+    } else {
+      strings(0) match {
+        case "NLSuperBetweenTick" =>
+          QLSystem.betweenTickPerf.get.average.toLogoObject
+        case "NLSuperHandleGroups" => 
+          QLSystem.handleGroupPerf.get.average.toLogoObject
+        case "NLSuperGuiInter" =>
+          QLSystem.guiInterPerf.get.average.toLogoObject
+        case "HeadlessAnswerNLPerf" =>
+          QLSystem.headlessAnswerNLPerf.get.average.toLogoObject
+        case "TickPerf" =>
+          QLSystem.tickPerf.get.average.toLogoObject
+      }
     }
   }
 }
