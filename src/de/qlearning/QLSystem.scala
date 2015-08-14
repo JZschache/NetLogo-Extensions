@@ -2,9 +2,18 @@ package de.qlearning
 
 import java.util.{ List => JList }
 import java.io.File
-
 import scala.collection.JavaConverters._
 
+import org.nlogo.api._
+import org.nlogo.api.Syntax._
+import org.nlogo.api.ScalaConversions._
+
+import de.util.PerformanceMeasure
+
+import java.net.URLClassLoader
+import java.net.URL
+
+import com.typesafe.config.ConfigFactory
 import akka.actor.ActorSystem
 import akka.actor.Props
 import akka.agent.{ Agent => AkkaAgent }
@@ -13,24 +22,35 @@ import akka.pattern.ask
 import akka.util.Timeout
 import akka.util.duration._
 
-import org.nlogo.api._
-import org.nlogo.api.Syntax._
-import org.nlogo.api.ScalaConversions._
-
-import com.typesafe.config.ConfigFactory
-
-import de.util.PerformanceMeasure
-
+class MyClassLoader(urls: Array[URL]) extends URLClassLoader(urls){
+  
+    def addAnURL(url:URL) {
+        super.addURL(url)
+    }
+  
+  }
 
 object QLSystem {
+
+  val loader = new MyClassLoader(ClassLoader.getSystemClassLoader().asInstanceOf[URLClassLoader].getURLs())
+  println("System class loader from QLSystem object")
+  loader.getURLs().foreach(p => println(p))
+  
+  println("QLSystem class loader")
+  val loader3 = new MyClassLoader(this.getClass().getClassLoader().asInstanceOf[URLClassLoader].getURLs())
+  loader3.getURLs().foreach(p => println(p))
   
   // name of NetLogo extension
   val EXTENSION_NAME = "ql"
   // path of configuration file
-  val confFile = "conf/application.conf"
+  val confFile1 = "extensions/ql/conf/reference.conf"
+  val confFile2 = "extensions/ql/conf/application.conf"
+    
+  val config1 = ConfigFactory.parseFile(new File(confFile1))
     
   // starting the ActorSystem
-  implicit val system = ActorSystem("QLSystem", ConfigFactory.parseFile(new File(confFile)))
+//  implicit val system = ActorSystem("QLSystem", ConfigFactory.parseFile(new File(confFile2)).withFallback(config1), QLSystem.getClass().getClassLoader())
+  implicit val system = ActorSystem("QLSystem", ConfigFactory.parseFile(new File(confFile2)).withFallback(config1), ActorSystem.getClass().getClassLoader())
   
   val config = system.settings.config
   val cfgstr = "netlogo"
@@ -56,14 +76,7 @@ object QLSystem {
   val headlessAnswerNLPerf = AkkaAgent(PerformanceMeasure())
   
   val tickPerf = AkkaAgent(PerformanceMeasure()) 
-  
-//  
-//  val mailboxNLGroupsList = AkkaAgent(0)
-//  val mailboxNLGroupChoicesList = AkkaAgent(0)
-//  val mailboxGetNLGroupChoices = AkkaAgent(0)
-//  
-//  val maxQueueLength = AkkaAgent(0)
-  
+
   // the supervisor controls the simulation
   val netLogoSuper = system.actorOf(Props(new NetLogoSupervisor(netLogoRouter)))//.withDispatcher("pinned-dispatcher"))
       
@@ -76,49 +89,49 @@ object QLSystem {
 /**
  * the extension class needed by NetLogo
  */
-class QLExtension extends DefaultClassManager {
-  import QLSystem._
-  
-  override def load(manager: PrimitiveManager) {
-    // observer primitives
-    manager.addPrimitive("init", new Init)
-    manager.addPrimitive("create-group", new CreateGroup)
-    manager.addPrimitive("set-group-structure", new NewGroupStructure)
-    manager.addPrimitive("start", new Start)
-    manager.addPrimitive("stop", new Stop)
-    manager.addPrimitive("decay-exploration", new DecreaseExperimenting)
-    
-    manager.addPrimitive("get-group-list", new GetGroupList)
-    manager.addPrimitive("get-agents", new GetAgents)
-    manager.addPrimitive("get-decisions", new GetDecisions)
-    manager.addPrimitive("set-rewards", new SetRewards)
-    
-    manager.addPrimitive("get-performance", new GetPerformance)
-  }
-    
-  
-  override def additionalJars: JList[String] = {
-    val list : java.util.List[String] =  new java.util.ArrayList[String]
-    list.add("akka-actor-2.0.5.jar")
-    list.add("akka-agent-2.0.5.jar")
-    list.add("config-1.0.2.jar")
-    list.add("colt-1.2.0.jar")
-    list.add("scala-stm_2.9.1-0.5.jar")
-    list
-  }
-  
-  override def clearAll() {
-    // stop all data agents and reset the map
-    // this may take a while
-    qlDataMap send {map => {
-      map.values.foreach(_.close)
-      Map[org.nlogo.api.Agent, AkkaAgent[QLAgent]]()
-    }}
-    // wait till complete
-    qlDataMap.await
-  }
-    
-}
+//class QLExtension extends DefaultClassManager {
+//      
+//  override def load(manager: PrimitiveManager) {
+//    // observer primitives
+//    manager.addPrimitive("init", new Init)
+//    manager.addPrimitive("create-group", new CreateGroup)
+//    manager.addPrimitive("set-group-structure", new NewGroupStructure)
+//    manager.addPrimitive("start", new Start)
+//    manager.addPrimitive("stop", new Stop)
+//    manager.addPrimitive("decay-exploration", new DecreaseExperimenting)
+//    
+//    manager.addPrimitive("get-group-list", new GetGroupList)
+//    manager.addPrimitive("get-agents", new GetAgents)
+//    manager.addPrimitive("get-decisions", new GetDecisions)
+//    manager.addPrimitive("set-rewards", new SetRewards)
+//    
+//    manager.addPrimitive("get-performance", new GetPerformance)
+//  }
+//    
+//  
+//  override def additionalJars: JList[String] = {
+//    val list : java.util.List[String] =  new java.util.ArrayList[String]
+//    list.add("akka-actor-2.0.5.jar")
+//    list.add("akka-agent-2.0.5.jar")
+//    list.add("config-1.0.2.jar")
+//    list.add("colt-1.2.0.jar")
+//    list.add("scala-stm_2.9.1-0.5.jar")
+//    list
+//  }
+//  
+//  override def clearAll() {
+//    import QLSystem._
+//    // stop all data agents and reset the map
+//    // this may take a while
+//    qlDataMap send {map => {
+//      map.values.foreach(_.close)
+//      Map[org.nlogo.api.Agent, AkkaAgent[QLAgent]]()
+//    }}
+//    // wait till complete
+//    qlDataMap.await
+//  }
+//    
+//}
 
 //////////////////////////////////////////////
 /// implementations of new NetLogo objects /// 
@@ -176,14 +189,14 @@ class GetGroupList extends DefaultReporter {
   def report(args: Array[Argument], c: Context): AnyRef = {
     
     headlessAnswerNLPerf send { _.start(scala.compat.Platform.currentTime)}
-    
+  
     val future = (netLogoRouter ? GetNLGroupChoices(args(0).getIntValue)).mapTo[NLGroupChoicesList]
+    
     // we have to block because NetLogo is waiting for a result
     val result = try {
-      Await.result(future, defaultWaitDuration).list
+      Await.result(future, QLSystem.defaultWaitDuration).list
     } catch {
       case e: java.util.concurrent.TimeoutException =>
-        
         println("Timeout when waiting for HeadlessEnvironment with id: " + args(0).getIntValue)
         Nil
     }
@@ -243,6 +256,14 @@ class SetRewards extends DefaultReporter {
 class Init extends DefaultCommand {
   import QLSystem._
   
+  val loader2 = new MyClassLoader(ClassLoader.getSystemClassLoader().asInstanceOf[URLClassLoader].getURLs())
+  println("System class loader from Init class")
+  loader2.getURLs().foreach(p => println(p))
+  
+  println("Init class loader")
+  val loader4 = new MyClassLoader(this.getClass().getClassLoader().asInstanceOf[URLClassLoader].getURLs())
+  loader4.getURLs().foreach(p => println(p))
+    
   override def getAgentClassString = "O"
   override def getSyntax = commandSyntax(Array( TurtlesetType | PatchsetType, NumberType, StringType))
 

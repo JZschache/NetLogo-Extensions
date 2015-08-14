@@ -1,4 +1,4 @@
 Manifest-Version: 1.0
 NetLogo-Extension-API-Version: 5.0
 Extension-Name: ql
-Class-Manager: de.qlearning.QLExtension
+Class-Manager: de.qlextension.QLExtension

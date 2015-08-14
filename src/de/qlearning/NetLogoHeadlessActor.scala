@@ -43,6 +43,7 @@ class NetLogoHeadlessActor(val id: Int) extends Actor with FSM[NetLogoHeadlessAc
   import QLSystem._
   import org.nlogo.headless.HeadlessWorkspace
 
+//  val workspace = HeadlessWorkspace.newInstance(classOf[MyHeadlessWorkspace])
   val workspace = HeadlessWorkspace.newInstance
   val rewardRepName = config.getString(cfgstr + ".reward-reporter-name")
   val setupComName = config.getString(cfgstr + ".setup-command-name")
@@ -163,11 +164,11 @@ class NetLogoHeadlessActor(val id: Int) extends Actor with FSM[NetLogoHeadlessAc
       goto(Ready) using Initialized(workspace.compileReporter(rewardRepName + " " + id), null)
     }
     
-    case Event(NLGroupChoicesList(_), _) => // ignore (e.g. after opening a new model)
-      stay
-      
-    case Event(GetNLGroupChoices(_), _) => // ignore (e.g. after opening a new model)
-      stay
+//    case Event(NLGroupChoicesList(_), _) => // ignore (e.g. after opening a new model)
+//      stay
+//      
+//    case Event(GetNLGroupChoices(_), _) => // ignore (e.g. after opening a new model)
+//      stay
     
   }
   
