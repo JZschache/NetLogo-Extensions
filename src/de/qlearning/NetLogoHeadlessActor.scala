@@ -9,6 +9,7 @@ import akka.dispatch.{Future,Dispatchers}
 import akka.util.duration._
 import de.util.PerformanceMeasure
 import org.nlogo.app.ModelSaver
+import de.qlextension.QLExtension
 
 
 object NetLogoHeadlessActor {
@@ -45,8 +46,8 @@ class NetLogoHeadlessActor(val id: Int) extends Actor with FSM[NetLogoHeadlessAc
 
 //  val workspace = HeadlessWorkspace.newInstance(classOf[MyHeadlessWorkspace])
   val workspace = HeadlessWorkspace.newInstance
-  val rewardRepName = config.getString(cfgstr + ".reward-reporter-name")
-  val setupComName = config.getString(cfgstr + ".setup-command-name")
+  val rewardRepName = config.getString(QLExtension.cfgstr + ".reward-reporter-name")
+  val setupComName = config.getString(QLExtension.cfgstr + ".setup-command-name")
   
   override def postStop() {
     workspace.dispose()

@@ -1,6 +1,7 @@
 package de.qlearning
 
 import de.util.RandomHelper
+import de.qlextension.QLExtension
 
 object QLAgent {
 
@@ -72,8 +73,8 @@ object QLAgent {
 //    }
 //  }
   
-  val qvaluePrefix = QLSystem.config.getString(QLSystem.cfgstr + ".qvalue-prefix")
-  val nPrefix = QLSystem.config.getString(QLSystem.cfgstr + ".n-prefix")
+  val qvaluePrefix = QLSystem.config.getString(QLExtension.cfgstr + ".qvalue-prefix")
+  val nPrefix = QLSystem.config.getString(QLExtension.cfgstr + ".n-prefix")
   
   def findUpdateFunction(nlAgent: org.nlogo.agent.Agent, alt: String) = {
     
@@ -90,7 +91,7 @@ object QLAgent {
     }
   }
   
-  val expRateName = QLSystem.config.getString(QLSystem.cfgstr + ".exploration-rate-name")
+  val expRateName = QLSystem.config.getString(QLExtension.cfgstr + ".exploration-rate-name")
   
   def findExpUpdateFunction(nlAgent: org.nlogo.agent.Agent) = {
     

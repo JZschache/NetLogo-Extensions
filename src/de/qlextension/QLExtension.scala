@@ -3,43 +3,86 @@ package de.qlextension
 import java.net.URLClassLoader
 import java.net.URL
 import java.io.File
+import java.io.FileReader
+import java.io.FileNotFoundException
+
+import scala.collection.JavaConverters._
 
 import org.nlogo.api.DefaultClassManager
 import org.nlogo.api.PrimitiveManager
 import org.nlogo.api.Primitive
 
-
+/**
+ * 
+ * This class is the only element of ql.jar.
+ * It initialises the ql-extension.
+ * 
+ * The main logic is implemented in the qlearning.jar.
+ * 
+ * This class is separated from the main logic because of problems regarding the class path.
+ * If the additional jars are not in the system class loader, they must be reloaded when a HeadlessWorkspace loads the extension.
+ * This leads to additional Akka ActorSystems, which impedes the communication between the HeadlessWorkspaces and main workspace (which loaded the extension).
+ * 
+ * There are two ways to prevent this behaviour:
+ * 1. Adding the jars to the variable 'Class-Path' of the manifest file of NetLogo.jar.
+ * 2. Adding the jars to the class path at runtime: http://stackoverflow.com/questions/1010919/adding-files-to-java-classpath-at-runtime
+ * 
+ * The latter is tried in the following. 
+ * However, this is a hack that is not directly supported by Java. 
+ * There might arise problems with a SecurityManager.
+ * 
+ * If problems arise, try the first way.
+ * 
+ */
 object QLExtension {
   
-  println("adding qlearning.jar to classpath")
-  
-  val jar1ToAdd = new File("/home/johannes/netlogo/netlogo-5.2.0/extensions/ql/hiddenlibs/qlearning.jar");
-  val jar2ToAdd = new File("/home/johannes/netlogo/netlogo-5.2.0/extensions/ql/hiddenlibs/akka-actor-2.0.5.jar");
-  val jar3ToAdd = new File("/home/johannes/netlogo/netlogo-5.2.0/extensions/ql/hiddenlibs/akka-agent-2.0.5.jar");
-  val jar4ToAdd = new File("/home/johannes/netlogo/netlogo-5.2.0/extensions/ql/hiddenlibs/config-1.0.2.jar");
-  val jar5ToAdd = new File("/home/johannes/netlogo/netlogo-5.2.0/extensions/ql/hiddenlibs/colt-1.2.0.jar");
-  val jar6ToAdd = new File("/home/johannes/netlogo/netlogo-5.2.0/extensions/ql/hiddenlibs/scala-stm_2.9.1-0.5.jar");
-  
-  class MyClassLoader(urls: Array[URL]) extends URLClassLoader(urls){
-  
-    def addAnURL(url:URL) {
-        super.addURL(url)
-    }
-  
+  // name of NetLogo extension
+  val EXTENSION_NAME = "ql"
+  // name of section in configuration file
+  val cfgstr = "netlogo"
+  // path of configuration file
+  val confFile = new File("extensions/ql/application.conf")
+  // check whether confFile exists
+  try {
+    new FileReader(confFile)
+  } catch {
+    case e: FileNotFoundException =>
+      System.err.println("FileNotFoundException: extensions/ql/application.conf") 
+      exit(0)
   }
-  
-  val loader = new MyClassLoader(ClassLoader.getSystemClassLoader().asInstanceOf[URLClassLoader].getURLs())
-  
-  println("System class loader from QLExtension object")
-  loader.getURLs().foreach(p => println(p))
-  
-  loader.addAnURL(jar1ToAdd.toURL())
-  loader.addAnURL(jar2ToAdd.toURL())
-  loader.addAnURL(jar3ToAdd.toURL())
-  loader.addAnURL(jar4ToAdd.toURL())
-  loader.addAnURL(jar5ToAdd.toURL())
-  loader.addAnURL(jar6ToAdd.toURL())
-  
+  // additional jars that are needed
+  val jarList =  List[String]("extensions/ql/ql.jar",
+                              "extensions/ql/qlearning.jar", 
+                              "extensions/ql/akka-actor-2.0.5.jar",
+                              "extensions/ql/akka-agent-2.0.5.jar",
+                              "extensions/ql/config-1.0.2.jar", 
+                              "extensions/ql/colt-1.2.0.jar", 
+                              "extensions/ql/scala-stm_2.9.1-0.5.jar")
+  // adding the jars to the system class loader
+  val sysloader = ClassLoader.getSystemClassLoader().asInstanceOf[URLClassLoader]
+  val sysclass = classOf[URLClassLoader]
+  try {
+     val method = sysclass.getDeclaredMethod("addURL", classOf[URL])
+     method.setAccessible(true)
+     jarList.foreach(jarName => {
+       val file = new File(jarName)
+       // check whether jar exists
+       new FileReader(file)
+       // load jar
+       method.invoke(sysloader, file.toURL())
+     })
+  } catch {
+    case e: FileNotFoundException =>
+      val newLine = System.getProperty("line.separator")
+      System.err.println("FileNotFoundException: Check if all required jars exists: " + newLine +  
+          jarList.tail.foldLeft(jarList.first)((s, el) => s + "," + newLine + el)) + "." + newLine + 
+      exit(0)
+    case t: Throwable => 
+      val newLine = System.getProperty("line.separator")
+      System.err.println("Setting additional jars failed. A SecurityManager may prevent the adding of jars to the class path at runtime." + newLine + 
+          "Manually add the names of the jars to the variable 'Class-Path' of the manifest file of NetLogo.jar.")
+      t.printStackTrace()
+  }
     
 }
 
@@ -49,66 +92,29 @@ object QLExtension {
 class QLExtension extends DefaultClassManager {
   import QLExtension._
   
-  import akka.agent.{ Agent => AkkaAgent }
-  
-  jar1ToAdd
-  
-  println("QLExtension class loader")
-  val loader2 = new MyClassLoader(this.getClass().getClassLoader().asInstanceOf[URLClassLoader].getURLs())
-  
-  loader2.getURLs().foreach(p => println(p))
-  
-  val loader3 = new MyClassLoader(ClassLoader.getSystemClassLoader().asInstanceOf[URLClassLoader].getURLs())
-  println("System class loader from QLExtension class")
-  loader3.getURLs().foreach(p => println(p))
-  loader3.addAnURL(jar1ToAdd.toURL())
-  loader3.addAnURL(jar2ToAdd.toURL())
-  loader3.addAnURL(jar3ToAdd.toURL())
-  loader3.addAnURL(jar4ToAdd.toURL())
-  loader3.addAnURL(jar5ToAdd.toURL())
-  loader3.addAnURL(jar6ToAdd.toURL())
-  loader3.getURLs().foreach(p => println(p))
+  private def getPrimitive(name: String) = {
+    sysloader.loadClass(name).getConstructor().newInstance().asInstanceOf[Primitive]
+  }
   
   override def load(manager: PrimitiveManager) {
-    // observer primitives
-    manager.addPrimitive("init", loader.loadClass("de.qlearning.Init").getConstructor().newInstance().asInstanceOf[Primitive])
-    manager.addPrimitive("create-group", loader.loadClass("de.qlearning.CreateGroup").getConstructor().newInstance().asInstanceOf[Primitive])
-    manager.addPrimitive("set-group-structure", loader.loadClass("de.qlearning.NewGroupStructure").getConstructor().newInstance().asInstanceOf[Primitive])
-    manager.addPrimitive("start", loader.loadClass("de.qlearning.Start").getConstructor().newInstance().asInstanceOf[Primitive])
-    manager.addPrimitive("stop", loader.loadClass("de.qlearning.Stop").getConstructor().newInstance().asInstanceOf[Primitive])
-    manager.addPrimitive("decay-exploration", loader.loadClass("de.qlearning.DecreaseExperimenting").getConstructor().newInstance().asInstanceOf[Primitive])
-    
-    manager.addPrimitive("get-group-list", loader.loadClass("de.qlearning.GetGroupList").getConstructor().newInstance().asInstanceOf[Primitive])
-    manager.addPrimitive("get-agents", loader.loadClass("de.qlearning.GetAgents").getConstructor().newInstance().asInstanceOf[Primitive])
-    manager.addPrimitive("get-decisions", loader.loadClass("de.qlearning.GetDecisions").getConstructor().newInstance().asInstanceOf[Primitive])
-    manager.addPrimitive("set-rewards", loader.loadClass("de.qlearning.SetRewards").getConstructor().newInstance().asInstanceOf[Primitive])
-    
-    manager.addPrimitive("get-performance", loader.loadClass("de.qlearning.GetPerformance").getConstructor().newInstance().asInstanceOf[Primitive])
+    manager.addPrimitive("init", getPrimitive("de.qlearning.Init"))
+    manager.addPrimitive("create-group", getPrimitive("de.qlearning.CreateGroup"))
+    manager.addPrimitive("set-group-structure", getPrimitive("de.qlearning.NewGroupStructure"))
+    manager.addPrimitive("start", getPrimitive("de.qlearning.Start"))
+    manager.addPrimitive("stop", getPrimitive("de.qlearning.Stop"))
+    manager.addPrimitive("decay-exploration", getPrimitive("de.qlearning.DecreaseExperimenting"))
+    manager.addPrimitive("get-group-list", getPrimitive("de.qlearning.GetGroupList"))
+    manager.addPrimitive("get-agents", getPrimitive("de.qlearning.GetAgents"))
+    manager.addPrimitive("get-decisions", getPrimitive("de.qlearning.GetDecisions"))
+    manager.addPrimitive("set-rewards", getPrimitive("de.qlearning.SetRewards"))
+    manager.addPrimitive("get-performance", getPrimitive("de.qlearning.GetPerformance"))
   }
     
   
-  override def additionalJars: java.util.List[String] = {
-    val list : java.util.List[String] =  new java.util.ArrayList[String]
-    list.add("/home/johannes/netlogo/netlogo-5.2.0/extensions/ql/hiddenlibs/qlearning.jar")
-    list.add("/home/johannes/netlogo/netlogo-5.2.0/extensions/ql/hiddenlibs/akka-actor-2.0.5.jar")
-    list.add("/home/johannes/netlogo/netlogo-5.2.0/extensions/ql/hiddenlibs/akka-agent-2.0.5.jar")
-    list.add("/home/johannes/netlogo/netlogo-5.2.0/extensions/ql/hiddenlibs/config-1.0.2.jar")
-    list.add("/home/johannes/netlogo/netlogo-5.2.0/extensions/ql/hiddenlibs/colt-1.2.0.jar")
-    list.add("/home/johannes/netlogo/netlogo-5.2.0/extensions/ql/hiddenlibs/scala-stm_2.9.1-0.5.jar")
-    list
-  }
+  override def additionalJars: java.util.List[String] = jarList.asJava
   
   override def clearAll() {
-    //TODO:
-//    import QLSystem._
-    // stop all data agents and reset the map
-    // this may take a while
-//    qlDataMap send {map => {
-//      map.values.foreach(_.close)
-//      Map[org.nlogo.api.Agent, AkkaAgent[QLAgent]]()
-//    }}
-    // wait till complete
-//    qlDataMap.await
+    // nothing to do
   }
     
 }

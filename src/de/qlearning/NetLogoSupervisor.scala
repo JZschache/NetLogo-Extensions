@@ -9,6 +9,7 @@ import akka.dispatch.{Future,Dispatchers}
 import akka.util.duration._
 import de.util.PerformanceMeasure
 import org.nlogo.app.ModelSaver
+import de.qlextension.QLExtension
 
 
 object NetLogoSupervisor {
@@ -71,8 +72,8 @@ class NetLogoSupervisor(netLogoRouter: ActorRef) extends Actor with FSM[NetLogoS
   
   val nlApp = org.nlogo.app.App.app
     
-  val groupRepName = config.getString(cfgstr + ".group-reporter-name")
-  val updateComName = config.getString(cfgstr + ".update-command-name")
+  val groupRepName = config.getString(QLExtension.cfgstr + ".group-reporter-name")
+  val updateComName = config.getString(QLExtension.cfgstr + ".update-command-name")
   
   //private message
   case object Tick
