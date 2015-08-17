@@ -1,10 +1,10 @@
 extensions[ql]
-patches-own[ qv-0 qv-1 explore n-0 n-1]
+patches-own[ qv-0 qv-1 n-0 n-1 explore]
 
 to setup
   clear-all
   set-patch-size 400 / n-patches  
-  resize-world 0 n-patches 0 n-patches
+  resize-world 0 (n-patches - 1) 0 (n-patches - 1)
   ql:init patches experimenting "epsilon-greedy"
   let alternatives ["0" "1"]
   let groups [ql:create-group (list (list self alternatives))] of patches
@@ -40,11 +40,11 @@ end
 GRAPHICS-WINDOW
 355
 35
-768
-469
+765
+466
 -1
 -1
-3.883495145631068
+8.0
 1
 10
 1
@@ -55,9 +55,9 @@ GRAPHICS-WINDOW
 1
 1
 0
-103
+49
 0
-103
+49
 0
 0
 1
@@ -73,7 +73,7 @@ n-patches
 n-patches
 0
 200
-103
+50
 1
 1
 ^2
@@ -211,20 +211,20 @@ PENS
 
 MONITOR
 50
-370
-350
-415
+520
+345
+565
 NIL
-ql:get-performance \"NLSuperBetweenTick\"
+ql:get-performance \"NLSuperIdle\"
 17
 1
 11
 
 MONITOR
-49
-422
-349
-467
+50
+570
+345
+615
 NIL
 ql:get-performance \"NLSuperHandleGroups\"
 17
@@ -232,166 +232,67 @@ ql:get-performance \"NLSuperHandleGroups\"
 11
 
 MONITOR
-48
-471
-348
-516
-NIL
-ql:get-performance \"NLSuperGuiInter\"
-17
-1
-11
-
-MONITOR
-45
-570
-440
-615
-NIL
-ql:get-performance \"HeadlessIdlePerf 1\"
-17
-1
-11
-
-MONITOR
-45
+50
 620
-440
-665
-NIL
-ql:get-performance \"HeadlessHandleNLGroupPerf 1\"
-17
-1
-11
-
-MONITOR
-45
-670
-440
-715
-NIL
-ql:get-performance \"HeadlessHandleNLGroupChoicePerf 1\"
-17
-1
-11
-
-MONITOR
-445
-570
-840
-615
-NIL
-ql:get-performance \"HeadlessIdlePerf 2\"
-17
-1
-11
-
-MONITOR
-445
-670
-840
-715
-NIL
-ql:get-performance \"HeadlessHandleNLGroupChoicePerf 2\"
-17
-1
-11
-
-MONITOR
-445
-620
-840
-665
-NIL
-ql:get-performance \"HeadlessHandleNLGroupPerf 2\"
-17
-1
-11
-
-MONITOR
-45
-520
 345
+665
+NIL
+ql:get-performance \"NLSuperUpdate\"
+17
+1
+11
+
+MONITOR
+350
+470
+670
+515
+NIL
+ql:get-performance \"HeadlessIdle 1\"
+17
+1
+11
+
+MONITOR
+350
+520
+670
 565
 NIL
-ql:get-performance \"HeadlessAnswerNLPerf\"
+ql:get-performance \"HeadlessHandleGroups 1\"
 17
 1
 11
 
 MONITOR
-845
+350
 570
-1235
+670
 615
 NIL
-ql:get-performance \"HeadlessIdlePerf 3\"
+ql:get-performance \"HeadlessHandleChoices 1\"
 17
 1
 11
 
 MONITOR
-1240
-570
-1630
-615
-NIL
-ql:get-performance \"HeadlessIdlePerf 4\"
-17
-1
-11
-
-MONITOR
-845
+350
 620
-1235
+670
 665
 NIL
-ql:get-performance \"HeadlessHandleNLGroupPerf 3\"
+ql:get-performance \"HeadlessAnswering 1\"
 17
 1
 11
 
 MONITOR
-1240
-620
-1630
-665
+50
+470
+345
+515
 NIL
-ql:get-performance \"HeadlessHandleNLGroupPerf 4\"
-17
-1
-11
-
-MONITOR
-845
-670
-1235
-715
-NIL
-ql:get-performance \"HeadlessHandleNLGroupChoicePerf 3\"
-17
-1
-11
-
-MONITOR
-1240
-670
-1630
-715
-NIL
-ql:get-performance \"HeadlessHandleNLGroupChoicePerf 4\"
-17
-1
-11
-
-MONITOR
-820
-60
-1067
-105
-NIL
-ql:get-performance \"TickPerf\"
+ql:get-performance \"HundredTicks\"
 17
 1
 11
@@ -743,6 +644,52 @@ NetLogo 5.2.0
 @#$#@#$#@
 @#$#@#$#@
 @#$#@#$#@
+<experiments>
+  <experiment name="performance-experiment" repetitions="10" runMetricsEveryStep="false">
+    <setup>setup
+ql:start</setup>
+    <final>ql:stop</final>
+    <exitCondition>ticks &gt; 500</exitCondition>
+    <metric>ql:get-performance "HundredTicks"</metric>
+    <metric>ql:get-performance "NLSuperIdle"</metric>
+    <metric>ql:get-performance "NLSuperHandleGroups"</metric>
+    <metric>ql:get-performance "NLSuperUpdate"</metric>
+    <metric>ql:get-performance "HeadlessAnswering 1"</metric>
+    <metric>ql:get-performance "HeadlessIdle 1"</metric>
+    <metric>ql:get-performance "HeadlessHandleGroups 1"</metric>
+    <metric>ql:get-performance "HeadlessHandleChoices 1"</metric>
+    <metric>ql:get-performance "HeadlessAnswering 2"</metric>
+    <metric>ql:get-performance "HeadlessIdle 2"</metric>
+    <metric>ql:get-performance "HeadlessHandleGroups 2"</metric>
+    <metric>ql:get-performance "HeadlessHandleChoices 2"</metric>
+    <metric>ql:get-performance "HeadlessAnswering 3"</metric>
+    <metric>ql:get-performance "HeadlessIdle 3"</metric>
+    <metric>ql:get-performance "HeadlessHandleGroups 3"</metric>
+    <metric>ql:get-performance "HeadlessHandleChoices 3"</metric>
+    <metric>ql:get-performance "HeadlessAnswering 4"</metric>
+    <metric>ql:get-performance "HeadlessIdle 4"</metric>
+    <metric>ql:get-performance "HeadlessHandleGroups 4"</metric>
+    <metric>ql:get-performance "HeadlessHandleChoices 4"</metric>
+    <enumeratedValueSet variable="sd">
+      <value value="10"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="mean-1">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="n-patches">
+      <value value="50"/>
+      <value value="100"/>
+      <value value="150"/>
+      <value value="200"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="mean-2">
+      <value value="75"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="experimenting">
+      <value value="0.05"/>
+    </enumeratedValueSet>
+  </experiment>
+</experiments>
 @#$#@#$#@
 @#$#@#$#@
 default

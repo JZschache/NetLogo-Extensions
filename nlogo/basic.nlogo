@@ -1,6 +1,6 @@
 extensions[ql]
 
-turtles-own[qv1 qv2 explore]
+turtles-own[qv-forward qv-right explore]
 
 to setup
   clear-all
@@ -8,7 +8,7 @@ to setup
     setxy random-xcor random-ycor
   ]
   ql:init turtles exploration-rate "epsilon-greedy"
-  let alternatives (list "forward" "turn right")
+  let alternatives (list "forward" "right")
   let groups [ql:create-group (list (list self alternatives))] of turtles  
   ql:set-group-structure groups
   reset-ticks
@@ -37,19 +37,7 @@ to-report reward [group-choice]
 end
 
 to update
-  ask turtles [
-    foreach ql:get-data set-q-value
-    set explore ql:get-exploration-rate
-  ]
   tick 
-end
-
-to set-q-value [data-entry]
-  ifelse ((item 0 data-entry) = "forward") [ 
-    set qv1 (item 1 data-entry) 
-  ] [
-    set qv2 (item 1 data-entry) 
-  ]
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
@@ -195,7 +183,7 @@ PLOT
 165
 350
 315
-mean of qv1 and qv2
+mean of Q-values
 NIL
 NIL
 0.0
@@ -206,8 +194,8 @@ true
 true
 "" ""
 PENS
-"qv1" 1.0 0 -16777216 true "" "plot mean [qv1] of turtles"
-"qv2" 1.0 0 -7500403 true "" "plot mean [qv2] of turtles"
+"qv-forward" 1.0 0 -16777216 true "" "plot mean [qv-forward] of turtles"
+"qv-right" 1.0 0 -7500403 true "" "plot mean [qv-right] of turtles"
 
 BUTTON
 65
@@ -227,13 +215,13 @@ NIL
 1
 
 MONITOR
-70
-380
-282
-425
+65
+375
+277
+420
 NIL
 mean [explore] of turtles
-17
+2
 1
 11
 

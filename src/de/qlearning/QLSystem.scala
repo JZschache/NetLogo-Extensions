@@ -34,25 +34,26 @@ object QLSystem {
   // a number of headless instances of NetLogo are loaded in the background
   // they are used to simultaneousely execute reward procedures
   // a router is used to distribute jobs to the headless instances
-  val conHeadlessEnv = config.getInt(QLExtension.cfgstr + ".concurrent-headless-environments")
+  val conHeadlessEnv = config.getInt(QLExtension.cfgstr + ".headless-workspaces")
   val netLogoRouter = system.actorOf(Props().withRouter(NetLogoHeadlessRouter(conHeadlessEnv)))
   
   // the supervisor controls the simulation
-  val netLogoSuper = system.actorOf(Props(new NetLogoSupervisor(netLogoRouter)))//.withDispatcher("pinned-dispatcher"))
+  val netLogoSuper = system.actorOf(Props(new NetLogoSupervisor(netLogoRouter)))
       
   // this map connects an NetLogo-agent (turtle / patch) to a QLAgent that performs the learning 
   // it therefore also holds all data about the agents
   val qlDataMap = AkkaAgent(Map[Agent, AkkaAgent[QLAgent]]())
   
   // various AkkaAgents that measure performance of the program
-  val betweenTickPerf = AkkaAgent(PerformanceMeasure())
-  val handleGroupPerf = AkkaAgent(PerformanceMeasure())
-  val guiInterPerf = AkkaAgent(PerformanceMeasure())
+  val hundredTicksPerf = AkkaAgent(PerformanceMeasure())
+  val nlSuperIdlePerf = AkkaAgent(PerformanceMeasure())
+  val nlSuperHandleGroupsPerf = AkkaAgent(PerformanceMeasure())
+  val nlSuperUpdatePerf = AkkaAgent(PerformanceMeasure())
   val headlessIdlePerf = AkkaAgent(Map[Int,PerformanceMeasure]().withDefault(id => PerformanceMeasure()))
-  val headlessHandleNLGroupPerf = AkkaAgent(Map[Int,PerformanceMeasure]().withDefault(id => PerformanceMeasure()))
-  val headlessHandleNLGroupChoicePerf = AkkaAgent(Map[Int,PerformanceMeasure]().withDefault(id => PerformanceMeasure()))
-  val headlessAnswerNLPerf = AkkaAgent(PerformanceMeasure())
-  val tickPerf = AkkaAgent(PerformanceMeasure()) 
+  val headlessHandleGroupsPerf = AkkaAgent(Map[Int,PerformanceMeasure]().withDefault(id => PerformanceMeasure()))
+  val headlessHandleChoicesPerf = AkkaAgent(Map[Int,PerformanceMeasure]().withDefault(id => PerformanceMeasure()))
+  val headlessAnsweringPerf = AkkaAgent(Map[Int,PerformanceMeasure]().withDefault(id => PerformanceMeasure()))
+   
 }
 
 
@@ -111,9 +112,11 @@ class GetGroupList extends DefaultReporter {
   
   def report(args: Array[Argument], c: Context): AnyRef = {
     
-    headlessAnswerNLPerf send { _.start(scala.compat.Platform.currentTime)}
-  
-    val future = (netLogoRouter ? GetNLGroupChoices(args(0).getIntValue)).mapTo[NLGroupChoicesList]
+    val id = args(0).getIntValue
+    
+    headlessAnsweringPerf send {m => m.updated(id, m(id).start(scala.compat.Platform.currentTime))} 
+    
+    val future = (netLogoRouter ? GetNLGroupChoices(id)).mapTo[NLGroupChoicesList]
     
     // we have to block because NetLogo is waiting for a result
     val result = try {
@@ -124,7 +127,7 @@ class GetGroupList extends DefaultReporter {
         Nil
     }
     
-    headlessAnswerNLPerf send { _.end(scala.compat.Platform.currentTime) }
+    headlessAnsweringPerf send {m => m.updated(id, m(id).end(scala.compat.Platform.currentTime))}
       
     result.toLogoList
   }
@@ -183,7 +186,7 @@ class Init extends DefaultCommand {
   override def getSyntax = commandSyntax(Array( TurtlesetType | PatchsetType, NumberType, StringType))
 
   def perform(args: Array[Argument], c: Context) {
-
+        
     // stop all data agents and reset the map
     // this may take a while
     qlDataMap send {map => {
@@ -194,19 +197,18 @@ class Init extends DefaultCommand {
     qlDataMap.await
     
     // init performance measures
-    betweenTickPerf update PerformanceMeasure()
-    handleGroupPerf update PerformanceMeasure()
-    guiInterPerf update PerformanceMeasure()
+    hundredTicksPerf update PerformanceMeasure()
+    nlSuperIdlePerf update PerformanceMeasure()
+    nlSuperHandleGroupsPerf update PerformanceMeasure()
+    nlSuperUpdatePerf update PerformanceMeasure()
     headlessIdlePerf update Map[Int,PerformanceMeasure]().withDefault(id => PerformanceMeasure()) 
-    headlessHandleNLGroupPerf update Map[Int,PerformanceMeasure]().withDefault(id => PerformanceMeasure())
-    headlessHandleNLGroupChoicePerf update Map[Int,PerformanceMeasure]().withDefault(id => PerformanceMeasure())
-    headlessAnswerNLPerf update PerformanceMeasure()
-    tickPerf update PerformanceMeasure()
+    headlessHandleGroupsPerf update Map[Int,PerformanceMeasure]().withDefault(id => PerformanceMeasure())
+    headlessHandleChoicesPerf update Map[Int,PerformanceMeasure]().withDefault(id => PerformanceMeasure())
     
     // the groups structure is deleted, 
     // the NetLogo-model is reloaded,
     // and the commands and reporters are recompiled
-    netLogoSuper ! NetLogoSupervisor.InitNetLogoActors
+    netLogoSuper ! NetLogoSupervisor.InitNetLogoActors(c.asInstanceOf[org.nlogo.nvm.ExtensionContext].workspace())
     
     // read parameters
     val newNLAgents = args(0).getAgentSet.agents.asScala.toList
@@ -319,25 +321,25 @@ class GetPerformance extends DefaultReporter {
     if (strings.size == 2)  {
       val id = strings(1).toInt - 1
       strings(0) match {
-        case "HeadlessIdlePerf" => 
+        case "HeadlessIdle" => 
           QLSystem.headlessIdlePerf.get.apply(id).average.toLogoObject
-        case "HeadlessHandleNLGroupPerf" => 
-          QLSystem.headlessHandleNLGroupPerf.get.apply(id).average.toLogoObject
-        case "HeadlessHandleNLGroupChoicePerf" => 
-          QLSystem.headlessHandleNLGroupChoicePerf.get.apply(id).average.toLogoObject
+        case "HeadlessHandleGroups" => 
+          QLSystem.headlessHandleGroupsPerf.get.apply(id).average.toLogoObject
+        case "HeadlessHandleChoices" => 
+          QLSystem.headlessHandleChoicesPerf.get.apply(id).average.toLogoObject
+        case "HeadlessAnswering" => 
+          QLSystem.headlessAnsweringPerf.get.apply(id).average.toLogoObject
       }
     } else {
       strings(0) match {
-        case "NLSuperBetweenTick" =>
-          QLSystem.betweenTickPerf.get.average.toLogoObject
+        case "NLSuperIdle" =>
+          QLSystem.nlSuperIdlePerf.get.average.toLogoObject
         case "NLSuperHandleGroups" => 
-          QLSystem.handleGroupPerf.get.average.toLogoObject
-        case "NLSuperGuiInter" =>
-          QLSystem.guiInterPerf.get.average.toLogoObject
-        case "HeadlessAnswerNLPerf" =>
-          QLSystem.headlessAnswerNLPerf.get.average.toLogoObject
-        case "TickPerf" =>
-          QLSystem.tickPerf.get.average.toLogoObject
+          QLSystem.nlSuperHandleGroupsPerf.get.average.toLogoObject
+        case "NLSuperUpdate" =>
+          QLSystem.nlSuperUpdatePerf.get.average.toLogoObject
+        case "HundredTicks" =>
+          QLSystem.hundredTicksPerf.get.average.toLogoObject
       }
     }
   }

@@ -81,7 +81,7 @@ class NetLogoHeadlessActor(val id: Int) extends Actor with FSM[NetLogoHeadlessAc
       
       val time1 = scala.compat.Platform.currentTime
       headlessIdlePerf send { m => m.updated(id, m(id).end(time1)) }
-      headlessHandleNLGroupPerf send {m => m.updated(id, m(id).start(time1))}
+      headlessHandleGroupsPerf send {m => m.updated(id, m(id).start(time1))}
       
       Future.sequence(groups.map(group => Future.sequence((group.qlAgents zip group.alternatives).map(pair => 
         pair._1.future map {_.choose(pair._2)}
@@ -94,7 +94,7 @@ class NetLogoHeadlessActor(val id: Int) extends Actor with FSM[NetLogoHeadlessAc
       }
       
       val time2 = scala.compat.Platform.currentTime
-      headlessHandleNLGroupPerf send {m => m.updated(id, m(id).end(time2))}
+      headlessHandleGroupsPerf send {m => m.updated(id, m(id).end(time2))}
       headlessIdlePerf send {m => m.updated(id, m(id).start(time2))}
       
       goto(Waiting)
@@ -114,7 +114,7 @@ class NetLogoHeadlessActor(val id: Int) extends Actor with FSM[NetLogoHeadlessAc
       
       val time1 = scala.compat.Platform.currentTime
       headlessIdlePerf send {m => m.updated(id, m(id).end(time1))}
-      headlessHandleNLGroupChoicePerf send {m => m.updated(id, m(id).start(time1))}
+      headlessHandleChoicesPerf send {m => m.updated(id, m(id).start(time1))}
       
       Future {
           workspace.runCompiledReporter(workspace.defaultOwner, reporter).asInstanceOf[org.nlogo.api.LogoList]
@@ -128,7 +128,7 @@ class NetLogoHeadlessActor(val id: Int) extends Actor with FSM[NetLogoHeadlessAc
       }
       
       val time2 = scala.compat.Platform.currentTime
-      headlessHandleNLGroupChoicePerf send {m => m.updated(id, m(id).end(time2))}
+      headlessHandleChoicesPerf send {m => m.updated(id, m(id).end(time2))}
       headlessIdlePerf send {m => m.updated(id, m(id).start(time2))}
       
       stay using Initialized(reporter, list)
