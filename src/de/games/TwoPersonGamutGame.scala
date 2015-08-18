@@ -59,7 +59,7 @@ object TwoPersonGamutGame {
       null
     } else {
           
-	  val confFile = "conf/application.conf"
+	  val confFile = "extensions/games/application.conf"
 	  val config = ConfigFactory.parseFile(new File(confFile))
 	  val minPayoff = config.getInt("gamut.min-payoff")
 	  // Make sure that max_payoff is greater than min_payoff

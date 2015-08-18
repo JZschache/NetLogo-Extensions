@@ -304,10 +304,10 @@ class Stop extends DefaultCommand {
 class DecreaseExperimenting extends DefaultCommand {
 
   override def getAgentClassString = "O"
-  override def getSyntax = commandSyntax(Array[Int](NumberType))
+  override def getSyntax = commandSyntax(Array[Int]())
   
   def perform(args: Array[Argument], c: Context) {
-    QLSystem.qlDataMap.get.values.foreach(_ send {_.startDecreasing(args(0).getDoubleValue)} )
+    QLSystem.qlDataMap.get.values.foreach(_ send {_.startDecreasing} )
   }
 }
 

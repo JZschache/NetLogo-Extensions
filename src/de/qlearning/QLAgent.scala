@@ -22,11 +22,18 @@ object QLAgent {
   /**
    *  the QValue (immutable)
    */ 
-  class QValue(val alt: String, val n: Double, val value: Double, val updateFunction: (Double, Double) => Unit) extends HasValue {
+  class QValue(val alt: String, val n: Double, val value: Double, val epsilon: Double, val nDecay: Double, val updateFunction: (Double, Double) => Unit) extends HasValue {
+    
     def updated(amount: Double) = { 
       val newValue = value + (1.0 /(n + 1.0)) * (amount - value)
       updateFunction(newValue, n + 1.0)
-      new QValue(alt, n + 1.0, newValue, updateFunction)
+      new QValue(alt, n + 1.0, newValue, epsilon, nDecay, updateFunction)
+    }
+    
+    def updated(amount: Double, initialExploreRate: Double) = { 
+      val newValue = value + (1.0 /(n + 1.0)) * (amount - value)
+      updateFunction(newValue, n + 1.0)
+      new QValue(alt, n + 1.0, newValue, (initialExploreRate / (nDecay + 1.0)), nDecay + 1.0, updateFunction)
     }
   }
 
@@ -39,24 +46,27 @@ object QLAgent {
         case "epsilon-greedy" => epsGreedy
         case "softmax" => softmax
 //        case "uncertainty" => uncertainty
-      }), 1.0, nlAgent, findExpUpdateFunction(nlAgent))   
+      }), false, nlAgent, findExpUpdateFunction(nlAgent))   
 
   
   ////////////////////////////////////////
   // various decision making algorithms //
   ////////////////////////////////////////
   
-  private val epsGreedy = (qValues: List[QValue], epsilon: Double, rh: RandomHelper) => {
-    if (rh.uniform.nextDoubleFromTo(0, 1) < epsilon)
-      rh.randomComponent(qValues).alt
-    else {
+  private val epsGreedy = (qValues: List[QValue], rh: RandomHelper) => {
+    val eps = qValues.scanLeft(("".asInstanceOf[String], 0.0))((temp, qva) => (qva.alt, temp._2 + qva.epsilon)).tail
+    if (rh.uniform.nextDoubleFromTo(0, 1) < eps.last._2) {
+      val randomValue = rh.uniform.nextDoubleFromTo(0, eps.last._2)
+      eps.find(randomValue < _._2).get._1
+    } else {
       val maxima = maximum(qValues)
       if (maxima.length == 1) maxima.head.alt  else rh.randomComponent(maxima).alt
     }
   }
-  private val softmax = (qValues: List[QValue], temperature:Double, rh: RandomHelper) => {
-    val t = Math.max(temperature, 0.02) // there is some problem if temperature <= 0.02
-    val expForm = qValues.scanLeft(("".asInstanceOf[String], 0.0))((temp, qva) => (qva.alt, temp._2 + scala.math.exp(qva.value / t))).tail
+  
+  private val softmax = (qValues: List[QValue], rh: RandomHelper) => {
+    // there is some problem if temperature <= 0.02
+    val expForm = qValues.scanLeft(("".asInstanceOf[String], 0.0))((temp, qva) => (qva.alt, temp._2 + scala.math.exp(qva.value / Math.max(qva.epsilon, 0.02)))).tail
     val randomValue = rh.uniform.nextDoubleFromTo(0, expForm.last._2)
     expForm.find(randomValue < _._2).get._1
   }
@@ -99,9 +109,10 @@ object QLAgent {
     
     val idx = (0 until vLength).toList.find(i => nlAgent.variableName(i) ==  expRateName.toUpperCase())
     
-    (value: Double) => {
-      if (idx.isDefined) 
-        nlAgent.setVariable(idx.get, value)
+    (qValues: Iterable[QLAgent.QValue]) => {
+      if (idx.isDefined) {
+        nlAgent.setVariable(idx.get, qValues.foldLeft(0.0)((temp, qva) => temp + qva.epsilon))
+      }
     }
   }
     
@@ -117,30 +128,31 @@ object QLAgent {
  */ 
 case class QLAgent(experimenting: Double, qValuesMap: Map[String,QLAgent.QValue], 
                    lastChoice: String,
-                   choiceAlg: (List[QLAgent.QValue], Double, RandomHelper) => String,
-                   expDecay: Double, nlAgent: org.nlogo.agent.Agent, expUpdate: Double => Unit) {
+                   choiceAlg: (List[QLAgent.QValue], RandomHelper) => String,
+                   expDecay: Boolean, nlAgent: org.nlogo.agent.Agent, expUpdate: Iterable[QLAgent.QValue] => Unit) {
   
   def updated(alt:String, reward: Double) : QLAgent = {
-    val newQvalue = qValuesMap.getOrElse(alt, new QLAgent.QValue(alt, 0.0, 0.0, QLAgent.findUpdateFunction(nlAgent, alt))).updated(reward)
-    val newExp = experimenting * expDecay
-    expUpdate(newExp)
-    QLAgent(newExp, qValuesMap.updated(alt, newQvalue), 
-            alt, choiceAlg, expDecay, nlAgent, expUpdate)
+    val newQvalue = if(expDecay)
+        qValuesMap.getOrElse(alt, new QLAgent.QValue(alt, 0.0, 0.0, experimenting, 0.0, QLAgent.findUpdateFunction(nlAgent, alt))).updated(reward, experimenting)
+      else
+        qValuesMap.getOrElse(alt, new QLAgent.QValue(alt, 0.0, 0.0, experimenting, 0.0, QLAgent.findUpdateFunction(nlAgent, alt))).updated(reward)
+    val newQvaluesMap = qValuesMap.updated(alt, newQvalue)
+    expUpdate(newQvaluesMap.values)
+    QLAgent(experimenting, newQvaluesMap, alt, choiceAlg, expDecay, nlAgent, expUpdate)
   }
   
   def setAlternatives(alternatives: List[String]) = QLAgent(experimenting,
-      alternatives.map(key => (key -> qValuesMap.getOrElse(key, new QLAgent.QValue(key, 0.0, 0.0, QLAgent.findUpdateFunction(nlAgent, key))))).toMap,
+      alternatives.map(key => (key -> qValuesMap.getOrElse(key, new QLAgent.QValue(key, 0.0, 0.0, experimenting, 0.0, QLAgent.findUpdateFunction(nlAgent, key))))).toMap,
       lastChoice, choiceAlg, expDecay, nlAgent, expUpdate)
   
   def choose(alternatives: List[String]): String = {
-    choiceAlg(alternatives.map(alt => qValuesMap.getOrElse(alt, new QLAgent.QValue(alt, 0.0, 0.0, QLAgent.findUpdateFunction(nlAgent, alt)))), experimenting, de.util.ThreadLocalRandomHelper.current)
+    choiceAlg(alternatives.map(alt => qValuesMap.getOrElse(alt, new QLAgent.QValue(alt, 0.0, 0.0, experimenting, 0.0, QLAgent.findUpdateFunction(nlAgent, alt)))), de.util.ThreadLocalRandomHelper.current)
   }
   
   /**
-   * after calling this function, the agent successively lowers the  
-   * level of experimenting.
+   * after calling this function, the agent successively lowers the levels of exploration.
    */
-  def startDecreasing(experimentingDecay: Double) : QLAgent = 
-    QLAgent(experimenting, qValuesMap, lastChoice, choiceAlg, experimentingDecay, nlAgent, expUpdate)
+  def startDecreasing() : QLAgent = 
+    QLAgent(experimenting, qValuesMap, lastChoice, choiceAlg, true, nlAgent, expUpdate)
     
 }

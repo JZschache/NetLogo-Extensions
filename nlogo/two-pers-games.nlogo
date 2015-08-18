@@ -1,6 +1,6 @@
 extensions[ql matrix games]
 
-turtles-own[ leader av-list n-list total-n current-exp diff optimal-action last-field]
+turtles-own[ leader explore qv-0 qv-1 n-0 n-1 total-n diff optimal-action last-field]
 globals[ group-structure means-1-matrix means-2-matrix optimal-fields rel-freq-optimal]
 
 to-report read-means-matrix [ nr ]
@@ -88,7 +88,7 @@ to setup
     hatch 1 [ 
       set leader false
       setxy (1 + [xcor] of myself) (1 + [ycor] of myself)
-      set group-structure lput (ql:create-group (list myself self) (list (n-values n-alt-x [(word ?)]) (n-values n-alt-y [(word ?)]))) group-structure
+      set group-structure lput (ql:create-group (list (list myself (n-values n-alt-x [(word ?)])) (list self (n-values n-alt-y [(word ?)])))) group-structure
       face myself
       set partner self
     ]
@@ -97,12 +97,11 @@ to setup
   
   ql:init turtles experimenting exploration
   ql:set-group-structure group-structure
-  ql:decrease-experimenting experimenting-decay
   
   ask turtles [    
     ;set q-values ql:get-q-values
     ;set total-n ql:get-total-n
-    set current-exp ql:get-experimenting
+    ;set current-exp ql:get-experimenting
     set optimal-action one-of [true false]
   ]
   
@@ -162,22 +161,22 @@ to update
   
   ask turtles [
      
-    let q-triples ql:get-q-values
+    ;let q-triples ql:get-q-values
     let n-alt n-alt-y
     if leader [ set n-alt n-alt-x ]
     
-    set av-list map [ (item 1 (item ? q-triples)) ] (n-values n-alt [ ? ])
-    set n-list map [ (item 2 (item ? q-triples)) ] (n-values n-alt [ ? ])
-    set total-n sum n-list
-    set current-exp ql:get-experimenting
+    ;set av-list map [ (item 1 (item ? q-triples)) ] (n-values n-alt [ ? ])
+    ;set n-list map [ (item 2 (item ? q-triples)) ] (n-values n-alt [ ? ])
+    set total-n n-0 + n-1
+    ;set current-exp ql:get-experimenting
 
     set diff 0
-    if (total-n > 0) [
-      let zipped (map [ (list ?1 ?2) ] av-list n-list)
-      let filtered filter [ (item 1 ?) / total-n > experimenting ] zipped
-      let avs map [ (item 0 ?) ] filtered
-      if (length avs > 1) [ set diff standard-deviation avs]
-    ]
+    ;if (total-n > 0) [
+    ;  let zipped (map [ (list ?1 ?2) ] av-list n-list)
+    ;  let filtered filter [ (item 1 ?) / total-n > experimenting ] zipped
+    ;  let avs map [ (item 0 ?) ] filtered
+    ;  if (length avs > 1) [ set diff standard-deviation avs]
+    ;]
     
     if leader [
       if optimal-action [ set optimal-freq optimal-freq + 1 ]
@@ -191,10 +190,10 @@ to update
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
-785
-15
-1201
-452
+770
+25
+1186
+462
 -1
 -1
 6.25
@@ -233,10 +232,10 @@ NIL
 HORIZONTAL
 
 BUTTON
-820
-500
-970
-533
+770
+465
+920
+498
 NIL
 setup
 NIL
@@ -250,10 +249,10 @@ NIL
 1
 
 BUTTON
-820
-535
-970
-568
+770
+500
+920
+533
 NIL
 ql:start
 NIL
@@ -267,10 +266,10 @@ NIL
 1
 
 BUTTON
-820
-570
-970
-603
+770
+535
+920
+568
 NIL
 ql:stop
 NIL
@@ -332,7 +331,7 @@ CHOOSER
 exploration
 exploration
 "epsilon-greedy" "softmax"
-1
+0
 
 MONITOR
 15
@@ -342,39 +341,6 @@ MONITOR
 NIL
 rel-freq-optimal
 2
-1
-11
-
-MONITOR
-1250
-20
-1540
-65
-NIL
-ql:get-performance \"NLSuperBetweenTick\"
-17
-1
-11
-
-MONITOR
-1250
-70
-1540
-115
-NIL
-ql:get-performance \"NLSuperHandleGroups\"
-17
-1
-11
-
-MONITOR
-1250
-120
-1540
-165
-NIL
-ql:get-performance \"NLSuperGuiInter\"
-17
 1
 11
 
@@ -396,21 +362,6 @@ false
 PENS
 "default" 1.0 0 -16777216 true "" "plot rel-freq-optimal"
 
-SLIDER
-15
-60
-215
-93
-experimenting-decay
-experimenting-decay
-0.9
-1
-0.99
-0.001
-1
-NIL
-HORIZONTAL
-
 PLOT
 15
 145
@@ -427,12 +378,12 @@ true
 false
 "" ""
 PENS
-"default" 1.0 0 -16777216 true "set-plot-y-range 0 experimenting" "plot mean [current-exp] of turtles"
+"default" 1.0 0 -16777216 true "set-plot-y-range 0 experimenting" "plot mean [explore] of turtles"
 
 INPUTBOX
 220
 355
-770
+765
 560
 fields
 | 1: (10, 1) P | 2: ( 3, 4) PN|\n| 3: ( 4, 2) P | 4: ( 1, 0)   |\n
@@ -538,10 +489,10 @@ NIL
 HORIZONTAL
 
 PLOT
-270
-605
-815
-755
+220
+565
+765
+715
 diff
 NIL
 NIL
@@ -554,6 +505,23 @@ false
 "" ""
 PENS
 "default" 0.1 1 -16777216 true "" "histogram [diff] of turtles"
+
+BUTTON
+15
+60
+215
+93
+NIL
+ql:decay-exploration
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
 
 @#$#@#$#@
 ## WHAT IS IT?

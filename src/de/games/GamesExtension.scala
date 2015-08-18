@@ -63,17 +63,19 @@ object GamesExtension {
 class GamesExtension extends DefaultClassManager {
   
   override def load(manager: PrimitiveManager) {
+    // constructor of and reporters on matrices
     manager.addPrimitive("matrix-from-row-list", new GetMatrixFromRowList)
     manager.addPrimitive("matrix-transpose", new GetMatrixTranspose)
     manager.addPrimitive("matrix-as-pretty-strings", new GetMatrixAsPrettyStrings)
-    
+    //constructors of games
     manager.addPrimitive("two-persons-game", new GetTwoPersonsGame)
     manager.addPrimitive("two-persons-gamut-game", new GetTwoPersonsGamutGame)
+    // reporters on game objects
     manager.addPrimitive("game-matrix", new GetGameMatrix)
     manager.addPrimitive("game-pure-solutions", new GetGamePureSolutions)
     manager.addPrimitive("game-pure-optima", new GetGamePureOptima)
     manager.addPrimitive("get-solutions-string", new GetSolutionsString)
-    manager.addPrimitive("get-solutions-string-with-expect", new GetSolutionsStringWithExpectations)
+//    manager.addPrimitive("get-solutions-string-with-expect", new GetSolutionsStringWithExpectations)
     manager.addPrimitive("get-fields-string", new GetFieldsString)
   }
   
@@ -312,24 +314,21 @@ class GetGamePureOptima extends DefaultReporter {
   }
 }
 
+//class GetSolutionsString extends DefaultReporter {
+//  
+//  override def getAgentClassString = "O"
+//  override def getSyntax = reporterSyntax(Array[Int](WildcardType), ListType)
+//  
+//  def report(args: Array[Argument], c: Context): AnyRef = {
+//    val game = args(0).get.asInstanceOf[TwoPersonsGame]
+//    GamesExtension.printSolutions(game, false).toLogoObject
+//  }
+//}
+
 class GetSolutionsString extends DefaultReporter {
   
   override def getAgentClassString = "O"
   override def getSyntax = reporterSyntax(Array[Int](WildcardType), ListType)
-  
-  def report(args: Array[Argument], c: Context): AnyRef = {
-    val game = args(0).get.asInstanceOf[TwoPersonsGame]
-    GamesExtension.printSolutions(game, false).toLogoObject
-  }
-}
-
-class GetSolutionsStringWithExpectations extends DefaultReporter {
-  
-  override def getAgentClassString = "O"
-  override def getSyntax = reporterSyntax(Array[Int](WildcardType), ListType)
-  
-  private def lines(n: Int) = (0 until n).foldLeft("")((str, el) => str + "-")
-  private def spaces(n: Int) = (0 until n).foldLeft("")((str, el) => str + " ")
   
   def report(args: Array[Argument], c: Context): AnyRef = {
     val game = args(0).get.asInstanceOf[TwoPersonsGame]

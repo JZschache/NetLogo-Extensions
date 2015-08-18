@@ -1,50 +1,96 @@
-extensions[ql]
-patches-own[ qv-0 qv-1 n-0 n-1 explore]
+extensions[games matrix]
 
-to setup
-  clear-all
-  set-patch-size 400 / n-patches  
-  resize-world 0 (n-patches - 1) 0 (n-patches - 1)
-  ql:init patches experimenting "epsilon-greedy"
-  let alternatives ["0" "1"]
-  let groups [ql:create-group (list (list self alternatives))] of patches
-  ql:set-group-structure groups
-  reset-ticks
+globals[ means-1-matrix means-2-matrix optimal-fields]
+
+to-report read-means-matrix [ nr ]
+  let row-string-list []
+  let temp means-x
+  if (nr = 2) [set temp means-y]
+  while [temp != ""] [
+    let line-break position "\n" temp
+    ifelse line-break = false [ 
+      set row-string-list lput temp row-string-list
+      set temp ""
+    ] [
+      set row-string-list lput (substring temp 0 line-break) row-string-list
+      set temp substring temp (line-break + 1) (length temp)
+    ]
+  ]
+  report (map [read-from-string (word "[ " ? " ]")] row-string-list)
+end
+
+to-report write-means-matrix [ matrix ]
+  let strings games:matrix-as-pretty-strings matrix
+  let result ""
+  foreach strings [ set result (word result (reduce [(word ?1 " " ?2 )] ?) "\n") ]
+  report result
+end
+
+
+to set-game
+  
+  let rows1 (read-means-matrix 1)
+  let rows2 (read-means-matrix 2)
+  
+  let pm1 games:matrix-from-row-list rows1
+  let pm2 games:matrix-from-row-list rows2
+  
+  let game 0
+  
+  ifelse (game-name = "Custom") [
+    set game games:two-persons-game pm1 pm2
+  ] [
+    ifelse (game-name = "CopyMeansX") [
+      set pm2 pm1
+      set game games:two-persons-game pm1 pm2
+    ] [ 
+      ifelse (game-name = "TransposeMeansX" and (length rows1) = (length first rows1) ) [
+        set pm2 games:matrix-transpose pm1
+        set game games:two-persons-game pm1 pm2
+      ] [ ; use gamut    
+        set game games:two-persons-gamut-game game-name n-alt-x n-alt-y
+      ]
+    ]
+  ]
+  
+  set pm1 games:game-matrix game 1
+  set pm2 games:game-matrix game 2
+  let m games:matrix-as-pretty-strings pm1
+  set n-alt-x length m
+  set n-alt-y length first m
+  
+  set means-x write-means-matrix pm1
+  set means-y write-means-matrix pm2
+  
+  set sample-equilibria games:get-solutions-string game
+  set fields games:get-fields-string game
+  
 end
 
 to setup-all
-  ; empty
-end
-
-to-report get-rewards [ headless-id ]
-  let group-list ql:get-group-list headless-id
-  report map [reward ?] group-list
-end
-
-to-report reward [group-choice]
-  let agent first ql:get-agents group-choice
-  let decision first ql:get-decisions group-choice
-  ifelse decision = "0" [
-    ask agent [set pcolor blue]
-    report ql:set-rewards group-choice (list random-normal mean-1 sd)
-  ] [
-    ask agent [set pcolor red]
-    report ql:set-rewards group-choice (list random-normal mean-2 sd)
-  ]
-end
-
-to update
-  tick
+  
+  let rows1 read-means-matrix 1
+  set means-1-matrix matrix:from-row-list rows1
+  set n-alt-x length rows1
+  set n-alt-y length first rows1
+  let rows2 (read-means-matrix 2)
+  set means-2-matrix matrix:from-row-list rows2
+  
+  let pm1 games:matrix-from-row-list rows1
+  let pm2 games:matrix-from-row-list rows2
+  
+  let game games:two-persons-game pm1 pm2
+  set optimal-fields games:game-pure-optima game
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
-355
-35
-765
-466
+1075
+55
+1491
+492
 -1
 -1
-8.0
+6.25
 1
 10
 1
@@ -55,266 +101,65 @@ GRAPHICS-WINDOW
 1
 1
 0
-49
+64
 0
-49
+64
 0
 0
 1
 ticks
 30.0
 
-SLIDER
-50
-35
-222
-68
-n-patches
-n-patches
-0
-200
-50
+INPUTBOX
+220
+60
+395
+180
+means-x
+ 5  3  5\n10  4  3\n
 1
 1
-^2
-HORIZONTAL
+String
 
-BUTTON
-230
-35
-350
-68
-NIL
-setup
-NIL
+INPUTBOX
+220
+310
+765
+415
+fields
+| 1: ( 5, 5) P | 2: ( 3, 7) P | 3: ( 5, 5) P |\n| 4: (10, 0) P | 5: ( 4, 6) P | 6: ( 3, 7) P |\n
 1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
 1
+String
 
-BUTTON
-230
+INPUTBOX
+400
+60
+575
+180
+means-y
+5 7 5\n0 6 7\n
+1
+1
+String
+
+CHOOSER
+580
+25
+765
 70
-350
-103
-NIL
-ql:start
-NIL
-1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
-1
-
-SLIDER
-50
-140
-222
-173
-mean-1
-mean-1
-0
-100
-50
-1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-50
-175
-222
-208
-mean-2
-mean-2
-0
-100
-75
-1
-1
-NIL
-HORIZONTAL
+game-name
+game-name
+"Custom" "CopyMeansX" "TransposeMeansX" "BattleOfTheSexes" "Chicken" "CollaborationGame" "CoordinationGame" "DispersionGame" "GrabTheDollar" "GuessTwoThirdsAve" "HawkAndDove" "MajorityVoting" "MatchingPennies" "PrisonersDilemma" "RandomGame" "RandomZeroSum" "RockPaperScissors" "ShapleysGame"
+15
 
 BUTTON
-230
-106
-350
-139
-NIL
-ql:stop
-NIL
-1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
-1
-
-SLIDER
-50
-70
-222
-103
-experimenting
-experimenting
-0
-1
-0.05
-0.01
-1
-NIL
-HORIZONTAL
-
-SLIDER
-50
-105
-222
-138
-sd
-sd
-0
-100
-10
-0.1
-1
-NIL
-HORIZONTAL
-
-PLOT
-50
-215
-350
-365
-means of qv-1 and qv-2
-NIL
-NIL
-0.0
-10.0
-0.0
-10.0
-true
-true
-"" ""
-PENS
-"qv-1" 1.0 0 -16777216 true "" "plot mean [qv-0] of patches"
-"qv-2" 1.0 0 -7500403 true "" "plot mean [qv-1] of patches"
-
-MONITOR
-50
-520
-345
-565
-NIL
-ql:get-performance \"NLSuperIdle\"
-17
-1
-11
-
-MONITOR
-50
-570
-345
-615
-NIL
-ql:get-performance \"NLSuperHandleGroups\"
-17
-1
-11
-
-MONITOR
-50
-620
-345
-665
-NIL
-ql:get-performance \"NLSuperUpdate\"
-17
-1
-11
-
-MONITOR
-350
-470
-670
-515
-NIL
-ql:get-performance \"HeadlessIdle 1\"
-17
-1
-11
-
-MONITOR
-350
-520
-670
-565
-NIL
-ql:get-performance \"HeadlessHandleGroups 1\"
-17
-1
-11
-
-MONITOR
-350
-570
-670
-615
-NIL
-ql:get-performance \"HeadlessHandleChoices 1\"
-17
-1
-11
-
-MONITOR
-350
-620
-670
-665
-NIL
-ql:get-performance \"HeadlessAnswering 1\"
-17
-1
-11
-
-MONITOR
-50
-470
-345
-515
-NIL
-ql:get-performance \"HundredTicks\"
-17
-1
-11
-
-MONITOR
-855
+580
 145
-1042
-190
+765
+178
 NIL
-[explore] of patch 0 0
-17
-1
-11
-
-BUTTON
-850
-85
-1042
-118
-NIL
-ql:decay-exploration
+set-game
 NIL
 1
 T
@@ -324,6 +169,47 @@ NIL
 NIL
 NIL
 1
+
+INPUTBOX
+220
+185
+765
+305
+sample-equilibria
+    x1    x2    y1    y2    y3  |    Ex    Ey  |    mx\n------------------------------------------------------------\n   1/3   2/3     0   2/3   1/3  |  11/3  19/3  |     P\n
+1
+1
+String
+
+SLIDER
+580
+75
+765
+108
+n-alt-x
+n-alt-x
+1
+10
+2
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+580
+110
+765
+143
+n-alt-y
+n-alt-y
+1
+10
+3
+1
+1
+NIL
+HORIZONTAL
 
 @#$#@#$#@
 ## WHAT IS IT?
@@ -672,52 +558,6 @@ NetLogo 5.2.0
 @#$#@#$#@
 @#$#@#$#@
 @#$#@#$#@
-<experiments>
-  <experiment name="performance-experiment" repetitions="10" runMetricsEveryStep="false">
-    <setup>setup
-ql:start</setup>
-    <final>ql:stop</final>
-    <exitCondition>ticks &gt; 1000</exitCondition>
-    <metric>ql:get-performance "HundredTicks"</metric>
-    <metric>ql:get-performance "NLSuperIdle"</metric>
-    <metric>ql:get-performance "NLSuperHandleGroups"</metric>
-    <metric>ql:get-performance "NLSuperUpdate"</metric>
-    <metric>ql:get-performance "HeadlessAnswering 1"</metric>
-    <metric>ql:get-performance "HeadlessIdle 1"</metric>
-    <metric>ql:get-performance "HeadlessHandleGroups 1"</metric>
-    <metric>ql:get-performance "HeadlessHandleChoices 1"</metric>
-    <metric>ql:get-performance "HeadlessAnswering 2"</metric>
-    <metric>ql:get-performance "HeadlessIdle 2"</metric>
-    <metric>ql:get-performance "HeadlessHandleGroups 2"</metric>
-    <metric>ql:get-performance "HeadlessHandleChoices 2"</metric>
-    <metric>ql:get-performance "HeadlessAnswering 3"</metric>
-    <metric>ql:get-performance "HeadlessIdle 3"</metric>
-    <metric>ql:get-performance "HeadlessHandleGroups 3"</metric>
-    <metric>ql:get-performance "HeadlessHandleChoices 3"</metric>
-    <metric>ql:get-performance "HeadlessAnswering 4"</metric>
-    <metric>ql:get-performance "HeadlessIdle 4"</metric>
-    <metric>ql:get-performance "HeadlessHandleGroups 4"</metric>
-    <metric>ql:get-performance "HeadlessHandleChoices 4"</metric>
-    <enumeratedValueSet variable="sd">
-      <value value="10"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="mean-1">
-      <value value="50"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="n-patches">
-      <value value="50"/>
-      <value value="100"/>
-      <value value="150"/>
-      <value value="200"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="mean-2">
-      <value value="75"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="experimenting">
-      <value value="0.05"/>
-    </enumeratedValueSet>
-  </experiment>
-</experiments>
 @#$#@#$#@
 @#$#@#$#@
 default

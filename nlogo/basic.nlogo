@@ -203,7 +203,7 @@ BUTTON
 350
 363
 NIL
-ql:decay-exploration 0.99
+ql:decay-exploration
 NIL
 1
 T

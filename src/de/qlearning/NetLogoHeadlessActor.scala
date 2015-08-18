@@ -165,11 +165,11 @@ class NetLogoHeadlessActor(val id: Int) extends Actor with FSM[NetLogoHeadlessAc
       goto(Ready) using Initialized(workspace.compileReporter(rewardRepName + " " + id), null)
     }
     
-//    case Event(NLGroupChoicesList(_), _) => // ignore (e.g. after opening a new model)
-//      stay
-//      
-//    case Event(GetNLGroupChoices(_), _) => // ignore (e.g. after opening a new model)
-//      stay
+    case Event(NLGroupChoicesList(_), _) => // ignore (e.g. after opening a new model)
+      stay
+      
+    case Event(GetNLGroupChoices(_), _) => // ignore (e.g. after opening a new model)
+      stay
     
   }
   
