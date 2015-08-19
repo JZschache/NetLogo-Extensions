@@ -1,13 +1,13 @@
 extensions[ql]
-patches-own[ qv-0 qv-1 n-0 n-1 explore]
+patches-own[ q-values]
 
 to setup
   clear-all
   set-patch-size 400 / n-patches  
   resize-world 0 (n-patches - 1) 0 (n-patches - 1)
   ql:init patches experimenting "epsilon-greedy"
-  let alternatives ["0" "1"]
-  let groups [ql:create-group (list (list self alternatives))] of patches
+  let choices ["0" "1"]
+  let groups [ql:create-group (list (list self choices))] of patches
   ql:set-group-structure groups
   reset-ticks
 end
@@ -206,8 +206,8 @@ true
 true
 "" ""
 PENS
-"qv-1" 1.0 0 -16777216 true "" "plot mean [qv-0] of patches"
-"qv-2" 1.0 0 -7500403 true "" "plot mean [qv-1] of patches"
+"qv-1" 1.0 0 -16777216 true "" "plot mean [first q-values] of patches"
+"qv-2" 1.0 0 -7500403 true "" "plot mean [last q-values] of patches"
 
 MONITOR
 50
@@ -296,34 +296,6 @@ ql:get-performance \"HundredTicks\"
 17
 1
 11
-
-MONITOR
-855
-145
-1042
-190
-NIL
-[explore] of patch 0 0
-17
-1
-11
-
-BUTTON
-850
-85
-1042
-118
-NIL
-ql:decay-exploration
-NIL
-1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
-1
 
 @#$#@#$#@
 ## WHAT IS IT?

@@ -54,6 +54,11 @@ object QLSystem {
   val headlessHandleChoicesPerf = AkkaAgent(Map[Int,PerformanceMeasure]().withDefault(id => PerformanceMeasure()))
   val headlessAnsweringPerf = AkkaAgent(Map[Int,PerformanceMeasure]().withDefault(id => PerformanceMeasure()))
    
+  // names of agent variables
+  val altListName = QLSystem.config.getString(QLExtension.cfgstr + ".alternatives-list")
+  val qvListName = QLSystem.config.getString(QLExtension.cfgstr + ".q-values-list")
+  val freqListName = QLSystem.config.getString(QLExtension.cfgstr + ".frequencies-list")
+  val explListName = QLSystem.config.getString(QLExtension.cfgstr + ".explorations-list")
 }
 
 
@@ -217,7 +222,23 @@ class Init extends DefaultCommand {
 
     // create a QLData-object that holds all the information about the Q-learning process
     qlDataMap send { newNLAgents.map(a => {
-      a -> AkkaAgent(QLAgent(exploration, experimenting, a.asInstanceOf[org.nlogo.agent.Agent]))
+      val agent = a.asInstanceOf[org.nlogo.agent.Agent]
+      // set variables
+      val vLength = agent.variables.size
+      val idxA = (0 until vLength).toList.find(i => agent.variableName(i) == altListName.toUpperCase())
+      val idxQ = (0 until vLength).toList.find(i => agent.variableName(i) == qvListName.toUpperCase())
+      val idxN = (0 until vLength).toList.find(i => agent.variableName(i) == freqListName.toUpperCase())
+      val idxE = (0 until vLength).toList.find(i => agent.variableName(i) == explListName.toUpperCase())
+      if (idxA.isDefined) 
+        agent.setVariable(idxA.get, LogoList())
+      if (idxQ.isDefined) 
+        agent.setVariable(idxQ.get, LogoList())
+      if (idxN.isDefined)
+        agent.setVariable(idxN.get, LogoList())
+      if (idxE.isDefined) 
+        agent.setVariable(idxE.get, LogoList())
+      // return mapping
+      a -> AkkaAgent(QLAgent(exploration, experimenting, agent))
     }).toMap }
     // must wait for new agents to be set
     qlDataMap.await
@@ -236,19 +257,14 @@ class CreateGroup extends DefaultReporter {
   
   def report(args: Array[Argument], context: Context): AnyRef = {
     
-    val (nlAgents, qlAgents, alternatives) = args(0).getList.map(entry => {
+    val (nlAgents, alternatives) = args(0).getList.map(entry => {
       val ll = entry.asInstanceOf[LogoList]
       val nlAgent = ll.first.asInstanceOf[org.nlogo.api.Agent]
-      val alt = ll.butFirst.first.asInstanceOf[LogoList].map(s => s.asInstanceOf[String]).toList
-      
-      // find QLAgent to NLAgent
-      val qlAgent = QLSystem.qlDataMap.get().apply(nlAgent)
-      qlAgent send { _.setAlternatives(alt) }
-      
-      (nlAgent, qlAgent, alt)
-    }).toList.unzip3
+      val alt = ll.butFirst.first.asInstanceOf[LogoList].map(s => s.asInstanceOf[String]).toList 
+      (nlAgent, alt)
+    }).toList.unzip
        
-    NLGroup(nlAgents, qlAgents, alternatives)
+    NLGroup(nlAgents, Nil, alternatives)
   }
 }
 
@@ -262,7 +278,19 @@ class NewGroupStructure extends DefaultCommand {
   override def getSyntax = commandSyntax(Array(ListType))
   
   def perform(args: Array[Argument], c: Context) {
-    val groupStructure = args(0).getList.map(_.asInstanceOf[NLGroup]).toList
+    val groupStructure = args(0).getList.map(_.asInstanceOf[NLGroup]).toList.map(group => {
+      if (group.qlAgents.isEmpty) {
+        // find QLAgents to NLAgents
+        // this must be done here because when creating a group, the qlAgents may not exist yet
+        val newQlAgents = (group.nlAgents zip group.alternatives).map(pair => {
+          val qlAgent = QLSystem.qlDataMap.get().apply(pair._1)
+          qlAgent send { _.setAlternatives(pair._2) }
+          qlAgent })
+        group.copy(qlAgents = newQlAgents)
+      } else 
+        group
+    })
+    
     QLSystem.netLogoSuper ! NetLogoSupervisor.SetGroupStructure(groupStructure)
   }
 }

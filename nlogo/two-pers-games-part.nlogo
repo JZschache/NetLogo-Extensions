@@ -116,18 +116,18 @@ INPUTBOX
 395
 180
 means-x
- 5  3  5\n10  4  3\n
+9 6 6 6\n7 7 5 7\n0 1 8 9\n
 1
 1
 String
 
 INPUTBOX
 220
-310
+315
 765
-415
+420
 fields
-| 1: ( 5, 5) P | 2: ( 3, 7) P | 3: ( 5, 5) P |\n| 4: (10, 0) P | 5: ( 4, 6) P | 6: ( 3, 7) P |\n
+|  1: ( 9, 7) O |  2: ( 6, 0)   |  3: ( 6, 3)   |  4: ( 6,10) O |\n|  5: ( 7, 3)   |  6: ( 7, 9) ON|  7: ( 5, 5)   |  8: ( 7, 9) O |\n|  9: ( 0, 6)   | 10: ( 1, 2)   | 11: ( 8, 4)   | 12: ( 9, 4)   |\n
 1
 1
 String
@@ -138,7 +138,7 @@ INPUTBOX
 575
 180
 means-y
-5 7 5\n0 6 7\n
+ 7  0  3 10\n 3  9  5  9\n 6  2  4  4\n
 1
 1
 String
@@ -151,7 +151,7 @@ CHOOSER
 game-name
 game-name
 "Custom" "CopyMeansX" "TransposeMeansX" "BattleOfTheSexes" "Chicken" "CollaborationGame" "CoordinationGame" "DispersionGame" "GrabTheDollar" "GuessTwoThirdsAve" "HawkAndDove" "MajorityVoting" "MatchingPennies" "PrisonersDilemma" "RandomGame" "RandomZeroSum" "RockPaperScissors" "ShapleysGame"
-15
+0
 
 BUTTON
 580
@@ -172,11 +172,11 @@ NIL
 
 INPUTBOX
 220
-185
+180
 765
-305
+315
 sample-equilibria
-    x1    x2    y1    y2    y3  |    Ex    Ey  |    mx\n------------------------------------------------------------\n   1/3   2/3     0   2/3   1/3  |  11/3  19/3  |     P\n
+    x1    x2    x3    y1    y2    y3    y4  |    Ex    Ey  |    mx\n------------------------------------------------------------------------\n     0     1     0     0   1/4     0   3/4  |     7     9  |     O\n     0   1/4   3/4   2/9     0     0   7/9  |     7  21/4  |      \n
 1
 1
 String
@@ -190,7 +190,7 @@ n-alt-x
 n-alt-x
 1
 10
-2
+3
 1
 1
 NIL
@@ -205,7 +205,7 @@ n-alt-y
 n-alt-y
 1
 10
-3
+4
 1
 1
 NIL

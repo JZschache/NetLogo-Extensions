@@ -2,9 +2,11 @@ package de.qlearning
 
 import de.util.RandomHelper
 import de.qlextension.QLExtension
+import org.nlogo.api.LogoList
 
 object QLAgent {
-
+  import QLSystem._
+  
   sealed trait HasValue { val value : Double}
   /**
    * finding all HasValue-objects with the highest value
@@ -22,18 +24,16 @@ object QLAgent {
   /**
    *  the QValue (immutable)
    */ 
-  class QValue(val alt: String, val n: Double, val value: Double, val epsilon: Double, val nDecay: Double, val updateFunction: (Double, Double) => Unit) extends HasValue {
+  class QValue(val name: String, val freq: Double, val value: Double, val epsilon: Double, val nDecay: Double) extends HasValue {
     
     def updated(amount: Double) = { 
-      val newValue = value + (1.0 /(n + 1.0)) * (amount - value)
-      updateFunction(newValue, n + 1.0)
-      new QValue(alt, n + 1.0, newValue, epsilon, nDecay, updateFunction)
+      val newValue = value + (1.0 /(freq + 1.0)) * (amount - value)
+      new QValue(name, freq + 1.0, newValue, epsilon, nDecay)
     }
     
     def updated(amount: Double, initialExploreRate: Double) = { 
-      val newValue = value + (1.0 /(n + 1.0)) * (amount - value)
-      updateFunction(newValue, n + 1.0)
-      new QValue(alt, n + 1.0, newValue, (initialExploreRate / (nDecay + 1.0)), nDecay + 1.0, updateFunction)
+      val newValue = value + (1.0 /(freq + 1.0)) * (amount - value)
+      new QValue(name, freq + 1.0, newValue, (initialExploreRate / (nDecay + 1.0)), nDecay + 1.0)
     }
   }
 
@@ -46,7 +46,7 @@ object QLAgent {
         case "epsilon-greedy" => epsGreedy
         case "softmax" => softmax
 //        case "uncertainty" => uncertainty
-      }), false, nlAgent, findExpUpdateFunction(nlAgent))   
+      }), false, findUpdateFunction(nlAgent))   
 
   
   ////////////////////////////////////////
@@ -54,19 +54,19 @@ object QLAgent {
   ////////////////////////////////////////
   
   private val epsGreedy = (qValues: List[QValue], rh: RandomHelper) => {
-    val eps = qValues.scanLeft(("".asInstanceOf[String], 0.0))((temp, qva) => (qva.alt, temp._2 + qva.epsilon)).tail
+    val eps = qValues.scanLeft(("".asInstanceOf[String], 0.0))((temp, qva) => (qva.name, temp._2 + qva.epsilon)).tail
     if (rh.uniform.nextDoubleFromTo(0, 1) < eps.last._2) {
       val randomValue = rh.uniform.nextDoubleFromTo(0, eps.last._2)
       eps.find(randomValue < _._2).get._1
     } else {
       val maxima = maximum(qValues)
-      if (maxima.length == 1) maxima.head.alt  else rh.randomComponent(maxima).alt
+      if (maxima.length == 1) maxima.head.name  else rh.randomComponent(maxima).name
     }
   }
   
   private val softmax = (qValues: List[QValue], rh: RandomHelper) => {
     // there is some problem if temperature <= 0.02
-    val expForm = qValues.scanLeft(("".asInstanceOf[String], 0.0))((temp, qva) => (qva.alt, temp._2 + scala.math.exp(qva.value / Math.max(qva.epsilon, 0.02)))).tail
+    val expForm = qValues.scanLeft(("".asInstanceOf[String], 0.0))((temp, qva) => (qva.name, temp._2 + scala.math.exp(qva.value / Math.max(qva.epsilon, 0.02)))).tail
     val randomValue = rh.uniform.nextDoubleFromTo(0, expForm.last._2)
     expForm.find(randomValue < _._2).get._1
   }
@@ -82,39 +82,57 @@ object QLAgent {
 //      if (maxima.length == 1) maxima.head.alt  else rh.randomComponent(maxima).alt
 //    }
 //  }
-  
-  val qvaluePrefix = QLSystem.config.getString(QLExtension.cfgstr + ".qvalue-prefix")
-  val nPrefix = QLSystem.config.getString(QLExtension.cfgstr + ".n-prefix")
-  
-  def findUpdateFunction(nlAgent: org.nlogo.agent.Agent, alt: String) = {
+    
+  def findUpdateFunction(nlAgent: org.nlogo.agent.Agent) = {
     
     val vLength = nlAgent.variables.size
     
-    val idxQv = (0 until vLength).toList.find(i => nlAgent.variableName(i) == (qvaluePrefix + alt).toUpperCase())
-    val idxN = (0 until vLength).toList.find(i => nlAgent.variableName(i) == (nPrefix + alt).toUpperCase())
+    val idxA = (0 until vLength).toList.find(i => nlAgent.variableName(i) == altListName.toUpperCase())
+    val idxQ = (0 until vLength).toList.find(i => nlAgent.variableName(i) == qvListName.toUpperCase())
+    val idxN = (0 until vLength).toList.find(i => nlAgent.variableName(i) == freqListName.toUpperCase())
+    val idxE = (0 until vLength).toList.find(i => nlAgent.variableName(i) == explListName.toUpperCase())
     
-    (value: Double, n: Double) => {
-      if (idxQv.isDefined) 
-        nlAgent.setVariable(idxQv.get, value)
+    (qValues: List[QLAgent.QValue]) => {
+      if (idxA.isDefined) 
+        nlAgent.setVariable(idxA.get, LogoList.fromIterator(qValues.map(_.name).toIterator))
+      if (idxQ.isDefined) 
+        nlAgent.setVariable(idxQ.get, LogoList.fromIterator(qValues.map(q => Double.box(q.value)).toIterator))
       if (idxN.isDefined)
-        nlAgent.setVariable(idxN.get, n)
+        nlAgent.setVariable(idxN.get, LogoList.fromIterator(qValues.map(q => Double.box(q.freq)).toIterator))
+      if (idxE.isDefined) 
+        nlAgent.setVariable(idxE.get, LogoList.fromIterator(qValues.map(q => Double.box(q.epsilon)).toIterator))
     }
   }
   
-  val expRateName = QLSystem.config.getString(QLExtension.cfgstr + ".exploration-rate-name")
+//  def findUpdateFunction(nlAgent: org.nlogo.agent.Agent, alt: String) = {
+//    
+//    val vLength = nlAgent.variables.size
+//    
+//    val idxQv = (0 until vLength).toList.find(i => nlAgent.variableName(i) == (qvaluePrefix + alt).toUpperCase())
+//    val idxN = (0 until vLength).toList.find(i => nlAgent.variableName(i) == (nPrefix + alt).toUpperCase())
+//    
+//    (value: Double, n: Double) => {
+//      if (idxQv.isDefined) 
+//        nlAgent.setVariable(idxQv.get, value)
+//      if (idxN.isDefined)
+//        nlAgent.setVariable(idxN.get, n)
+//    }
+//  }
   
-  def findExpUpdateFunction(nlAgent: org.nlogo.agent.Agent) = {
-    
-    val vLength = nlAgent.variables.size
-    
-    val idx = (0 until vLength).toList.find(i => nlAgent.variableName(i) ==  expRateName.toUpperCase())
-    
-    (qValues: Iterable[QLAgent.QValue]) => {
-      if (idx.isDefined) {
-        nlAgent.setVariable(idx.get, qValues.foldLeft(0.0)((temp, qva) => temp + qva.epsilon))
-      }
-    }
-  }
+//  val expRateName = QLSystem.config.getString(QLExtension.cfgstr + ".exploration-rate-name")
+//  
+//  def findExpUpdateFunction(nlAgent: org.nlogo.agent.Agent) = {
+//    
+//    val vLength = nlAgent.variables.size
+//    
+//    val idx = (0 until vLength).toList.find(i => nlAgent.variableName(i) ==  expRateName.toUpperCase())
+//    
+//    (qValues: Iterable[QLAgent.QValue]) => {
+//      if (idx.isDefined) {
+//        nlAgent.setVariable(idx.get, qValues.foldLeft(0.0)((temp, qva) => temp + qva.epsilon))
+//      }
+//    }
+//  }
     
   
 }
@@ -129,30 +147,33 @@ object QLAgent {
 case class QLAgent(experimenting: Double, qValuesMap: Map[String,QLAgent.QValue], 
                    lastChoice: String,
                    choiceAlg: (List[QLAgent.QValue], RandomHelper) => String,
-                   expDecay: Boolean, nlAgent: org.nlogo.agent.Agent, expUpdate: Iterable[QLAgent.QValue] => Unit) {
+                   expDecay: Boolean, update: List[QLAgent.QValue] => Unit) {
   
   def updated(alt:String, reward: Double) : QLAgent = {
     val newQvalue = if(expDecay)
-        qValuesMap.getOrElse(alt, new QLAgent.QValue(alt, 0.0, 0.0, experimenting, 0.0, QLAgent.findUpdateFunction(nlAgent, alt))).updated(reward, experimenting)
+        qValuesMap.getOrElse(alt, new QLAgent.QValue(alt, 0.0, 0.0, experimenting, 0.0)).updated(reward, experimenting)
       else
-        qValuesMap.getOrElse(alt, new QLAgent.QValue(alt, 0.0, 0.0, experimenting, 0.0, QLAgent.findUpdateFunction(nlAgent, alt))).updated(reward)
+        qValuesMap.getOrElse(alt, new QLAgent.QValue(alt, 0.0, 0.0, experimenting, 0.0)).updated(reward)
     val newQvaluesMap = qValuesMap.updated(alt, newQvalue)
-    expUpdate(newQvaluesMap.values)
-    QLAgent(experimenting, newQvaluesMap, alt, choiceAlg, expDecay, nlAgent, expUpdate)
+    update(newQvaluesMap.values.toList)
+    QLAgent(experimenting, newQvaluesMap, alt, choiceAlg, expDecay, update)
   }
   
-  def setAlternatives(alternatives: List[String]) = QLAgent(experimenting,
-      alternatives.map(key => (key -> qValuesMap.getOrElse(key, new QLAgent.QValue(key, 0.0, 0.0, experimenting, 0.0, QLAgent.findUpdateFunction(nlAgent, key))))).toMap,
-      lastChoice, choiceAlg, expDecay, nlAgent, expUpdate)
+  def setAlternatives(alternatives: List[String]) = {
+    val newQvaluesMap = alternatives.map(key => (key -> qValuesMap.getOrElse(key, new QLAgent.QValue(key, 0.0, 0.0, experimenting, 0.0)))).toMap
+    update(newQvaluesMap.values.toList)
+    QLAgent(experimenting, newQvaluesMap, lastChoice, choiceAlg, expDecay, update)
+  }
+      
   
   def choose(alternatives: List[String]): String = {
-    choiceAlg(alternatives.map(alt => qValuesMap.getOrElse(alt, new QLAgent.QValue(alt, 0.0, 0.0, experimenting, 0.0, QLAgent.findUpdateFunction(nlAgent, alt)))), de.util.ThreadLocalRandomHelper.current)
+    choiceAlg(alternatives.map(alt => qValuesMap.getOrElse(alt, new QLAgent.QValue(alt, 0.0, 0.0, experimenting, 0.0))), de.util.ThreadLocalRandomHelper.current)
   }
   
   /**
    * after calling this function, the agent successively lowers the levels of exploration.
    */
   def startDecreasing() : QLAgent = 
-    QLAgent(experimenting, qValuesMap, lastChoice, choiceAlg, true, nlAgent, expUpdate)
+    QLAgent(experimenting, qValuesMap, lastChoice, choiceAlg, true, update)
     
 }

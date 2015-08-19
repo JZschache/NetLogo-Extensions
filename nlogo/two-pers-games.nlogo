@@ -1,7 +1,7 @@
-extensions[ql matrix games]
+extensions[ql games]
 
-turtles-own[ leader explore qv-0 qv-1 n-0 n-1 total-n diff optimal-action last-field]
-globals[ group-structure means-1-matrix means-2-matrix optimal-fields rel-freq-optimal]
+turtles-own[ is-player-x q-values frequencies explorations diff optimal-action last-field]
+globals[ means-x-matrix means-y-matrix optimal-fields rel-freq-optimal]
 
 to-report read-means-matrix [ nr ]
   let row-string-list []
@@ -20,7 +20,7 @@ to-report read-means-matrix [ nr ]
   report (map [read-from-string (word "[ " ? " ]")] row-string-list)
 end
 
-to-report write-means-matrix [ matrix n-row ]
+to-report write-means-matrix [ matrix ]
   let strings games:matrix-as-pretty-strings matrix
   let result ""
   foreach strings [ set result (word result (reduce [(word ?1 " " ?2 )] ?) "\n") ]
@@ -30,43 +30,43 @@ end
 
 to set-game
   
-  let rows1 (read-means-matrix 1)
-  let rows2 (read-means-matrix 2)
-  
-  let pm1 games:matrix-from-row-list rows1
-  let pm2 games:matrix-from-row-list rows2
-  
+  let pm1 0
+  let pm2 0
   let game 0
   
-  ifelse (game-name = "Custom") [
-    set game games:two-persons-game pm1 pm2
-  ] [
-    ifelse (game-name = "CopyMeansX") [
+  ifelse (member? game-name ["Custom" "CopyMeansX" "TransposeMeansX"])[
+    if (game-name = "Custom") [
+      set pm1 games:matrix-from-row-list (read-means-matrix 1)
+      set pm2 games:matrix-from-row-list (read-means-matrix 2)
+      set game games:two-persons-game pm1 pm2
+    ] 
+    if (game-name = "CopyMeansX") [
+      set pm1 games:matrix-from-row-list (read-means-matrix 1)
       set pm2 pm1
       set game games:two-persons-game pm1 pm2
-    ] [ 
-      ifelse (game-name = "TransposeMeansX" and (length rows1) = (length first rows1) ) [
-        set pm2 games:matrix-transpose pm1
-        set game games:two-persons-game pm1 pm2
-      ] [ ; use gamut    
-        set game games:two-persons-gamut-game game-name n-alt-x n-alt-y
-      ]
+    ] 
+    if (game-name = "TransposeMeansX") [
+      set pm1 games:matrix-from-row-list (read-means-matrix 1)
+      set pm2 games:matrix-transpose pm1
+      set game games:two-persons-game pm1 pm2
     ]
+  ][ ; else: use gamut
+    set game games:two-persons-gamut-game game-name n-alt-x n-alt-y
+    set pm1 games:game-matrix game 1
+    set pm2 games:game-matrix game 2
   ]
   
-  set pm1 games:game-matrix game 1
-  set pm2 games:game-matrix game 2
+  ; update interface
   let m games:matrix-as-pretty-strings pm1
   set n-alt-x length m
-  set n-alt-y length first m
-  
-  set means-x write-means-matrix pm1 n-alt-x
-  set means-y write-means-matrix pm2 n-alt-x
-  
-  set sample-equilibria games:get-solutions-string-with-expect game
+  set n-alt-y length first m  
+  set means-x write-means-matrix pm1
+  set means-y write-means-matrix pm2
+  set sample-equilibria games:get-solutions-string game
   set fields games:get-fields-string game
-  
 end
+
+
 
 to setup
   
@@ -75,18 +75,17 @@ to setup
   let n-patches (1 + floor sqrt (n-pairs * 9))
   set-patch-size 400 / n-patches
   resize-world 0 n-patches 0 n-patches
-    
-  setup-all
   
-  set group-structure []
-    
+  setup-all
+  set rel-freq-optimal 0.0
+  
+  let group-structure []
   create-turtles n-pairs [
-    set leader true
+    set is-player-x true
     setxy random-xcor random-ycor
-    ; create a partner
     let partner 0
-    hatch 1 [ 
-      set leader false
+    hatch 1 [ ; create a partner
+      set is-player-x false
       setxy (1 + [xcor] of myself) (1 + [ycor] of myself)
       set group-structure lput (ql:create-group (list (list myself (n-values n-alt-x [(word ?)])) (list self (n-values n-alt-y [(word ?)])))) group-structure
       face myself
@@ -98,14 +97,9 @@ to setup
   ql:init turtles experimenting exploration
   ql:set-group-structure group-structure
   
-  ask turtles [    
-    ;set q-values ql:get-q-values
-    ;set total-n ql:get-total-n
-    ;set current-exp ql:get-experimenting
-    set optimal-action one-of [true false]
+  ask turtles [
+    set optimal-action false
   ]
-  
-  set rel-freq-optimal 0.5
   
   reset-ticks
 end
@@ -114,60 +108,69 @@ end
 
 to setup-all
   
-  let rows1 read-means-matrix 1
-  set means-1-matrix matrix:from-row-list rows1
-  set n-alt-x length rows1
-  set n-alt-y length first rows1
-  let rows2 (read-means-matrix 2)
-  set means-2-matrix matrix:from-row-list rows2
+  let rows-x read-means-matrix 1
+  let rows-y read-means-matrix 2
   
-  let pm1 games:matrix-from-row-list rows1
-  let pm2 games:matrix-from-row-list rows2
+  set n-alt-x length rows-x
+  set n-alt-y length first rows-x
   
-  let game games:two-persons-game pm1 pm2
+  set means-x-matrix games:matrix-from-row-list rows-x
+  set means-y-matrix games:matrix-from-row-list rows-y
+  
+  let game games:two-persons-game means-x-matrix means-y-matrix
   set optimal-fields games:game-pure-optima game
+  
 end
 
-to-report get-reward [ env-id ]
+to-report get-rewards [ env-id ]
   let dec-list ql:get-group-list env-id
   let result map [reward ?] dec-list
   report result
 end
 
 to-report reward [group-choice]
+  
   let agents ql:get-agents group-choice
   let decisions ql:get-decisions group-choice
   
-  let dec1 (read-from-string first decisions) 
-  let dec2 (read-from-string last decisions)
+  let dec-x (read-from-string first decisions) 
+  let dec-y (read-from-string last decisions)
   
-  let field dec1 * n-alt-y + dec2 
+  let field dec-x * n-alt-y + dec-y
   let optimal item field optimal-fields
+  show agents
   (foreach agents [ ask ?1 [ 
         set optimal-action optimal 
         set last-field field
+        let n-alt n-alt-y
+        if is-player-x [ set n-alt n-alt-x ]
+        
+        
+        
      ]])
     
-  let m1 matrix:get means-1-matrix dec1 dec2
-  let m2 matrix:get means-2-matrix dec1 dec2
+  let m1 games:get-reward means-x-matrix dec-x dec-y
+  let m2 games:get-reward means-y-matrix dec-x dec-y
+   
   let rewards (list (random-normal m1 sd) (random-normal m2 sd))
-  let new-object ql:set-rewards group-choice rewards
-  report new-object
+  report ql:set-rewards group-choice rewards
+  
 end
 
 to update
   
-  let optimal-freq 0
+  let optimal-freq count turtles with [is-player-x and optimal-action]
+  set rel-freq-optimal optimal-freq / (n-pairs)
   
   ask turtles [
      
     ;let q-triples ql:get-q-values
     let n-alt n-alt-y
-    if leader [ set n-alt n-alt-x ]
+    if is-player-x [ set n-alt n-alt-x ]
     
     ;set av-list map [ (item 1 (item ? q-triples)) ] (n-values n-alt [ ? ])
     ;set n-list map [ (item 2 (item ? q-triples)) ] (n-values n-alt [ ? ])
-    set total-n n-0 + n-1
+    let total-n n-0 + n-1
     ;set current-exp ql:get-experimenting
 
     set diff 0
@@ -178,13 +181,10 @@ to update
     ;  if (length avs > 1) [ set diff standard-deviation avs]
     ;]
     
-    if leader [
-      if optimal-action [ set optimal-freq optimal-freq + 1 ]
-    ]
-    
   ]
+    
   
-  set rel-freq-optimal optimal-freq / (n-pairs)
+  
   
   tick
 end
@@ -192,11 +192,11 @@ end
 GRAPHICS-WINDOW
 770
 25
-1186
-462
+1185
+461
 -1
 -1
-6.25
+5.633802816901408
 1
 10
 1
@@ -207,9 +207,9 @@ GRAPHICS-WINDOW
 1
 1
 0
-64
+71
 0
-64
+71
 0
 0
 1
@@ -225,7 +225,7 @@ n-pairs
 n-pairs
 0
 10000
-450
+560
 10
 1
 NIL
@@ -233,9 +233,9 @@ HORIZONTAL
 
 BUTTON
 770
-465
+510
 920
-498
+543
 NIL
 setup
 NIL
@@ -250,9 +250,9 @@ NIL
 
 BUTTON
 770
-500
+545
 920
-533
+578
 NIL
 ql:start
 NIL
@@ -267,9 +267,9 @@ NIL
 
 BUTTON
 770
-535
+580
 920
-568
+613
 NIL
 ql:stop
 NIL
@@ -291,7 +291,7 @@ experimenting
 experimenting
 0
 30
-0.2
+0.1
 0.1
 1
 NIL
@@ -318,7 +318,7 @@ INPUTBOX
 395
 180
 means-x
-10  3\n 4  1\n
+ 8  5  4\n10  0  3\n 3  2  1\n
 1
 1
 String
@@ -382,11 +382,11 @@ PENS
 
 INPUTBOX
 220
-355
+315
 765
-560
+455
 fields
-| 1: (10, 1) P | 2: ( 3, 4) PN|\n| 3: ( 4, 2) P | 4: ( 1, 0)   |\n
+| 1: ( 8, 8) O | 2: ( 5,10) ON| 3: ( 4, 3)   |\n| 4: (10, 5) ON| 5: ( 0, 0)   | 6: ( 3, 2)   |\n| 7: ( 3, 4)   | 8: ( 2, 3)   | 9: ( 1, 1)   |\n
 1
 1
 String
@@ -407,7 +407,7 @@ true
 false
 "" ""
 PENS
-"default" 1.0 1 -16777216 false "set-plot-x-range 0 (n-alt-x * n-alt-y)" "histogram [last-field] of turtles with [leader]"
+"default" 1.0 1 -16777216 false "set-plot-x-range 0 (n-alt-x * n-alt-y)" "histogram [last-field] of turtles with [is-player-x]"
 
 INPUTBOX
 400
@@ -415,7 +415,7 @@ INPUTBOX
 575
 180
 means-y
-1 4\n2 0\n
+ 8 10  3\n 5  0  2\n 4  3  1\n
 1
 1
 String
@@ -428,7 +428,7 @@ CHOOSER
 game-name
 game-name
 "Custom" "CopyMeansX" "TransposeMeansX" "BattleOfTheSexes" "Chicken" "CollaborationGame" "CoordinationGame" "DispersionGame" "GrabTheDollar" "GuessTwoThirdsAve" "HawkAndDove" "MajorityVoting" "MatchingPennies" "PrisonersDilemma" "RandomGame" "RandomZeroSum" "RockPaperScissors" "ShapleysGame"
-14
+2
 
 BUTTON
 580
@@ -451,9 +451,9 @@ INPUTBOX
 220
 185
 765
-346
+310
 sample-equilibria
- x1 x2 y1 y2  | Ex Ey  | mx\n---------------------------\n
+    x1    x2    x3    y1    y2    y3  |    Ex    Ey  |    mx\n------------------------------------------------------------------\n   5/7   2/7     0   5/7   2/7     0  |  50/7  50/7  |      \n
 1
 1
 String
@@ -467,7 +467,7 @@ n-alt-x
 n-alt-x
 1
 10
-2
+3
 1
 1
 NIL
@@ -482,7 +482,7 @@ n-alt-y
 n-alt-y
 1
 10
-2
+3
 1
 1
 NIL
@@ -490,9 +490,9 @@ HORIZONTAL
 
 PLOT
 220
-565
+460
 765
-715
+610
 diff
 NIL
 NIL

@@ -1,6 +1,6 @@
 extensions[ql]
 
-turtles-own[qv-forward qv-right explore]
+turtles-own[alternatives q-values frequencies explorations]
 
 to setup
   clear-all
@@ -8,8 +8,8 @@ to setup
     setxy random-xcor random-ycor
   ]
   ql:init turtles exploration-rate "epsilon-greedy"
-  let alternatives (list "forward" "right")
-  let groups [ql:create-group (list (list self alternatives))] of turtles  
+  let choices (list "forward" "right")
+  let groups [ql:create-group (list (list self choices))] of turtles  
   ql:set-group-structure groups
   reset-ticks
 end
@@ -194,8 +194,8 @@ true
 true
 "" ""
 PENS
-"qv-forward" 1.0 0 -16777216 true "" "plot mean [qv-forward] of turtles"
-"qv-right" 1.0 0 -7500403 true "" "plot mean [qv-right] of turtles"
+"qv-forward" 1.0 0 -16777216 true "" "plot mean [first q-values] of turtles"
+"qv-right" 1.0 0 -7500403 true "" "plot mean [last q-values] of turtles"
 
 BUTTON
 65
@@ -217,10 +217,10 @@ NIL
 MONITOR
 65
 375
-277
+352
 420
 NIL
-mean [explore] of turtles
+mean [sum explorations] of turtles
 2
 1
 11

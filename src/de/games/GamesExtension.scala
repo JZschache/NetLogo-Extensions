@@ -19,7 +19,7 @@ object GamesExtension {
    * withExpectations includes the expected values and indicator of optimality (optimalInd)
    * 
    */
-  def printSolutions(game: TwoPersonsGame, withExpectations: Boolean, optimalInd:String =  "P"): String = {
+  def printSolutions(game: TwoPersonsGame, withExpectations: Boolean, optimalInd:String =  "O"): String = {
     
     val expectations = game.mixedSolutions.map(row => {
       val (x, y) = row.map(_._2).splitAt(game.pm1.nrow)
@@ -67,6 +67,7 @@ class GamesExtension extends DefaultClassManager {
     manager.addPrimitive("matrix-from-row-list", new GetMatrixFromRowList)
     manager.addPrimitive("matrix-transpose", new GetMatrixTranspose)
     manager.addPrimitive("matrix-as-pretty-strings", new GetMatrixAsPrettyStrings)
+    manager.addPrimitive("get-reward",new GetReward)
     //constructors of games
     manager.addPrimitive("two-persons-game", new GetTwoPersonsGame)
     manager.addPrimitive("two-persons-gamut-game", new GetTwoPersonsGamutGame)
@@ -118,6 +119,11 @@ class PayoffMatrix(val content: List[Rational], val nrow:Int, val ncol:Int) exte
     })._1
     (0 until ncol).map(i => rm(i).reverse).toList
   }
+  
+  
+  private val array = getRowList.map(list => list.toArray).toArray
+  
+  def getReward(rowId:Int, colId:Int) = array(rowId)(colId)
   
   /**
    * needed by the LemkeHowsonSolver
@@ -221,7 +227,10 @@ class GetMatrixTranspose extends DefaultReporter {
   
   def report(args: Array[Argument], c: Context): AnyRef = {
     val pm = args(0).get.asInstanceOf[PayoffMatrix]
-    new PayoffMatrix(pm.getRowList.flatten, pm.ncol, pm.nrow)
+    if (pm.ncol != pm.nrow){
+      throw new org.nlogo.api.ExtensionException("A game matrix must quadric for its transpostion to work.")
+    }
+    new PayoffMatrix(pm.getColumnList.flatten, pm.ncol, pm.nrow)
   }
 }
 
@@ -236,6 +245,17 @@ class GetMatrixAsPrettyStrings extends DefaultReporter {
   }
 }
 
+class GetReward extends DefaultReporter {
+  
+  override def getAgentClassString = "O"
+  override def getSyntax = reporterSyntax(Array[Int](WildcardType, NumberType, NumberType), NumberType)
+  
+  def report(args: Array[Argument], c: Context): AnyRef = {
+    val pm = args(0).get.asInstanceOf[PayoffMatrix]
+    pm.getReward(args(1).getIntValue, args(2).getIntValue).getDouble.toLogoObject
+  }
+}
+
 
 class GetTwoPersonsGame extends DefaultReporter {
   
@@ -247,6 +267,10 @@ class GetTwoPersonsGame extends DefaultReporter {
     val pm1 = args(0).get.asInstanceOf[PayoffMatrix]
     val pm2 = args(1).get.asInstanceOf[PayoffMatrix]
 
+    if (pm1.ncol != pm2.ncol || pm1.nrow != pm2.nrow){
+      throw new org.nlogo.api.ExtensionException("Input matrices must match in row and column length respectively.")
+    }
+    
     new TwoPersonsGame(pm1, pm2)
   }
 }
@@ -360,7 +384,7 @@ class GetFieldsString extends DefaultReporter {
       spaces(maxLengthNr + 1 - i.toString.length()) + i + ": (" + 
       spaces(maxLengthEntries - x.floor.toString.length()) + x.floor + "," + 
       spaces(maxLengthEntries - y.floor.toString().length()) + y.floor + ") " + 
-      (if (isMaxima(i - 1)) "P" else " ") + (if (isSolution(i - 1)) "N" else " ")
+      (if (isMaxima(i - 1)) "O" else " ") + (if (isSolution(i - 1)) "N" else " ")
     })
     
     val result = stringList.foldLeft(("", 1))((r, el) => if (r._2 == game.pm1.ncol) (r._1 + "|" + el + "|\n", 1 ) else (r._1 + "|" + el , r._2 + 1))._1
