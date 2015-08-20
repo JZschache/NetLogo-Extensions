@@ -40,7 +40,7 @@ object GamesExtension {
                     else
                       maxLengthSol
     
-    val colLength = if (withExpectations) game.pm1.nrow + game.pm1.ncol + 5 else game.pm1.nrow + game.pm1.ncol
+    val colLength = if (withExpectations) game.pm1.nrow + game.pm1.ncol + 4 else game.pm1.nrow + game.pm1.ncol
     val header = (1 to game.pm1.nrow).foldLeft("")((a,b) => a + spaces(maxLength) + "x" + b ) +  
                  (1 to game.pm1.ncol).foldLeft("")((a,b) => a + spaces(maxLength) + "y" + b ) + 
                  (if (withExpectations) 
@@ -377,7 +377,9 @@ class GetFieldsString extends DefaultReporter {
     val isSolution = game.isPureSolution.flatten
     
     val maxLengthNr = game.pm1.content.length.toString().length()
-    val maxLengthEntries = (game.pm1.content ++ game.pm2.content).map(_.floor).max.toString().length()
+    val hasNegValue = (game.pm1.content ++ game.pm2.content).find(_ < 0).isDefined
+    val maxLengthEntries = (game.pm1.content ++ game.pm2.content).map(e => Math.abs(e.floor)).max.toString().length() + (if (hasNegValue) 1 else 0)
+    
     
     val stringList = (1 to game.pm1.content.length).map(i => { 
       val (x,y) = pureExpectations(i - 1)

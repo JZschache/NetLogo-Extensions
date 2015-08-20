@@ -1,7 +1,7 @@
 extensions[ql games]
 
-turtles-own[ is-player-x q-values frequencies explorations diff optimal-action last-field]
-globals[ means-x-matrix means-y-matrix optimal-fields rel-freq-optimal]
+turtles-own[ is-player-x q-values frequencies rel-freqs explorations q-values-std last-action nash-action optimal-action last-field]
+globals[ means-x-matrix means-y-matrix optimal-fields nash-fields rel-freq-optimal rel-freq-nash]
 
 to-report read-means-matrix [ nr ]
   let row-string-list []
@@ -81,12 +81,12 @@ to setup
   
   let group-structure []
   create-turtles n-pairs [
-    set is-player-x true
     setxy random-xcor random-ycor
+    set is-player-x true
     let partner 0
     hatch 1 [ ; create a partner
-      set is-player-x false
       setxy (1 + [xcor] of myself) (1 + [ycor] of myself)
+      set is-player-x false
       set group-structure lput (ql:create-group (list (list myself (n-values n-alt-x [(word ?)])) (list self (n-values n-alt-y [(word ?)])))) group-structure
       face myself
       set partner self
@@ -99,6 +99,9 @@ to setup
   
   ask turtles [
     set optimal-action false
+    set nash-action false
+    set rel-freqs (n-values n-alt-y [ 0.0 ])
+    if is-player-x [set rel-freqs (n-values n-alt-x [ 0.0 ])]
   ]
   
   reset-ticks
@@ -119,7 +122,7 @@ to setup-all
   
   let game games:two-persons-game means-x-matrix means-y-matrix
   set optimal-fields games:game-pure-optima game
-  
+  set nash-fields games:game-pure-solutions game
 end
 
 to-report get-rewards [ env-id ]
@@ -138,16 +141,19 @@ to-report reward [group-choice]
   
   let field dec-x * n-alt-y + dec-y
   let optimal item field optimal-fields
-  show agents
-  (foreach agents [ ask ?1 [ 
-        set optimal-action optimal 
-        set last-field field
-        let n-alt n-alt-y
-        if is-player-x [ set n-alt n-alt-x ]
-        
-        
-        
-     ]])
+  let nash item field nash-fields
+  ask first agents [
+    set last-action dec-x
+    set optimal-action optimal 
+    set nash-action nash
+    set last-field field
+  ]
+  ask last agents [
+    set last-action dec-y
+    set optimal-action optimal 
+    set nash-action nash
+    set last-field field
+  ]
     
   let m1 games:get-reward means-x-matrix dec-x dec-y
   let m2 games:get-reward means-y-matrix dec-x dec-y
@@ -159,44 +165,42 @@ end
 
 to update
   
-  let optimal-freq count turtles with [is-player-x and optimal-action]
-  set rel-freq-optimal optimal-freq / (n-pairs)
+  
+  tick
+end
+
+to update-slow
+  
+  let optimal-freq count turtles with [optimal-action]
+  set rel-freq-optimal optimal-freq / 2 / n-pairs
+  
+  let nash-freq count turtles with [nash-action]
+  set rel-freq-nash nash-freq / 2 / n-pairs
   
   ask turtles [
-     
-    ;let q-triples ql:get-q-values
-    let n-alt n-alt-y
-    if is-player-x [ set n-alt n-alt-x ]
-    
-    ;set av-list map [ (item 1 (item ? q-triples)) ] (n-values n-alt [ ? ])
-    ;set n-list map [ (item 2 (item ? q-triples)) ] (n-values n-alt [ ? ])
-    let total-n n-0 + n-1
-    ;set current-exp ql:get-experimenting
-
-    set diff 0
-    ;if (total-n > 0) [
-    ;  let zipped (map [ (list ?1 ?2) ] av-list n-list)
-    ;  let filtered filter [ (item 1 ?) / total-n > experimenting ] zipped
-    ;  let avs map [ (item 0 ?) ] filtered
-    ;  if (length avs > 1) [ set diff standard-deviation avs]
-    ;]
-    
+    let total-n sum frequencies 
+    set q-values-std 0
+    if (total-n > 0) [
+      set rel-freqs map [ ? / total-n] frequencies   
+      let zipped (map [ (list ?1 ?2) ] q-values frequencies)
+      let filtered filter [ ((item 1 ?) / total-n) > experimenting ] zipped
+      let qvs map [ (item 0 ?) / 10 ] filtered
+      if (length qvs > 1) [ 
+        set q-values-std standard-deviation qvs
+      ]
+    ]
   ]
-    
-  
-  
-  
   tick
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
-770
+1110
 25
-1185
-461
+1524
+460
 -1
 -1
-5.633802816901408
+4.2105263157894735
 1
 10
 1
@@ -207,9 +211,9 @@ GRAPHICS-WINDOW
 1
 1
 0
-71
+95
 0
-71
+95
 0
 0
 1
@@ -217,25 +221,25 @@ ticks
 30.0
 
 SLIDER
-220
+30
 25
-395
+215
 58
 n-pairs
 n-pairs
 0
 10000
-560
+1000
 10
 1
 NIL
 HORIZONTAL
 
 BUTTON
-770
-510
-920
-543
+630
+185
+765
+218
 NIL
 setup
 NIL
@@ -249,10 +253,10 @@ NIL
 1
 
 BUTTON
-770
-545
-920
-578
+630
+220
+765
+253
 NIL
 ql:start
 NIL
@@ -266,10 +270,10 @@ NIL
 1
 
 BUTTON
-770
-580
-920
-613
+630
+255
+765
+288
 NIL
 ql:stop
 NIL
@@ -283,25 +287,25 @@ NIL
 1
 
 SLIDER
-15
-25
+30
+60
 215
-58
+93
 experimenting
 experimenting
 0
 30
-0.1
-0.1
+0.05
+0.05
 1
 NIL
 HORIZONTAL
 
 SLIDER
-400
-25
-575
-58
+580
+75
+765
+108
 sd
 sd
 0
@@ -316,86 +320,50 @@ INPUTBOX
 220
 60
 395
-180
+175
 means-x
- 8  5  4\n10  0  3\n 3  2  1\n
+10  0  0\n 0  2  0\n 0  0 10\n
 1
 1
 String
 
 CHOOSER
-15
+30
 95
 215
 140
 exploration
 exploration
-"epsilon-greedy" "softmax"
-0
+"melioration" "epsilon-greedy" "softmax"
+1
 
 MONITOR
-15
-305
+30
+195
 215
-350
+240
 NIL
 rel-freq-optimal
 2
 1
 11
 
-PLOT
-15
-355
-215
-505
-rel-freq-optimal
-NIL
-NIL
-0.0
-1.0
-0.0
-1.0
-true
-false
-"" ""
-PENS
-"default" 1.0 0 -16777216 true "" "plot rel-freq-optimal"
-
-PLOT
-15
-145
-215
-295
-experimenting
-NIL
-NIL
-0.0
-10.0
-0.0
-1.0
-true
-false
-"" ""
-PENS
-"default" 1.0 0 -16777216 true "set-plot-y-range 0 experimenting" "plot mean [explore] of turtles"
-
 INPUTBOX
 220
-315
-765
-455
+185
+625
+330
 fields
-| 1: ( 8, 8) O | 2: ( 5,10) ON| 3: ( 4, 3)   |\n| 4: (10, 5) ON| 5: ( 0, 0)   | 6: ( 3, 2)   |\n| 7: ( 3, 4)   | 8: ( 2, 3)   | 9: ( 1, 1)   |\n
+| 1: (10,10) ON| 2: ( 0, 0)   | 3: ( 0, 0)   |\n| 4: ( 0, 0)   | 5: ( 2, 2)  N| 6: ( 0, 0)   |\n| 7: ( 0, 0)   | 8: ( 0, 0)   | 9: (10,10) ON|\n
 1
 1
 String
 
 PLOT
-15
-510
+30
+295
 215
-660
+435
 fields-histogram
 NIL
 NIL
@@ -413,9 +381,9 @@ INPUTBOX
 400
 60
 575
-180
+175
 means-y
- 8 10  3\n 5  0  2\n 4  3  1\n
+10  0  0\n 0  2  0\n 0  0 10\n
 1
 1
 String
@@ -428,13 +396,13 @@ CHOOSER
 game-name
 game-name
 "Custom" "CopyMeansX" "TransposeMeansX" "BattleOfTheSexes" "Chicken" "CollaborationGame" "CoordinationGame" "DispersionGame" "GrabTheDollar" "GuessTwoThirdsAve" "HawkAndDove" "MajorityVoting" "MatchingPennies" "PrisonersDilemma" "RandomGame" "RandomZeroSum" "RockPaperScissors" "ShapleysGame"
-2
+1
 
 BUTTON
 580
-145
+110
 765
-178
+143
 NIL
 set-game
 NIL
@@ -449,20 +417,20 @@ NIL
 
 INPUTBOX
 220
-185
+335
 765
-310
+496
 sample-equilibria
-    x1    x2    x3    y1    y2    y3  |    Ex    Ey  |    mx\n------------------------------------------------------------------\n   5/7   2/7     0   5/7   2/7     0  |  50/7  50/7  |      \n
+   x1   x2   x3   y1   y2   y3  |   Ex   Ey  |   mx\n--------------------------------------------------\n    0  5/6  1/6    0  5/6  1/6  |  5/3  5/3  |     \n  1/2    0  1/2  1/2    0  1/2  |    5    5  |     \n  1/6  5/6    0  1/6  5/6    0  |  5/3  5/3  |     \n
 1
 1
 String
 
 SLIDER
-580
-75
-765
-108
+220
+25
+395
+58
 n-alt-x
 n-alt-x
 1
@@ -474,10 +442,10 @@ NIL
 HORIZONTAL
 
 SLIDER
-580
-110
-765
-143
+400
+25
+575
+58
 n-alt-y
 n-alt-y
 1
@@ -489,28 +457,28 @@ NIL
 HORIZONTAL
 
 PLOT
-220
-460
-765
-610
-diff
+30
+440
+215
+575
+q-values-std-hist
 NIL
 NIL
 0.0
-10.0
+1.0
 0.0
 10.0
 true
 false
 "" ""
 PENS
-"default" 0.1 1 -16777216 true "" "histogram [diff] of turtles"
+"default" 0.05 1 -16777216 true "" "histogram [q-values-std] of turtles"
 
 BUTTON
-15
-60
-215
-93
+580
+145
+765
+178
 NIL
 ql:decay-exploration
 NIL
@@ -522,6 +490,75 @@ NIL
 NIL
 NIL
 1
+
+MONITOR
+30
+245
+215
+290
+NIL
+rel-freq-nash
+2
+1
+11
+
+MONITOR
+30
+580
+212
+625
+mean [q-values-std]
+mean [q-values-std] of turtles
+5
+1
+11
+
+MONITOR
+30
+145
+215
+190
+mean [sum explorations]
+mean [sum explorations] of turtles
+5
+1
+11
+
+PLOT
+220
+500
+380
+625
+freq-x-hist
+NIL
+NIL
+0.0
+10.0
+0.0
+10.0
+true
+false
+"" ""
+PENS
+"default" 1.0 1 -16777216 true "set-plot-x-range 0 n-alt-x" "histogram [last-action] of turtles with [is-player-x]"
+
+PLOT
+385
+500
+545
+625
+freq-y-hist
+NIL
+NIL
+0.0
+10.0
+0.0
+10.0
+true
+false
+"" ""
+PENS
+"default" 1.0 1 -16777216 true "set-plot-x-range 0 n-alt-y" "histogram [last-action] of turtles with [not is-player-x]"
 
 @#$#@#$#@
 ## WHAT IS IT?

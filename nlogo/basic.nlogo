@@ -7,7 +7,7 @@ to setup
   create-turtles n-turtles [
     setxy random-xcor random-ycor
   ]
-  ql:init turtles exploration-rate "epsilon-greedy"
+  ql:init turtles exploration-rate "melioration"
   let choices (list "forward" "right")
   let groups [ql:create-group (list (list self choices))] of turtles  
   ql:set-group-structure groups
@@ -222,6 +222,17 @@ MONITOR
 NIL
 mean [sum explorations] of turtles
 2
+1
+11
+
+MONITOR
+75
+435
+297
+480
+NIL
+[explorations] of turtle 0
+17
 1
 11
 
