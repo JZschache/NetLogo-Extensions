@@ -1,7 +1,7 @@
 extensions[ql games]
 
 turtles-own[ is-player-x q-values frequencies rel-freqs explorations q-values-std last-action nash-action optimal-action last-field]
-globals[ means-x-matrix means-y-matrix optimal-fields nash-fields rel-freq-optimal rel-freq-nash]
+globals[ means-x-matrix means-y-matrix means-max optimal-fields nash-fields rel-freq-optimal rel-freq-nash nextTick]
 
 to-report read-means-matrix [ nr ]
   let row-string-list []
@@ -76,7 +76,21 @@ to setup
   set-patch-size 400 / n-patches
   resize-world 0 n-patches 0 n-patches
   
-  setup-all
+  let rows-x read-means-matrix 1
+  let rows-y read-means-matrix 2
+  
+  set means-max max map [max map [abs ?] ? ](sentence rows-x rows-y)
+  
+  set n-alt-x length rows-x
+  set n-alt-y length first rows-x
+  
+  set means-x-matrix games:matrix-from-row-list rows-x
+  set means-y-matrix games:matrix-from-row-list rows-y
+  
+  let game games:two-persons-game means-x-matrix means-y-matrix
+  set optimal-fields games:game-pure-optima game
+  set nash-fields games:game-pure-solutions game
+  
   set rel-freq-optimal 0.0
   
   let group-structure []
@@ -96,6 +110,7 @@ to setup
   
   ql:init turtles experimenting exploration
   ql:set-group-structure group-structure
+  ql:decay-exploration
   
   ask turtles [
     set optimal-action false
@@ -104,25 +119,9 @@ to setup
     if is-player-x [set rel-freqs (n-values n-alt-x [ 0.0 ])]
   ]
   
+  set nextTick 0
+  
   reset-ticks
-end
-
-
-
-to setup-all
-  
-  let rows-x read-means-matrix 1
-  let rows-y read-means-matrix 2
-  
-  set n-alt-x length rows-x
-  set n-alt-y length first rows-x
-  
-  set means-x-matrix games:matrix-from-row-list rows-x
-  set means-y-matrix games:matrix-from-row-list rows-y
-  
-  let game games:two-persons-game means-x-matrix means-y-matrix
-  set optimal-fields games:game-pure-optima game
-  set nash-fields games:game-pure-solutions game
 end
 
 to-report get-rewards [ env-id ]
@@ -163,8 +162,14 @@ to-report reward [group-choice]
   
 end
 
+to wait-for-tick
+  set nextTick nextTick + 1
+  while [ticks < nextTick] [ 
+    update-slow
+  ]
+end
+
 to update
-  
   
   tick
 end
@@ -184,13 +189,14 @@ to update-slow
       set rel-freqs map [ ? / total-n] frequencies   
       let zipped (map [ (list ?1 ?2) ] q-values frequencies)
       let filtered filter [ ((item 1 ?) / total-n) > experimenting ] zipped
-      let qvs map [ (item 0 ?) / 10 ] filtered
+      let qvs map [ (item 0 ?) / means-max ] filtered
       if (length qvs > 1) [ 
         set q-values-std standard-deviation qvs
       ]
     ]
   ]
-  tick
+  
+  ;tick
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
@@ -294,7 +300,7 @@ SLIDER
 experimenting
 experimenting
 0
-30
+16
 0.05
 0.05
 1
@@ -322,7 +328,7 @@ INPUTBOX
 395
 175
 means-x
-10  0  0\n 0  2  0\n 0  0 10\n
+10  0\n 0 10\n
 1
 1
 String
@@ -335,7 +341,7 @@ CHOOSER
 exploration
 exploration
 "melioration" "epsilon-greedy" "softmax"
-1
+0
 
 MONITOR
 30
@@ -354,7 +360,7 @@ INPUTBOX
 625
 330
 fields
-| 1: (10,10) ON| 2: ( 0, 0)   | 3: ( 0, 0)   |\n| 4: ( 0, 0)   | 5: ( 2, 2)  N| 6: ( 0, 0)   |\n| 7: ( 0, 0)   | 8: ( 0, 0)   | 9: (10,10) ON|\n
+| 1: (10, 0) O | 2: ( 0,10) O |\n| 3: ( 0,10) O | 4: (10, 0) O |\n
 1
 1
 String
@@ -383,7 +389,7 @@ INPUTBOX
 575
 175
 means-y
-10  0  0\n 0  2  0\n 0  0 10\n
+ 0 10\n10  0\n
 1
 1
 String
@@ -396,7 +402,7 @@ CHOOSER
 game-name
 game-name
 "Custom" "CopyMeansX" "TransposeMeansX" "BattleOfTheSexes" "Chicken" "CollaborationGame" "CoordinationGame" "DispersionGame" "GrabTheDollar" "GuessTwoThirdsAve" "HawkAndDove" "MajorityVoting" "MatchingPennies" "PrisonersDilemma" "RandomGame" "RandomZeroSum" "RockPaperScissors" "ShapleysGame"
-1
+12
 
 BUTTON
 580
@@ -421,7 +427,7 @@ INPUTBOX
 765
 496
 sample-equilibria
-   x1   x2   x3   y1   y2   y3  |   Ex   Ey  |   mx\n--------------------------------------------------\n    0  5/6  1/6    0  5/6  1/6  |  5/3  5/3  |     \n  1/2    0  1/2  1/2    0  1/2  |    5    5  |     \n  1/6  5/6    0  1/6  5/6    0  |  5/3  5/3  |     \n
+   x1   x2   y1   y2  |   Ex   Ey  |   mx\n----------------------------------------\n  1/2  1/2  1/2  1/2  |    5    5  |    O\n
 1
 1
 String
@@ -435,7 +441,7 @@ n-alt-x
 n-alt-x
 1
 10
-3
+2
 1
 1
 NIL
@@ -450,7 +456,7 @@ n-alt-y
 n-alt-y
 1
 10
-3
+2
 1
 1
 NIL
@@ -473,23 +479,6 @@ false
 "" ""
 PENS
 "default" 0.05 1 -16777216 true "" "histogram [q-values-std] of turtles"
-
-BUTTON
-580
-145
-765
-178
-NIL
-ql:decay-exploration
-NIL
-1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
-1
 
 MONITOR
 30
@@ -559,6 +548,50 @@ false
 "" ""
 PENS
 "default" 1.0 1 -16777216 true "set-plot-x-range 0 n-alt-y" "histogram [last-action] of turtles with [not is-player-x]"
+
+MONITOR
+1060
+515
+1595
+560
+NIL
+[rel-freqs] of turtle 0
+2
+1
+11
+
+MONITOR
+1060
+615
+1595
+660
+NIL
+[rel-freqs] of turtle 1
+17
+1
+11
+
+MONITOR
+1060
+470
+1595
+515
+NIL
+[q-values] of turtle 0
+17
+1
+11
+
+MONITOR
+1060
+570
+1595
+615
+NIL
+[q-values] of turtle 1
+17
+1
+11
 
 @#$#@#$#@
 ## WHAT IS IT?
@@ -907,6 +940,124 @@ NetLogo 5.2.0
 @#$#@#$#@
 @#$#@#$#@
 @#$#@#$#@
+<experiments>
+  <experiment name="exp-simple-coordination" repetitions="1" runMetricsEveryStep="false">
+    <setup>setup
+ql:decay-exploration
+ql:start</setup>
+    <final>ql:stop
+wait 1</final>
+    <exitCondition>ticks &gt; 100</exitCondition>
+    <metric>rel-freq-optimal</metric>
+    <metric>rel-freq-nash</metric>
+    <enumeratedValueSet variable="exploration">
+      <value value="&quot;melioration&quot;"/>
+      <value value="&quot;epsilon-greedy&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="n-pairs">
+      <value value="1000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="means-x">
+      <value value="&quot;10  0\n 0 10\n&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="means-y">
+      <value value="&quot;10  0\n 0 10\n&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="sd">
+      <value value="1"/>
+      <value value="5"/>
+      <value value="10"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="experimenting">
+      <value value="0.01"/>
+      <value value="0.05"/>
+      <value value="0.1"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="exp-penalty-coordination" repetitions="1" runMetricsEveryStep="false">
+    <setup>set-game
+setup
+ql:decay-exploration
+ql:start</setup>
+    <final>ql:stop
+wait 1</final>
+    <exitCondition>ticks &gt; 1000</exitCondition>
+    <metric>rel-freq-optimal</metric>
+    <metric>rel-freq-nash</metric>
+    <metric>mean [sum explorations] of turtles</metric>
+    <enumeratedValueSet variable="exploration">
+      <value value="&quot;melioration&quot;"/>
+      <value value="&quot;epsilon-greedy&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="means-x">
+      <value value="&quot;10  0 -20\n 0  2  0\n-20  0 10\n&quot;"/>
+      <value value="&quot;10  0 -15\n 0  2  0\n-15  0 10\n&quot;"/>
+      <value value="&quot;10  0 -10\n 0  2  0\n-10  0 10\n&quot;"/>
+      <value value="&quot;10  0 -5\n 0  2  0\n-5  0 10\n&quot;"/>
+      <value value="&quot;10  0 0\n 0  2  0\n0  0 10\n&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="game-name">
+      <value value="&quot;CopyMeansX&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="n-pairs">
+      <value value="1000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="sd">
+      <value value="1"/>
+      <value value="5"/>
+      <value value="10"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="experimenting">
+      <value value="0.01"/>
+      <value value="0.05"/>
+      <value value="0.1"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="exp-two-alt-games" repetitions="10" runMetricsEveryStep="false">
+    <setup>set-game
+setup
+ql:start</setup>
+    <go>wait-for-tick</go>
+    <final>ql:stop
+wait 1</final>
+    <exitCondition>ticks &gt; 5000</exitCondition>
+    <metric>fields</metric>
+    <metric>rel-freq-optimal</metric>
+    <metric>rel-freq-nash</metric>
+    <metric>mean [q-values-std] of turtles</metric>
+    <metric>mean [sum explorations] of turtles</metric>
+    <metric>count turtles with [is-player-x and last-action = 0]</metric>
+    <metric>count turtles with [is-player-x and last-action = 1]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 0]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 1]</metric>
+    <metric>count turtles with [last-field = 0]</metric>
+    <metric>count turtles with [last-field = 1]</metric>
+    <metric>count turtles with [last-field = 2]</metric>
+    <metric>count turtles with [last-field = 3]</metric>
+    <enumeratedValueSet variable="exploration">
+      <value value="&quot;softmax&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="n-pairs">
+      <value value="1000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="sd">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="experimenting">
+      <value value="10"/>
+      <value value="15"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="game-name">
+      <value value="&quot;BattleOfTheSexes&quot;"/>
+      <value value="&quot;Chicken&quot;"/>
+      <value value="&quot;CollaborationGame&quot;"/>
+      <value value="&quot;CoordinationGame&quot;"/>
+      <value value="&quot;HawkAndDove&quot;"/>
+      <value value="&quot;MatchingPennies&quot;"/>
+      <value value="&quot;PrisonersDilemma&quot;"/>
+    </enumeratedValueSet>
+  </experiment>
+</experiments>
 @#$#@#$#@
 @#$#@#$#@
 default

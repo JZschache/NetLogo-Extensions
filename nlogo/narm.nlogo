@@ -12,10 +12,6 @@ to setup
   reset-ticks
 end
 
-to setup-all
-  ; empty
-end
-
 to-report get-rewards [ headless-id ]
   let group-list ql:get-group-list headless-id
   report map [reward ?] group-list

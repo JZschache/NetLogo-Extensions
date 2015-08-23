@@ -5,12 +5,11 @@ import java.net.URL
 import java.io.File
 import java.io.FileReader
 import java.io.FileNotFoundException
-
 import scala.collection.JavaConverters._
-
 import org.nlogo.api.DefaultClassManager
 import org.nlogo.api.PrimitiveManager
 import org.nlogo.api.Primitive
+import com.typesafe.config.ConfigFactory
 
 /**
  * 
@@ -51,13 +50,17 @@ object QLExtension {
       exit(0)
   }
   // additional jars that are needed
+  val config = ConfigFactory.parseFile(confFile)
   val jarList =  List[String]("extensions/ql/ql.jar",
                               "extensions/ql/qlearning.jar", 
                               "extensions/ql/akka-actor-2.0.5.jar",
                               "extensions/ql/akka-agent-2.0.5.jar",
                               "extensions/ql/config-1.0.2.jar", 
                               "extensions/ql/colt-1.2.0.jar", 
-                              "extensions/ql/scala-stm_2.9.1-0.5.jar")
+                              "extensions/ql/scala-stm_2.9.1-0.5.jar",
+                              "extensions/games/games.jar",
+                              "extensions/games/gamut.jar") ++ config.getStringList("netlogo.additional-jars").asScala
+  
   // adding the jars to the system class loader
   val sysloader = ClassLoader.getSystemClassLoader().asInstanceOf[URLClassLoader]
   val sysclass = classOf[URLClassLoader]

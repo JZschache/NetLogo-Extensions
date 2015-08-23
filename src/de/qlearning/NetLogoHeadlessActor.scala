@@ -24,7 +24,7 @@ object NetLogoHeadlessActor {
   case object Uninitialized extends Data
   case class Initialized(reporter: org.nlogo.nvm.Procedure, data: List[NLGroupChoice]) extends Data
   //messages
-  case class OpenModel(path:String)
+  case class OpenModel(path:String, settings: List[(String, Any)])
   case class NLGroupChoicesList(list: List[NLGroupChoice])
   case class GetNLGroupChoices(id: Int)
   case class IAmReady(headlessId: Int)
@@ -47,28 +47,29 @@ class NetLogoHeadlessActor(val id: Int) extends Actor with FSM[NetLogoHeadlessAc
 //  val workspace = HeadlessWorkspace.newInstance(classOf[MyHeadlessWorkspace])
   val workspace = HeadlessWorkspace.newInstance
   val rewardRepName = config.getString(QLExtension.cfgstr + ".reward-reporter-name")
-  val setupComName = config.getString(QLExtension.cfgstr + ".setup-command-name")
+//  val setupComName = config.getString(QLExtension.cfgstr + ".setup-command-name")
   
   override def postStop() {
     workspace.dispose()
   }
   
+  private def openModel(path:String, settings: List[(String, Any)]) {
+    workspace.modelOpened = false
+    workspace.open(path)
+    for((name, value) <- settings) {
+      if(workspace.world.observerOwnsIndexOf(name.toUpperCase) == -1)
+        throw new org.nlogo.api.ExtensionException("Global variable does not exist:\n" + name)
+      workspace.world.setObserverVariableByName(name, value)
+    }
+    netLogoSuper ! IAmReady(id)
+  }
+  
   startWith(NotReady, Uninitialized)
   
   when(NotReady) {
-    case Event(OpenModel(path), _) => {
-      workspace.modelOpened = false
-      workspace.open(path)
-      try {
-        workspace.command(setupComName)
-      } catch {
-        case  e: org.nlogo.api.CompilerException => {
-          System.err.println("Compilation of setup command '" + setupComName + "' failed.")
-          e.printStackTrace()
-        }
-      }
-      
-      netLogoSuper ! IAmReady(id)
+   
+    case Event(OpenModel(path, settings), _) => {
+      openModel(path, settings)
       goto(Ready) using Initialized(workspace.compileReporter(rewardRepName + " " + id), null)
     }
   }
@@ -150,18 +151,8 @@ class NetLogoHeadlessActor(val id: Int) extends Actor with FSM[NetLogoHeadlessAc
   
   whenUnhandled {
     // can be received in any state (especially when NotReady)
-    case Event(OpenModel(path), _) => {
-      workspace.modelOpened = false
-      workspace.open(path)
-      try {
-        workspace.command(setupComName)
-      } catch {
-        case  e: org.nlogo.api.CompilerException => {
-          System.err.println("Compilation of setup command '" + setupComName + "' failed.")
-          e.printStackTrace()
-        }
-      }
-      netLogoSuper ! IAmReady(id)
+    case Event(OpenModel(path, settings), _) => {
+      openModel(path, settings)
       goto(Ready) using Initialized(workspace.compileReporter(rewardRepName + " " + id), null)
     }
     

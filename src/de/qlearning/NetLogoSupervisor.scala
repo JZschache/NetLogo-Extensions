@@ -7,11 +7,11 @@ import akka.agent.{Agent => AkkaAgent}
 import akka.routing.{Broadcast,Route,RouteeProvider,RouterConfig,Destination}
 import akka.dispatch.{Future,Dispatchers}
 import akka.util.duration._
-import org.nlogo.app.ModelSaver
 import org.nlogo.nvm.Workspace
 import de.qlextension.QLExtension
 import de.util.PerformanceMeasure
 import org.nlogo.headless.HeadlessWorkspace
+import org.nlogo.app.ModelSaver
 
 object NetLogoSupervisor {
   
@@ -107,13 +107,25 @@ class NetLogoSupervisor(netLogoRouter: ActorRef) extends Actor with FSM[NetLogoS
     case Event(InitNetLogoActors(workspace), _) => {
       
       val path = workspace.getModelPath()
-      // save changes (if not headless)
+      // save changes to the model (if not headless)
       if (!workspace.isHeadless()){
         val ms = new ModelSaver(nlApp)
         org.nlogo.api.FileIO.writeFile(path, ms.save)
       }
+      // get global variables
+      // see setVariables(settings: List[Pair[String, Any]]) in org.nlogo.lab.Worker
+//      val nonObsVars = List(("MIN-PXCOR", workspace.world().minPxcor()), 
+//                         ("MAX-PXCOR", workspace.world().maxPxcor()),
+//                         ("MIN-PYCOR", workspace.world().maxPycor()),
+//                         ("MAX-PYCOR", workspace.world().maxPycor()),
+//                         ("WORLD-WIDTH", workspace.world().worldWidth()),
+//                         ("WORLD-HEIGHT", workspace.world().worldHeight()),
+//                         ("RANDOM-SEED", ??))
+      val obs = workspace.world().observer()
+      val settings = (0 until obs.variables().length).map(i => (obs.variableName(i), obs.getVariable(i))).toList
+      
       // the NetLogo-model is reloaded and the reward-reporter is recompiled
-      netLogoRouter ! Broadcast(NetLogoHeadlessActor.OpenModel(path))
+      netLogoRouter ! Broadcast(NetLogoHeadlessActor.OpenModel(path, settings))
       // recompile the update command
       val updateCommand = workspace.compileCommands(updateComName)
       // the groups structure is deleted

@@ -98,7 +98,7 @@ class GamesExtension extends DefaultClassManager {
 
 class PayoffMatrix(val content: List[Rational], val nrow:Int, val ncol:Int) extends ExtensionObject {
   require(content.length == nrow * ncol)
-  
+
   def dump(readable: Boolean, exporting: Boolean, reference: Boolean): String = toString
   def getExtensionName: String = "games"
   def getNLTypeName: String = "PayoffMatrix"
