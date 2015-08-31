@@ -1,13 +1,13 @@
 extensions[ql]
 
-turtles-own[alternatives q-values frequencies explorations]
+turtles-own[alternatives q-values frequencies exploration]
 
 to setup
   clear-all
   create-turtles n-turtles [
     setxy random-xcor random-ycor
   ]
-  ql:init turtles exploration-rate "melioration"
+  ql:init turtles exploration-rate "epsilon-greedy"
   let choices (list "forward" "right")
   let groups [ql:create-group (list (list self choices))] of turtles  
   ql:set-group-structure groups
@@ -216,19 +216,8 @@ MONITOR
 352
 420
 NIL
-mean [sum explorations] of turtles
+mean [exploration] of turtles
 2
-1
-11
-
-MONITOR
-75
-435
-297
-480
-NIL
-[explorations] of turtle 0
-17
 1
 11
 

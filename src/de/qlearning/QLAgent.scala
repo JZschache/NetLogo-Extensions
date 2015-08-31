@@ -45,13 +45,13 @@ object QLAgent {
 //    new QLAgent(experimenting, Map[String,QValue](), 0.0, "", (exploration match {
     new QLAgent(experimenting, Map[String,QValue](), 
         (exploration match {
-          case "melioration" => melioration
+//          case "melioration" => melioration
           case "epsilon-greedy" => epsGreedy
           case "softmax" => softmax
         }), 
-        false, findUpdateFunction(exploration, nlAgent), 
+        false, findUpdateFunction(nlAgent), 
         (exploration match {
-          case "melioration" => melExperimenting(experimenting, _:Boolean, _:Iterable[QValue])
+//          case "melioration" => melExperimenting(experimenting, _:Boolean, _:Iterable[QValue])
           case "epsilon-greedy" => epsGreedyExperimenting(experimenting, _:Boolean, _:Iterable[QValue])
           case "softmax" => softmaxExperimenting(experimenting, _:Boolean, _:Iterable[QValue])
         }))
@@ -61,19 +61,19 @@ object QLAgent {
   // various decision making algorithms //
   ////////////////////////////////////////
   
-  private val melioration = (eps: Double, qValues: List[QValue]) => {
-    val rh = de.util.ThreadLocalRandomHelper.current
-    val weights = qValues.scanLeft(("".asInstanceOf[String], 0.0))((temp, qva) => (qva.name, temp._2 + qva.epsilon)).tail
-    if (rh.uniform.nextDoubleFromTo(0, 1) < weights.last._2) {
-      val randomValue = rh.uniform.nextDoubleFromTo(0, weights.last._2)
-      weights.find(randomValue < _._2).get._1
-    } else {
-      val maxima = maximum(qValues)
-      if (maxima.length == 1) maxima.head.name  else rh.randomComponent(maxima).name
-    }
-  }
+//  private val melioration = (eps: Double, qValues: List[QValue]) => {
+//    val rh = de.util.ThreadLocalRandomHelper.current
+//    val weights = qValues.scanLeft(("".asInstanceOf[String], 0.0))((temp, qva) => (qva.name, temp._2 + qva.epsilon)).tail
+//    if (rh.uniform.nextDoubleFromTo(0, 1) < weights.last._2) {
+//      val randomValue = rh.uniform.nextDoubleFromTo(0, weights.last._2)
+//      weights.find(randomValue < _._2).get._1
+//    } else {
+//      val maxima = maximum(qValues)
+//      if (maxima.length == 1) maxima.head.name  else rh.randomComponent(maxima).name
+//    }
+//  }
   
-  private val melExperimenting = (initialEpsilon: Double, expDecay: Boolean, qValues: Iterable[QValue]) => initialEpsilon
+//  private val melExperimenting = (initialEpsilon: Double, expDecay: Boolean, qValues: Iterable[QValue]) => initialEpsilon
   
   private val epsGreedy = (epsilon: Double, qValues: List[QValue]) => {
     val rh = de.util.ThreadLocalRandomHelper.current
@@ -120,7 +120,7 @@ object QLAgent {
 //    }
 //  }
     
-  def findUpdateFunction(exploration: String, nlAgent: org.nlogo.agent.Agent) = {
+  def findUpdateFunction(nlAgent: org.nlogo.agent.Agent) = {
     
     val vLength = nlAgent.variables.size
     
@@ -137,11 +137,7 @@ object QLAgent {
       if (idxN.isDefined)
         nlAgent.setVariable(idxN.get, LogoList.fromIterator(qValues.map(q => Double.box(q.freq)).toIterator))
       if (idxE.isDefined)
-        exploration match {
-          case "melioration" => nlAgent.setVariable(idxE.get, LogoList.fromIterator(qValues.map(q => Double.box(q.epsilon)).toIterator))
-          case _ => nlAgent.setVariable(idxE.get, LogoList.fromIterator(List(Double.box(experimenting)).toIterator))
-      }
-        
+        nlAgent.setVariable(idxE.get, Double.box(experimenting))
     }
   }
   

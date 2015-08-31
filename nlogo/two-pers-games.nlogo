@@ -1,7 +1,7 @@
 extensions[ql games]
 
-turtles-own[ is-player-x q-values frequencies rel-freqs explorations q-values-std last-action nash-action optimal-action last-field]
-globals[ means-x-matrix means-y-matrix means-max optimal-fields nash-fields rel-freq-optimal rel-freq-nash nextTick]
+turtles-own[ is-player-x q-values frequencies rel-freqs exploration q-values-std last-action nash-action optimal-action last-field]
+globals[ means-x-matrix means-y-matrix means-max optimal-fields nash-fields rel-freq-optimal rel-freq-nash nextTick ]
 
 to-report read-means-matrix [ nr ]
   let row-string-list []
@@ -108,9 +108,8 @@ to setup
     face partner    
   ]
   
-  ql:init turtles experimenting exploration
+  ql:init turtles experimenting exploration-method
   ql:set-group-structure group-structure
-  ql:decay-exploration
   
   ask turtles [
     set optimal-action false
@@ -170,7 +169,6 @@ to wait-for-tick
 end
 
 to update
-  
   tick
 end
 
@@ -186,27 +184,35 @@ to update-slow
     let total-n sum frequencies 
     set q-values-std 0
     if (total-n > 0) [
-      set rel-freqs map [ ? / total-n] frequencies   
+      set rel-freqs map [ precision (? / total-n) 10] frequencies   
       let zipped (map [ (list ?1 ?2) ] q-values frequencies)
-      let filtered filter [ ((item 1 ?) / total-n) > experimenting ] zipped
+      let filtered filter [ ( standardised (item 1 ?) total-n) > 2.33 ] zipped
       let qvs map [ (item 0 ?) / means-max ] filtered
       if (length qvs > 1) [ 
-        set q-values-std standard-deviation qvs
+        set q-values-std precision (standard-deviation qvs) 2
       ]
     ]
   ]
   
   ;tick
 end
+
+to-report standardised [ n total-n ]
+  ifelse (is-player-x) [
+    report abs (n / total-n - experimenting / n-alt-x) * (sqrt total-n) / (sqrt (experimenting / n-alt-x * (1 - experimenting / n-alt-x)))
+  ] [
+    report abs (n / total-n - experimenting / n-alt-y) * (sqrt total-n) / (sqrt (experimenting / n-alt-y * (1 - experimenting / n-alt-y)))
+  ]
+end
 @#$#@#$#@
 GRAPHICS-WINDOW
-1110
+890
 25
-1524
-460
+1315
+471
 -1
 -1
-4.2105263157894735
+16.666666666666668
 1
 10
 1
@@ -217,9 +223,9 @@ GRAPHICS-WINDOW
 1
 1
 0
-95
+24
 0
-95
+24
 0
 0
 1
@@ -235,8 +241,8 @@ n-pairs
 n-pairs
 0
 10000
-1000
-10
+59
+1
 1
 NIL
 HORIZONTAL
@@ -301,8 +307,8 @@ experimenting
 experimenting
 0
 16
-0.05
-0.05
+0.2
+0.005
 1
 NIL
 HORIZONTAL
@@ -328,7 +334,7 @@ INPUTBOX
 395
 175
 means-x
-10  0\n 0 10\n
+ 8  6\n 0 10\n
 1
 1
 String
@@ -338,9 +344,9 @@ CHOOSER
 95
 215
 140
-exploration
-exploration
-"melioration" "epsilon-greedy" "softmax"
+exploration-method
+exploration-method
+"epsilon-greedy" "softmax"
 0
 
 MONITOR
@@ -360,7 +366,7 @@ INPUTBOX
 625
 330
 fields
-| 1: (10, 0) O | 2: ( 0,10) O |\n| 3: ( 0,10) O | 4: (10, 0) O |\n
+| 1: ( 8, 8)  N| 2: ( 6, 6)   |\n| 3: ( 0, 0)   | 4: (10,10) ON|\n
 1
 1
 String
@@ -389,7 +395,7 @@ INPUTBOX
 575
 175
 means-y
- 0 10\n10  0\n
+ 8  6\n 0 10\n
 1
 1
 String
@@ -402,7 +408,7 @@ CHOOSER
 game-name
 game-name
 "Custom" "CopyMeansX" "TransposeMeansX" "BattleOfTheSexes" "Chicken" "CollaborationGame" "CoordinationGame" "DispersionGame" "GrabTheDollar" "GuessTwoThirdsAve" "HawkAndDove" "MajorityVoting" "MatchingPennies" "PrisonersDilemma" "RandomGame" "RandomZeroSum" "RockPaperScissors" "ShapleysGame"
-12
+6
 
 BUTTON
 580
@@ -427,7 +433,7 @@ INPUTBOX
 765
 496
 sample-equilibria
-   x1   x2   y1   y2  |   Ex   Ey  |   mx\n----------------------------------------\n  1/2  1/2  1/2  1/2  |    5    5  |    O\n
+    x1    x2    y1    y2  |    Ex    Ey  |    mx\n------------------------------------------------\n   5/6   1/6   1/3   2/3  |  20/3  20/3  |      \n
 1
 1
 String
@@ -498,17 +504,17 @@ MONITOR
 625
 mean [q-values-std]
 mean [q-values-std] of turtles
-5
+2
 1
 11
 
 MONITOR
 30
 145
-215
+217
 190
-mean [sum explorations]
-mean [sum explorations] of turtles
+mean [sum exploration]
+mean [exploration] of turtles
 5
 1
 11
@@ -549,49 +555,22 @@ false
 PENS
 "default" 1.0 1 -16777216 true "set-plot-x-range 0 n-alt-y" "histogram [last-action] of turtles with [not is-player-x]"
 
-MONITOR
-1060
-515
-1595
-560
+BUTTON
+580
+145
+765
+178
 NIL
-[rel-freqs] of turtle 0
-2
-1
-11
-
-MONITOR
-1060
-615
-1595
-660
+ql:decay-exploration
 NIL
-[rel-freqs] of turtle 1
-17
 1
-11
-
-MONITOR
-1060
-470
-1595
-515
+T
+OBSERVER
 NIL
-[q-values] of turtle 0
-17
-1
-11
-
-MONITOR
-1060
-570
-1595
-615
 NIL
-[q-values] of turtle 1
-17
+NIL
+NIL
 1
-11
 
 @#$#@#$#@
 ## WHAT IS IT?
@@ -941,39 +920,6 @@ NetLogo 5.2.0
 @#$#@#$#@
 @#$#@#$#@
 <experiments>
-  <experiment name="exp-simple-coordination" repetitions="1" runMetricsEveryStep="false">
-    <setup>setup
-ql:decay-exploration
-ql:start</setup>
-    <final>ql:stop
-wait 1</final>
-    <exitCondition>ticks &gt; 100</exitCondition>
-    <metric>rel-freq-optimal</metric>
-    <metric>rel-freq-nash</metric>
-    <enumeratedValueSet variable="exploration">
-      <value value="&quot;melioration&quot;"/>
-      <value value="&quot;epsilon-greedy&quot;"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="n-pairs">
-      <value value="1000"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="means-x">
-      <value value="&quot;10  0\n 0 10\n&quot;"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="means-y">
-      <value value="&quot;10  0\n 0 10\n&quot;"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="sd">
-      <value value="1"/>
-      <value value="5"/>
-      <value value="10"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="experimenting">
-      <value value="0.01"/>
-      <value value="0.05"/>
-      <value value="0.1"/>
-    </enumeratedValueSet>
-  </experiment>
   <experiment name="exp-penalty-coordination" repetitions="1" runMetricsEveryStep="false">
     <setup>set-game
 setup
@@ -1055,6 +1001,1428 @@ wait 1</final>
       <value value="&quot;HawkAndDove&quot;"/>
       <value value="&quot;MatchingPennies&quot;"/>
       <value value="&quot;PrisonersDilemma&quot;"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="exp-no-pure-nash-2" repetitions="10" runMetricsEveryStep="false">
+    <setup>set-game
+setup-no-decay
+ql:start</setup>
+    <go>wait-for-tick</go>
+    <final>ql:stop
+wait 1</final>
+    <exitCondition>ticks &gt; 10000</exitCondition>
+    <metric>fields</metric>
+    <metric>[q-values-std] of turtles</metric>
+    <metric>(item 0 rel-freqs) of turtles with [is-player-x]</metric>
+    <metric>(item 1 rel-freqs) of turtles with [is-player-x]</metric>
+    <metric>(item 2 rel-freqs) of turtles with [is-player-x]</metric>
+    <metric>(item 0 rel-freqs) of turtles with [not is-player-x]</metric>
+    <metric>(item 1 rel-freqs) of turtles with [not is-player-x]</metric>
+    <metric>(item 2 rel-freqs) of turtles with [not is-player-x]</metric>
+    <enumeratedValueSet variable="exploration">
+      <value value="&quot;melioration&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="n-pairs">
+      <value value="1000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="sd">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="experimenting">
+      <value value="0.03"/>
+      <value value="0.05"/>
+      <value value="0.7"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="game-name">
+      <value value="&quot;RockPaperScissors&quot;"/>
+      <value value="&quot;ShapleysGame&quot;"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="exp-random-zero-sum" repetitions="100" runMetricsEveryStep="false">
+    <setup>set-game
+setup
+ql:start</setup>
+    <go>wait-for-tick</go>
+    <final>ql:stop
+wait 1</final>
+    <exitCondition>ticks &gt; 5000</exitCondition>
+    <metric>fields</metric>
+    <metric>rel-freq-optimal</metric>
+    <metric>rel-freq-nash</metric>
+    <metric>mean [q-values-std] of turtles</metric>
+    <metric>mean [sum explorations] of turtles</metric>
+    <metric>count turtles with [is-player-x and last-action = 0]</metric>
+    <metric>count turtles with [is-player-x and last-action = 1]</metric>
+    <metric>count turtles with [is-player-x and last-action = 2]</metric>
+    <metric>count turtles with [is-player-x and last-action = 3]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 0]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 1]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 2]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 3]</metric>
+    <metric>count turtles with [last-field = 0]</metric>
+    <metric>count turtles with [last-field = 1]</metric>
+    <metric>count turtles with [last-field = 2]</metric>
+    <metric>count turtles with [last-field = 3]</metric>
+    <metric>count turtles with [last-field = 4]</metric>
+    <metric>count turtles with [last-field = 5]</metric>
+    <metric>count turtles with [last-field = 6]</metric>
+    <metric>count turtles with [last-field = 7]</metric>
+    <metric>count turtles with [last-field = 8]</metric>
+    <metric>count turtles with [last-field = 9]</metric>
+    <metric>count turtles with [last-field = 10]</metric>
+    <metric>count turtles with [last-field = 11]</metric>
+    <metric>count turtles with [last-field = 12]</metric>
+    <metric>count turtles with [last-field = 13]</metric>
+    <metric>count turtles with [last-field = 14]</metric>
+    <metric>count turtles with [last-field = 15]</metric>
+    <enumeratedValueSet variable="exploration">
+      <value value="&quot;melioration&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="n-pairs">
+      <value value="1000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="n-alt-x">
+      <value value="3"/>
+      <value value="4"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="sd">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="experimenting">
+      <value value="0.2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="game-name">
+      <value value="&quot;RandomZeroSum&quot;"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="exp-two-persons-coordination-3" repetitions="10" runMetricsEveryStep="false">
+    <setup>set-game
+setup
+ql:start</setup>
+    <go>wait-for-tick</go>
+    <final>ql:stop
+wait 1</final>
+    <exitCondition>ticks &gt; 5000</exitCondition>
+    <metric>fields</metric>
+    <metric>rel-freq-optimal</metric>
+    <metric>rel-freq-nash</metric>
+    <metric>mean [q-values-std] of turtles</metric>
+    <metric>mean [sum explorations] of turtles</metric>
+    <metric>count turtles with [is-player-x and last-action = 0]</metric>
+    <metric>count turtles with [is-player-x and last-action = 1]</metric>
+    <metric>count turtles with [is-player-x and last-action = 2]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 0]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 1]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 2]</metric>
+    <metric>count turtles with [last-field = 0]</metric>
+    <metric>count turtles with [last-field = 1]</metric>
+    <metric>count turtles with [last-field = 2]</metric>
+    <metric>count turtles with [last-field = 3]</metric>
+    <metric>count turtles with [last-field = 4]</metric>
+    <metric>count turtles with [last-field = 5]</metric>
+    <metric>count turtles with [last-field = 6]</metric>
+    <metric>count turtles with [last-field = 7]</metric>
+    <metric>count turtles with [last-field = 8]</metric>
+    <enumeratedValueSet variable="exploration">
+      <value value="&quot;melioration&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="n-pairs">
+      <value value="1000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="game-name">
+      <value value="&quot;CopyMeansX&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="means-x">
+      <value value="&quot;10  0 -20\n 0  2  0\n-20  0 10\n&quot;"/>
+      <value value="&quot;10  0 -15\n 0  2  0\n-15  0 10\n&quot;"/>
+      <value value="&quot;10  0 -10\n 0  2  0\n-10  0 10\n&quot;"/>
+      <value value="&quot;10  0 -5\n 0  2  0\n-5  0 10\n&quot;"/>
+      <value value="&quot;10  0 0\n 0  2  0\n0  0 10\n&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="sd">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="experimenting">
+      <value value="0.2"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="exp-two-persons-battle-1" repetitions="10" runMetricsEveryStep="false">
+    <setup>set-game
+setup
+ql:start</setup>
+    <go>wait-for-tick</go>
+    <final>ql:stop
+wait 1</final>
+    <exitCondition>ticks &gt; 5000</exitCondition>
+    <metric>fields</metric>
+    <metric>rel-freq-optimal</metric>
+    <metric>rel-freq-nash</metric>
+    <metric>mean [q-values-std] of turtles</metric>
+    <metric>mean [sum explorations] of turtles</metric>
+    <metric>count turtles with [is-player-x and last-action = 0]</metric>
+    <metric>count turtles with [is-player-x and last-action = 1]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 0]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 1]</metric>
+    <metric>count turtles with [last-field = 0]</metric>
+    <metric>count turtles with [last-field = 1]</metric>
+    <metric>count turtles with [last-field = 2]</metric>
+    <metric>count turtles with [last-field = 3]</metric>
+    <enumeratedValueSet variable="exploration">
+      <value value="&quot;melioration&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="n-pairs">
+      <value value="1000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="game-name">
+      <value value="&quot;TransposeMeansX&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="means-x">
+      <value value="&quot;0  10\n 8 0\n&quot;"/>
+      <value value="&quot;1  10\n 8 0\n&quot;"/>
+      <value value="&quot;2  10\n 8 0\n&quot;"/>
+      <value value="&quot;3  10\n 8 0\n&quot;"/>
+      <value value="&quot;4  10\n 8 0\n&quot;"/>
+      <value value="&quot;5  10\n 8 0\n&quot;"/>
+      <value value="&quot;6  10\n 8 0\n&quot;"/>
+      <value value="&quot;7  10\n 8 0\n&quot;"/>
+      <value value="&quot;8  10\n 8 0\n&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="sd">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="experimenting">
+      <value value="0.2"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="exp-two-persons-three-opt-nash" repetitions="10" runMetricsEveryStep="false">
+    <setup>set-game
+setup
+ql:start</setup>
+    <go>wait-for-tick</go>
+    <final>ql:stop
+wait 1</final>
+    <exitCondition>ticks &gt; 5000</exitCondition>
+    <metric>fields</metric>
+    <metric>rel-freq-optimal</metric>
+    <metric>rel-freq-nash</metric>
+    <metric>mean [q-values-std] of turtles</metric>
+    <metric>mean [sum explorations] of turtles</metric>
+    <metric>count turtles with [is-player-x and last-action = 0]</metric>
+    <metric>count turtles with [is-player-x and last-action = 1]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 0]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 1]</metric>
+    <metric>count turtles with [last-field = 0]</metric>
+    <metric>count turtles with [last-field = 1]</metric>
+    <metric>count turtles with [last-field = 2]</metric>
+    <metric>count turtles with [last-field = 3]</metric>
+    <enumeratedValueSet variable="exploration">
+      <value value="&quot;melioration&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="n-pairs">
+      <value value="1000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="game-name">
+      <value value="&quot;CopyMeansX&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="means-x">
+      <value value="&quot;10  0\n 10 10\n&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="sd">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="experimenting">
+      <value value="0.2"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="exp-two-persons-battle-2" repetitions="10" runMetricsEveryStep="false">
+    <setup>set-game
+setup
+ql:start</setup>
+    <go>wait-for-tick</go>
+    <final>ql:stop
+wait 1</final>
+    <exitCondition>ticks &gt; 5000</exitCondition>
+    <metric>fields</metric>
+    <metric>rel-freq-optimal</metric>
+    <metric>rel-freq-nash</metric>
+    <metric>mean [q-values-std] of turtles</metric>
+    <metric>mean [sum explorations] of turtles</metric>
+    <metric>count turtles with [is-player-x and last-action = 0]</metric>
+    <metric>count turtles with [is-player-x and last-action = 1]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 0]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 1]</metric>
+    <metric>count turtles with [last-field = 0]</metric>
+    <metric>count turtles with [last-field = 1]</metric>
+    <metric>count turtles with [last-field = 2]</metric>
+    <metric>count turtles with [last-field = 3]</metric>
+    <enumeratedValueSet variable="exploration">
+      <value value="&quot;melioration&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="n-pairs">
+      <value value="1000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="game-name">
+      <value value="&quot;TransposeMeansX&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="means-x">
+      <value value="&quot;0  10\n 0 0\n&quot;"/>
+      <value value="&quot;1  10\n 1 0\n&quot;"/>
+      <value value="&quot;2  10\n 2 0\n&quot;"/>
+      <value value="&quot;3  10\n 3 0\n&quot;"/>
+      <value value="&quot;4  10\n 4 0\n&quot;"/>
+      <value value="&quot;5  10\n 5 0\n&quot;"/>
+      <value value="&quot;6  10\n 6 0\n&quot;"/>
+      <value value="&quot;7  10\n 7 0\n&quot;"/>
+      <value value="&quot;8  10\n 8 0\n&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="sd">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="experimenting">
+      <value value="0.2"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="exp-two-persons-extreme-chicken" repetitions="10" runMetricsEveryStep="false">
+    <setup>set-game
+setup
+ql:start</setup>
+    <go>wait-for-tick</go>
+    <final>ql:stop
+wait 1</final>
+    <exitCondition>ticks &gt; 5000</exitCondition>
+    <metric>fields</metric>
+    <metric>rel-freq-optimal</metric>
+    <metric>rel-freq-nash</metric>
+    <metric>mean [q-values-std] of turtles</metric>
+    <metric>mean [sum explorations] of turtles</metric>
+    <metric>count turtles with [is-player-x and last-action = 0]</metric>
+    <metric>count turtles with [is-player-x and last-action = 1]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 0]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 1]</metric>
+    <metric>count turtles with [last-field = 0]</metric>
+    <metric>count turtles with [last-field = 1]</metric>
+    <metric>count turtles with [last-field = 2]</metric>
+    <metric>count turtles with [last-field = 3]</metric>
+    <enumeratedValueSet variable="exploration">
+      <value value="&quot;melioration&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="n-pairs">
+      <value value="1000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="game-name">
+      <value value="&quot;TransposeMeansX&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="means-x">
+      <value value="&quot;1  0\n 10 0\n&quot;"/>
+      <value value="&quot;2  0\n 10 0\n&quot;"/>
+      <value value="&quot;3  0\n 10 0\n&quot;"/>
+      <value value="&quot;4  0\n 10 0\n&quot;"/>
+      <value value="&quot;5  0\n 10 0\n&quot;"/>
+      <value value="&quot;6  0\n 10 0\n&quot;"/>
+      <value value="&quot;7  0\n 10 0\n&quot;"/>
+      <value value="&quot;8  0\n 10 0\n&quot;"/>
+      <value value="&quot;9  0\n 10 0\n&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="sd">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="experimenting">
+      <value value="0.2"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="exp-two-persons-coordination-4" repetitions="10" runMetricsEveryStep="false">
+    <setup>set-game
+setup
+ql:start</setup>
+    <go>wait-for-tick</go>
+    <final>ql:stop
+wait 1</final>
+    <exitCondition>ticks &gt; 5000</exitCondition>
+    <metric>fields</metric>
+    <metric>rel-freq-optimal</metric>
+    <metric>rel-freq-nash</metric>
+    <metric>mean [q-values-std] of turtles</metric>
+    <metric>mean [sum explorations] of turtles</metric>
+    <metric>count turtles with [is-player-x and last-action = 0]</metric>
+    <metric>count turtles with [is-player-x and last-action = 1]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 0]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 1]</metric>
+    <metric>count turtles with [last-field = 0]</metric>
+    <metric>count turtles with [last-field = 1]</metric>
+    <metric>count turtles with [last-field = 2]</metric>
+    <metric>count turtles with [last-field = 3]</metric>
+    <enumeratedValueSet variable="exploration">
+      <value value="&quot;melioration&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="n-pairs">
+      <value value="1000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="game-name">
+      <value value="&quot;TransposeMeansX&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="means-x">
+      <value value="&quot;10  0 \n 10  8\n&quot;"/>
+      <value value="&quot;10  1 \n 9  8\n&quot;"/>
+      <value value="&quot;10  2 \n 8  8\n&quot;"/>
+      <value value="&quot;10  3 \n 7  8\n&quot;"/>
+      <value value="&quot;10  4 \n 6  8\n&quot;"/>
+      <value value="&quot;10  5 \n 5  8\n&quot;"/>
+      <value value="&quot;10  6 \n 4  8\n&quot;"/>
+      <value value="&quot;10  7 \n 3  8\n&quot;"/>
+      <value value="&quot;10  8 \n 2  8\n&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="sd">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="experimenting">
+      <value value="0.2"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="exp-two-persons-matching-nd-eg" repetitions="1" runMetricsEveryStep="false">
+    <setup>set-game
+setup
+ql:start</setup>
+    <go>wait-for-tick</go>
+    <final>ql:stop
+wait 1</final>
+    <exitCondition>ticks &gt; 20000</exitCondition>
+    <metric>fields</metric>
+    <metric>[q-values-std] of turtles</metric>
+    <metric>[(item 0 rel-freqs)] of turtles with [is-player-x]</metric>
+    <metric>[(item 1 rel-freqs)] of turtles with [is-player-x]</metric>
+    <metric>[(item 0 rel-freqs)] of turtles with [not is-player-x]</metric>
+    <metric>[(item 1 rel-freqs)] of turtles with [not is-player-x]</metric>
+    <enumeratedValueSet variable="exploration">
+      <value value="&quot;epsilon-greedy&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="n-pairs">
+      <value value="1000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="sd">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="n-alt-x">
+      <value value="2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="n-alt-y">
+      <value value="2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="experimenting">
+      <value value="0.1"/>
+      <value value="0.2"/>
+      <value value="0.3"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="game-name">
+      <value value="&quot;MatchingPennies&quot;"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="exp-no-pure-nash-3" repetitions="10" runMetricsEveryStep="false">
+    <setup>set-game
+setup-no-decay
+ql:start</setup>
+    <go>wait-for-tick</go>
+    <final>ql:stop
+wait 1</final>
+    <exitCondition>ticks &gt; 10000</exitCondition>
+    <metric>fields</metric>
+    <metric>[q-values-std] of turtles</metric>
+    <metric>(item 0 rel-freqs) of turtles with [is-player-x]</metric>
+    <metric>(item 1 rel-freqs) of turtles with [is-player-x]</metric>
+    <metric>(item 2 rel-freqs) of turtles with [is-player-x]</metric>
+    <metric>(item 0 rel-freqs) of turtles with [not is-player-x]</metric>
+    <metric>(item 1 rel-freqs) of turtles with [not is-player-x]</metric>
+    <metric>(item 2 rel-freqs) of turtles with [not is-player-x]</metric>
+    <enumeratedValueSet variable="exploration">
+      <value value="&quot;melioration&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="n-pairs">
+      <value value="1000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="sd">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="n-alt-x">
+      <value value="3"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="n-alt-y">
+      <value value="3"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="experimenting">
+      <value value="0.03"/>
+      <value value="0.05"/>
+      <value value="0.7"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="game-name">
+      <value value="&quot;RandomZeroSum&quot;"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="exp-two-persons-coordination-1" repetitions="1" runMetricsEveryStep="false">
+    <setup>set-game
+setup
+ql:start</setup>
+    <go>wait-for-tick</go>
+    <final>ql:stop
+wait 1</final>
+    <exitCondition>ticks &gt; 1000</exitCondition>
+    <metric>fields</metric>
+    <metric>rel-freq-optimal</metric>
+    <metric>rel-freq-nash</metric>
+    <metric>mean [q-values-std] of turtles</metric>
+    <metric>mean [exploration] of turtles</metric>
+    <metric>count turtles with [is-player-x and last-action = 0]</metric>
+    <metric>count turtles with [is-player-x and last-action = 1]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 0]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 1]</metric>
+    <metric>count turtles with [last-field = 0]</metric>
+    <metric>count turtles with [last-field = 1]</metric>
+    <metric>count turtles with [last-field = 2]</metric>
+    <metric>count turtles with [last-field = 3]</metric>
+    <enumeratedValueSet variable="exploration-method">
+      <value value="&quot;epsilon-greedy&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="n-pairs">
+      <value value="10000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="game-name">
+      <value value="&quot;CopyMeansX&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="means-x">
+      <value value="&quot;10  0\n 0 0\n&quot;"/>
+      <value value="&quot;10  0\n 0 1\n&quot;"/>
+      <value value="&quot;10  0\n 0 2\n&quot;"/>
+      <value value="&quot;10  0\n 0 3\n&quot;"/>
+      <value value="&quot;10  0\n 0 4\n&quot;"/>
+      <value value="&quot;10  0\n 0 5\n&quot;"/>
+      <value value="&quot;10  0\n 0 6\n&quot;"/>
+      <value value="&quot;10  0\n 0 7\n&quot;"/>
+      <value value="&quot;10  0\n 0 8\n&quot;"/>
+      <value value="&quot;10  0\n 0 9\n&quot;"/>
+      <value value="&quot;10  0\n 0 10\n&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="sd">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="experimenting">
+      <value value="0.05"/>
+      <value value="0.1"/>
+      <value value="0.15"/>
+      <value value="0.2"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="exp-two-persons-coordination-1-decay" repetitions="1" runMetricsEveryStep="false">
+    <setup>set-game
+setup
+ql:decay-exploration
+ql:start</setup>
+    <go>wait-for-tick</go>
+    <final>ql:stop
+wait 1</final>
+    <exitCondition>ticks &gt; 1000</exitCondition>
+    <metric>fields</metric>
+    <metric>rel-freq-optimal</metric>
+    <metric>rel-freq-nash</metric>
+    <metric>mean [q-values-std] of turtles</metric>
+    <metric>mean [exploration] of turtles</metric>
+    <metric>count turtles with [is-player-x and last-action = 0]</metric>
+    <metric>count turtles with [is-player-x and last-action = 1]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 0]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 1]</metric>
+    <metric>count turtles with [last-field = 0]</metric>
+    <metric>count turtles with [last-field = 1]</metric>
+    <metric>count turtles with [last-field = 2]</metric>
+    <metric>count turtles with [last-field = 3]</metric>
+    <enumeratedValueSet variable="exploration-method">
+      <value value="&quot;epsilon-greedy&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="n-pairs">
+      <value value="10000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="game-name">
+      <value value="&quot;CopyMeansX&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="means-x">
+      <value value="&quot;10  0\n 0 0\n&quot;"/>
+      <value value="&quot;10  0\n 0 1\n&quot;"/>
+      <value value="&quot;10  0\n 0 2\n&quot;"/>
+      <value value="&quot;10  0\n 0 3\n&quot;"/>
+      <value value="&quot;10  0\n 0 4\n&quot;"/>
+      <value value="&quot;10  0\n 0 5\n&quot;"/>
+      <value value="&quot;10  0\n 0 6\n&quot;"/>
+      <value value="&quot;10  0\n 0 7\n&quot;"/>
+      <value value="&quot;10  0\n 0 8\n&quot;"/>
+      <value value="&quot;10  0\n 0 9\n&quot;"/>
+      <value value="&quot;10  0\n 0 10\n&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="sd">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="experimenting">
+      <value value="0.05"/>
+      <value value="0.1"/>
+      <value value="0.15"/>
+      <value value="0.2"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="exp-two-persons-coordination-1-sofmax" repetitions="1" runMetricsEveryStep="false">
+    <setup>set-game
+setup
+ql:start</setup>
+    <go>wait-for-tick</go>
+    <final>ql:stop
+wait 1</final>
+    <exitCondition>ticks &gt; 1000</exitCondition>
+    <metric>fields</metric>
+    <metric>rel-freq-optimal</metric>
+    <metric>rel-freq-nash</metric>
+    <metric>mean [q-values-std] of turtles</metric>
+    <metric>mean [exploration] of turtles</metric>
+    <metric>count turtles with [is-player-x and last-action = 0]</metric>
+    <metric>count turtles with [is-player-x and last-action = 1]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 0]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 1]</metric>
+    <metric>count turtles with [last-field = 0]</metric>
+    <metric>count turtles with [last-field = 1]</metric>
+    <metric>count turtles with [last-field = 2]</metric>
+    <metric>count turtles with [last-field = 3]</metric>
+    <enumeratedValueSet variable="exploration-method">
+      <value value="&quot;softmax&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="n-pairs">
+      <value value="10000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="game-name">
+      <value value="&quot;CopyMeansX&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="means-x">
+      <value value="&quot;10  0\n 0 0\n&quot;"/>
+      <value value="&quot;10  0\n 0 1\n&quot;"/>
+      <value value="&quot;10  0\n 0 2\n&quot;"/>
+      <value value="&quot;10  0\n 0 3\n&quot;"/>
+      <value value="&quot;10  0\n 0 4\n&quot;"/>
+      <value value="&quot;10  0\n 0 5\n&quot;"/>
+      <value value="&quot;10  0\n 0 6\n&quot;"/>
+      <value value="&quot;10  0\n 0 7\n&quot;"/>
+      <value value="&quot;10  0\n 0 8\n&quot;"/>
+      <value value="&quot;10  0\n 0 9\n&quot;"/>
+      <value value="&quot;10  0\n 0 10\n&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="sd">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="experimenting">
+      <value value="2"/>
+      <value value="5"/>
+      <value value="10"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="exp-two-persons-coordination-1-sofmax-decay" repetitions="1" runMetricsEveryStep="false">
+    <setup>set-game
+setup
+ql:decay-exploration
+ql:start</setup>
+    <go>wait-for-tick</go>
+    <final>ql:stop
+wait 1</final>
+    <exitCondition>ticks &gt; 1000</exitCondition>
+    <metric>fields</metric>
+    <metric>rel-freq-optimal</metric>
+    <metric>rel-freq-nash</metric>
+    <metric>mean [q-values-std] of turtles</metric>
+    <metric>mean [exploration] of turtles</metric>
+    <metric>count turtles with [is-player-x and last-action = 0]</metric>
+    <metric>count turtles with [is-player-x and last-action = 1]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 0]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 1]</metric>
+    <metric>count turtles with [last-field = 0]</metric>
+    <metric>count turtles with [last-field = 1]</metric>
+    <metric>count turtles with [last-field = 2]</metric>
+    <metric>count turtles with [last-field = 3]</metric>
+    <enumeratedValueSet variable="exploration-method">
+      <value value="&quot;softmax&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="n-pairs">
+      <value value="10000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="game-name">
+      <value value="&quot;CopyMeansX&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="means-x">
+      <value value="&quot;10  0\n 0 0\n&quot;"/>
+      <value value="&quot;10  0\n 0 1\n&quot;"/>
+      <value value="&quot;10  0\n 0 2\n&quot;"/>
+      <value value="&quot;10  0\n 0 3\n&quot;"/>
+      <value value="&quot;10  0\n 0 4\n&quot;"/>
+      <value value="&quot;10  0\n 0 5\n&quot;"/>
+      <value value="&quot;10  0\n 0 6\n&quot;"/>
+      <value value="&quot;10  0\n 0 7\n&quot;"/>
+      <value value="&quot;10  0\n 0 8\n&quot;"/>
+      <value value="&quot;10  0\n 0 9\n&quot;"/>
+      <value value="&quot;10  0\n 0 10\n&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="sd">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="experimenting">
+      <value value="2"/>
+      <value value="5"/>
+      <value value="10"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="exp-two-persons-coordination-1-sd" repetitions="1" runMetricsEveryStep="false">
+    <setup>set-game
+setup
+ql:start</setup>
+    <go>wait-for-tick</go>
+    <final>ql:stop
+wait 1</final>
+    <exitCondition>ticks &gt; 1000</exitCondition>
+    <metric>fields</metric>
+    <metric>rel-freq-optimal</metric>
+    <metric>rel-freq-nash</metric>
+    <metric>mean [q-values-std] of turtles</metric>
+    <metric>mean [exploration] of turtles</metric>
+    <metric>count turtles with [is-player-x and last-action = 0]</metric>
+    <metric>count turtles with [is-player-x and last-action = 1]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 0]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 1]</metric>
+    <metric>count turtles with [last-field = 0]</metric>
+    <metric>count turtles with [last-field = 1]</metric>
+    <metric>count turtles with [last-field = 2]</metric>
+    <metric>count turtles with [last-field = 3]</metric>
+    <enumeratedValueSet variable="exploration-method">
+      <value value="&quot;epsilon-greedy&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="n-pairs">
+      <value value="10000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="game-name">
+      <value value="&quot;CopyMeansX&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="means-x">
+      <value value="&quot;10  0\n 0 0\n&quot;"/>
+      <value value="&quot;10  0\n 0 1\n&quot;"/>
+      <value value="&quot;10  0\n 0 2\n&quot;"/>
+      <value value="&quot;10  0\n 0 3\n&quot;"/>
+      <value value="&quot;10  0\n 0 4\n&quot;"/>
+      <value value="&quot;10  0\n 0 5\n&quot;"/>
+      <value value="&quot;10  0\n 0 6\n&quot;"/>
+      <value value="&quot;10  0\n 0 7\n&quot;"/>
+      <value value="&quot;10  0\n 0 8\n&quot;"/>
+      <value value="&quot;10  0\n 0 9\n&quot;"/>
+      <value value="&quot;10  0\n 0 10\n&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="sd">
+      <value value="1"/>
+      <value value="5"/>
+      <value value="10"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="experimenting">
+      <value value="0.1"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="exp-two-persons-coordination-2" repetitions="1" runMetricsEveryStep="false">
+    <setup>set-game
+setup
+ql:start</setup>
+    <go>wait-for-tick</go>
+    <final>ql:stop
+wait 1</final>
+    <exitCondition>ticks &gt; 1000</exitCondition>
+    <metric>fields</metric>
+    <metric>rel-freq-optimal</metric>
+    <metric>rel-freq-nash</metric>
+    <metric>mean [q-values-std] of turtles</metric>
+    <metric>mean [sum explorations] of turtles</metric>
+    <metric>count turtles with [is-player-x and last-action = 0]</metric>
+    <metric>count turtles with [is-player-x and last-action = 1]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 0]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 1]</metric>
+    <metric>count turtles with [last-field = 0]</metric>
+    <metric>count turtles with [last-field = 1]</metric>
+    <metric>count turtles with [last-field = 2]</metric>
+    <metric>count turtles with [last-field = 3]</metric>
+    <enumeratedValueSet variable="exploration">
+      <value value="&quot;epsilon-greedy&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="n-pairs">
+      <value value="10000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="game-name">
+      <value value="&quot;TransposeMeansX&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="means-x">
+      <value value="&quot;10  0 \n 10  8\n&quot;"/>
+      <value value="&quot;10  1 \n 9  8\n&quot;"/>
+      <value value="&quot;10  2 \n 8  8\n&quot;"/>
+      <value value="&quot;10  3 \n 7  8\n&quot;"/>
+      <value value="&quot;10  4 \n 6  8\n&quot;"/>
+      <value value="&quot;10  5 \n 5  8\n&quot;"/>
+      <value value="&quot;10  6 \n 4  8\n&quot;"/>
+      <value value="&quot;10  7 \n 3  8\n&quot;"/>
+      <value value="&quot;10  8 \n 2  8\n&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="sd">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="experimenting">
+      <value value="0.1"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="exp-two-persons-coordination-3-nd-eg" repetitions="1" runMetricsEveryStep="false">
+    <setup>set-game
+setup
+ql:start</setup>
+    <go>wait-for-tick</go>
+    <final>ql:stop
+wait 1</final>
+    <exitCondition>ticks &gt; 1000</exitCondition>
+    <metric>fields</metric>
+    <metric>rel-freq-optimal</metric>
+    <metric>rel-freq-nash</metric>
+    <metric>mean [q-values-std] of turtles</metric>
+    <metric>mean [sum explorations] of turtles</metric>
+    <metric>count turtles with [is-player-x and last-action = 0]</metric>
+    <metric>count turtles with [is-player-x and last-action = 1]</metric>
+    <metric>count turtles with [is-player-x and last-action = 2]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 0]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 1]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 2]</metric>
+    <metric>count turtles with [last-field = 0]</metric>
+    <metric>count turtles with [last-field = 1]</metric>
+    <metric>count turtles with [last-field = 2]</metric>
+    <metric>count turtles with [last-field = 3]</metric>
+    <metric>count turtles with [last-field = 4]</metric>
+    <metric>count turtles with [last-field = 5]</metric>
+    <metric>count turtles with [last-field = 6]</metric>
+    <metric>count turtles with [last-field = 7]</metric>
+    <metric>count turtles with [last-field = 8]</metric>
+    <enumeratedValueSet variable="exploration">
+      <value value="&quot;epsilon-greedy&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="n-pairs">
+      <value value="10000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="game-name">
+      <value value="&quot;CopyMeansX&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="means-x">
+      <value value="&quot;10  0 -20\n 0  2  0\n-20  0 10\n&quot;"/>
+      <value value="&quot;10  0 -15\n 0  2  0\n-15  0 10\n&quot;"/>
+      <value value="&quot;10  0 -10\n 0  2  0\n-10  0 10\n&quot;"/>
+      <value value="&quot;10  0 -5\n 0  2  0\n-5  0 10\n&quot;"/>
+      <value value="&quot;10  0 0\n 0  2  0\n0  0 10\n&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="sd">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="experimenting">
+      <value value="0.1"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="exp-two-persons-three-opt-nash-nd-eg" repetitions="1" runMetricsEveryStep="false">
+    <setup>set-game
+setup
+ql:start</setup>
+    <go>wait-for-tick</go>
+    <final>ql:stop
+wait 1</final>
+    <exitCondition>ticks &gt; 1000</exitCondition>
+    <metric>fields</metric>
+    <metric>rel-freq-optimal</metric>
+    <metric>rel-freq-nash</metric>
+    <metric>mean [q-values-std] of turtles</metric>
+    <metric>mean [sum explorations] of turtles</metric>
+    <metric>count turtles with [is-player-x and last-action = 0]</metric>
+    <metric>count turtles with [is-player-x and last-action = 1]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 0]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 1]</metric>
+    <metric>count turtles with [last-field = 0]</metric>
+    <metric>count turtles with [last-field = 1]</metric>
+    <metric>count turtles with [last-field = 2]</metric>
+    <metric>count turtles with [last-field = 3]</metric>
+    <enumeratedValueSet variable="exploration">
+      <value value="&quot;epsilon-greedy&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="n-pairs">
+      <value value="10000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="game-name">
+      <value value="&quot;CopyMeansX&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="means-x">
+      <value value="&quot;10  0\n 10 10\n&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="sd">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="experimenting">
+      <value value="0.1"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="exp-two-persons-battle-nd-eg" repetitions="1" runMetricsEveryStep="false">
+    <setup>set-game
+setup
+ql:start</setup>
+    <go>wait-for-tick</go>
+    <final>ql:stop
+wait 1</final>
+    <exitCondition>ticks &gt; 1000</exitCondition>
+    <metric>fields</metric>
+    <metric>rel-freq-optimal</metric>
+    <metric>rel-freq-nash</metric>
+    <metric>mean [q-values-std] of turtles</metric>
+    <metric>mean [sum explorations] of turtles</metric>
+    <metric>count turtles with [is-player-x and last-action = 0]</metric>
+    <metric>count turtles with [is-player-x and last-action = 1]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 0]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 1]</metric>
+    <metric>count turtles with [last-field = 0]</metric>
+    <metric>count turtles with [last-field = 1]</metric>
+    <metric>count turtles with [last-field = 2]</metric>
+    <metric>count turtles with [last-field = 3]</metric>
+    <enumeratedValueSet variable="exploration">
+      <value value="&quot;epsilon-greedy&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="n-pairs">
+      <value value="10000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="game-name">
+      <value value="&quot;TransposeMeansX&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="means-x">
+      <value value="&quot;0  10\n 8 0\n&quot;"/>
+      <value value="&quot;8  10\n 8 0\n&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="sd">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="experimenting">
+      <value value="0.1"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="exp-two-persons-chicken-nd-eg" repetitions="1" runMetricsEveryStep="false">
+    <setup>set-game
+setup
+ql:start</setup>
+    <go>wait-for-tick</go>
+    <final>ql:stop
+wait 1</final>
+    <exitCondition>ticks &gt; 1000</exitCondition>
+    <metric>fields</metric>
+    <metric>rel-freq-optimal</metric>
+    <metric>rel-freq-nash</metric>
+    <metric>mean [q-values-std] of turtles</metric>
+    <metric>mean [sum explorations] of turtles</metric>
+    <metric>count turtles with [is-player-x and last-action = 0]</metric>
+    <metric>count turtles with [is-player-x and last-action = 1]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 0]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 1]</metric>
+    <metric>count turtles with [last-field = 0]</metric>
+    <metric>count turtles with [last-field = 1]</metric>
+    <metric>count turtles with [last-field = 2]</metric>
+    <metric>count turtles with [last-field = 3]</metric>
+    <enumeratedValueSet variable="exploration">
+      <value value="&quot;epsilon-greedy&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="n-pairs">
+      <value value="10000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="sd">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="means-x">
+      <value value="&quot; 3 2\n 10 0&quot;"/>
+      <value value="&quot; 5 2\n 10 0&quot;"/>
+      <value value="&quot; 7 2\n 10 0&quot;"/>
+      <value value="&quot; 9 2\n 10 0&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="experimenting">
+      <value value="0.05"/>
+      <value value="0.1"/>
+      <value value="0.2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="game-name">
+      <value value="&quot;TransposeMeansX&quot;"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="exp-two-persons-extreme-chicken-nd-eg" repetitions="1" runMetricsEveryStep="false">
+    <setup>set-game
+setup
+ql:start</setup>
+    <go>wait-for-tick</go>
+    <final>ql:stop
+wait 1</final>
+    <exitCondition>ticks &gt; 1000</exitCondition>
+    <metric>fields</metric>
+    <metric>rel-freq-optimal</metric>
+    <metric>rel-freq-nash</metric>
+    <metric>mean [q-values-std] of turtles</metric>
+    <metric>mean [sum explorations] of turtles</metric>
+    <metric>count turtles with [is-player-x and last-action = 0]</metric>
+    <metric>count turtles with [is-player-x and last-action = 1]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 0]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 1]</metric>
+    <metric>count turtles with [last-field = 0]</metric>
+    <metric>count turtles with [last-field = 1]</metric>
+    <metric>count turtles with [last-field = 2]</metric>
+    <metric>count turtles with [last-field = 3]</metric>
+    <enumeratedValueSet variable="exploration">
+      <value value="&quot;epsilon-greedy&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="n-pairs">
+      <value value="10000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="game-name">
+      <value value="&quot;TransposeMeansX&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="means-x">
+      <value value="&quot;1  0\n 10 0\n&quot;"/>
+      <value value="&quot;2  0\n 10 0\n&quot;"/>
+      <value value="&quot;3  0\n 10 0\n&quot;"/>
+      <value value="&quot;4  0\n 10 0\n&quot;"/>
+      <value value="&quot;5  0\n 10 0\n&quot;"/>
+      <value value="&quot;6  0\n 10 0\n&quot;"/>
+      <value value="&quot;7  0\n 10 0\n&quot;"/>
+      <value value="&quot;8  0\n 10 0\n&quot;"/>
+      <value value="&quot;9  0\n 10 0\n&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="sd">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="experimenting">
+      <value value="0.1"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="exp-two-persons-prisoner-nd-eg" repetitions="1" runMetricsEveryStep="false">
+    <setup>set-game
+setup
+ql:start</setup>
+    <go>wait-for-tick</go>
+    <final>ql:stop
+wait 1</final>
+    <exitCondition>ticks &gt; 1000</exitCondition>
+    <metric>fields</metric>
+    <metric>rel-freq-optimal</metric>
+    <metric>rel-freq-nash</metric>
+    <metric>mean [q-values-std] of turtles</metric>
+    <metric>mean [sum explorations] of turtles</metric>
+    <metric>count turtles with [is-player-x and last-action = 0]</metric>
+    <metric>count turtles with [is-player-x and last-action = 1]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 0]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 1]</metric>
+    <metric>count turtles with [last-field = 0]</metric>
+    <metric>count turtles with [last-field = 1]</metric>
+    <metric>count turtles with [last-field = 2]</metric>
+    <metric>count turtles with [last-field = 3]</metric>
+    <enumeratedValueSet variable="exploration">
+      <value value="&quot;epsilon-greedy&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="n-pairs">
+      <value value="10000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="sd">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="means-x">
+      <value value="&quot; 3 0\n 10 2&quot;"/>
+      <value value="&quot; 5 0\n 10 2&quot;"/>
+      <value value="&quot; 7 0\n 10 2&quot;"/>
+      <value value="&quot; 9 0\n 10 2&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="experimenting">
+      <value value="0.05"/>
+      <value value="0.1"/>
+      <value value="0.2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="game-name">
+      <value value="&quot;TransposeMeansX&quot;"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="exp-two-persons-coordination-2-nd-eg-2" repetitions="1" runMetricsEveryStep="false">
+    <setup>set-game
+setup
+ql:start</setup>
+    <go>wait-for-tick</go>
+    <final>ql:stop
+wait 1</final>
+    <exitCondition>ticks &gt; 1000</exitCondition>
+    <metric>fields</metric>
+    <metric>rel-freq-optimal</metric>
+    <metric>rel-freq-nash</metric>
+    <metric>mean [q-values-std] of turtles</metric>
+    <metric>mean [sum explorations] of turtles</metric>
+    <metric>count turtles with [is-player-x and last-action = 0]</metric>
+    <metric>count turtles with [is-player-x and last-action = 1]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 0]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 1]</metric>
+    <metric>count turtles with [last-field = 0]</metric>
+    <metric>count turtles with [last-field = 1]</metric>
+    <metric>count turtles with [last-field = 2]</metric>
+    <metric>count turtles with [last-field = 3]</metric>
+    <enumeratedValueSet variable="exploration">
+      <value value="&quot;epsilon-greedy&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="n-pairs">
+      <value value="10000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="game-name">
+      <value value="&quot;CopyMeansX&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="means-x">
+      <value value="&quot;10  0\n 0 8\n&quot;"/>
+      <value value="&quot;10  0\n 1 8\n&quot;"/>
+      <value value="&quot;10  0\n 2 8\n&quot;"/>
+      <value value="&quot;10  0\n 3 8\n&quot;"/>
+      <value value="&quot;10  0\n 4 8\n&quot;"/>
+      <value value="&quot;10  0\n 5 8\n&quot;"/>
+      <value value="&quot;10  0\n 6 8\n&quot;"/>
+      <value value="&quot;10  0\n 7 8\n&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="sd">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="experimenting">
+      <value value="0.1"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="exp-two-persons-three-alt-games-nd-eg" repetitions="1" runMetricsEveryStep="false">
+    <setup>set-game
+setup
+ql:start</setup>
+    <go>wait-for-tick</go>
+    <final>ql:stop
+wait 1</final>
+    <exitCondition>ticks &gt; 1000</exitCondition>
+    <metric>fields</metric>
+    <metric>rel-freq-optimal</metric>
+    <metric>rel-freq-nash</metric>
+    <metric>mean [q-values-std] of turtles</metric>
+    <metric>mean [sum explorations] of turtles</metric>
+    <metric>count turtles with [is-player-x and last-action = 0]</metric>
+    <metric>count turtles with [is-player-x and last-action = 1]</metric>
+    <metric>count turtles with [is-player-x and last-action = 2]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 0]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 1]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 2]</metric>
+    <metric>count turtles with [last-field = 0]</metric>
+    <metric>count turtles with [last-field = 1]</metric>
+    <metric>count turtles with [last-field = 2]</metric>
+    <metric>count turtles with [last-field = 3]</metric>
+    <metric>count turtles with [last-field = 4]</metric>
+    <metric>count turtles with [last-field = 5]</metric>
+    <metric>count turtles with [last-field = 6]</metric>
+    <metric>count turtles with [last-field = 7]</metric>
+    <metric>count turtles with [last-field = 8]</metric>
+    <enumeratedValueSet variable="exploration">
+      <value value="&quot;epsilon-greedy&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="n-pairs">
+      <value value="10000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="n-alt-x">
+      <value value="3"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="game-name">
+      <value value="&quot;DispersionGame&quot;"/>
+      <value value="&quot;GrabTheDollar&quot;"/>
+      <value value="&quot;GuessTwoThirdsAve&quot;"/>
+      <value value="&quot;MajorityVoting&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="sd">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="experimenting">
+      <value value="0.05"/>
+      <value value="0.1"/>
+      <value value="0.2"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="exp-two-persons-four-alt-games-nd-eg" repetitions="1" runMetricsEveryStep="false">
+    <setup>set-game
+setup
+ql:start</setup>
+    <go>wait-for-tick</go>
+    <final>ql:stop
+wait 1</final>
+    <exitCondition>ticks &gt; 1000</exitCondition>
+    <metric>fields</metric>
+    <metric>rel-freq-optimal</metric>
+    <metric>rel-freq-nash</metric>
+    <metric>mean [q-values-std] of turtles</metric>
+    <metric>mean [sum explorations] of turtles</metric>
+    <metric>count turtles with [is-player-x and last-action = 0]</metric>
+    <metric>count turtles with [is-player-x and last-action = 1]</metric>
+    <metric>count turtles with [is-player-x and last-action = 2]</metric>
+    <metric>count turtles with [is-player-x and last-action = 3]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 0]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 1]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 2]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 3]</metric>
+    <metric>count turtles with [last-field = 0]</metric>
+    <metric>count turtles with [last-field = 1]</metric>
+    <metric>count turtles with [last-field = 2]</metric>
+    <metric>count turtles with [last-field = 3]</metric>
+    <metric>count turtles with [last-field = 4]</metric>
+    <metric>count turtles with [last-field = 5]</metric>
+    <metric>count turtles with [last-field = 6]</metric>
+    <metric>count turtles with [last-field = 7]</metric>
+    <metric>count turtles with [last-field = 8]</metric>
+    <metric>count turtles with [last-field = 9]</metric>
+    <metric>count turtles with [last-field = 10]</metric>
+    <metric>count turtles with [last-field = 11]</metric>
+    <metric>count turtles with [last-field = 12]</metric>
+    <metric>count turtles with [last-field = 13]</metric>
+    <metric>count turtles with [last-field = 14]</metric>
+    <metric>count turtles with [last-field = 15]</metric>
+    <enumeratedValueSet variable="exploration">
+      <value value="&quot;epsilon-greedy&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="n-pairs">
+      <value value="10000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="n-alt-x">
+      <value value="4"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="game-name">
+      <value value="&quot;DispersionGame&quot;"/>
+      <value value="&quot;GrabTheDollar&quot;"/>
+      <value value="&quot;GuessTwoThirdsAve&quot;"/>
+      <value value="&quot;MajorityVoting&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="sd">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="experimenting">
+      <value value="0.05"/>
+      <value value="0.1"/>
+      <value value="0.2"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="exp-two-persons-zero-sum-nd-eg" repetitions="1" runMetricsEveryStep="false">
+    <setup>set-game
+setup
+ql:start</setup>
+    <go>wait-for-tick</go>
+    <final>ql:stop
+wait 1</final>
+    <exitCondition>ticks &gt; 20000</exitCondition>
+    <metric>fields</metric>
+    <metric>[q-values-std] of turtles</metric>
+    <metric>[(item 0 rel-freqs)] of turtles with [is-player-x]</metric>
+    <metric>[(item 1 rel-freqs)] of turtles with [is-player-x]</metric>
+    <metric>[(item 0 rel-freqs)] of turtles with [not is-player-x]</metric>
+    <metric>[(item 1 rel-freqs)] of turtles with [not is-player-x]</metric>
+    <enumeratedValueSet variable="exploration">
+      <value value="&quot;epsilon-greedy&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="n-pairs">
+      <value value="1000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="sd">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="means-x">
+      <value value="&quot;7 0\n 5 6&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="means-y">
+      <value value="&quot;3 10\n 5 4&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="experimenting">
+      <value value="0.1"/>
+      <value value="0.2"/>
+      <value value="0.3"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="game-name">
+      <value value="&quot;Custom&quot;"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="exp-two-persons-RPS-SG-nd-eg" repetitions="1" runMetricsEveryStep="false">
+    <setup>set-game
+setup
+ql:start</setup>
+    <go>wait-for-tick</go>
+    <final>ql:stop
+wait 1</final>
+    <exitCondition>ticks &gt; 20000</exitCondition>
+    <metric>fields</metric>
+    <metric>[q-values-std] of turtles</metric>
+    <metric>[(item 0 rel-freqs)] of turtles with [is-player-x]</metric>
+    <metric>[(item 1 rel-freqs)] of turtles with [is-player-x]</metric>
+    <metric>[(item 2 rel-freqs)] of turtles with [is-player-x]</metric>
+    <metric>[(item 0 rel-freqs)] of turtles with [not is-player-x]</metric>
+    <metric>[(item 1 rel-freqs)] of turtles with [not is-player-x]</metric>
+    <metric>[(item 2 rel-freqs)] of turtles with [not is-player-x]</metric>
+    <enumeratedValueSet variable="exploration">
+      <value value="&quot;epsilon-greedy&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="n-pairs">
+      <value value="1000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="sd">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="experimenting">
+      <value value="0.1"/>
+      <value value="0.2"/>
+      <value value="0.3"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="game-name">
+      <value value="&quot;RockPaperScissors&quot;"/>
+      <value value="&quot;ShapleysGame&quot;"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="exp-two-persons-dollar-nd-eg" repetitions="1" runMetricsEveryStep="false">
+    <setup>set-game
+setup
+ql:start</setup>
+    <go>wait-for-tick</go>
+    <final>ql:stop
+wait 1</final>
+    <exitCondition>ticks &gt; 1000</exitCondition>
+    <metric>fields</metric>
+    <metric>rel-freq-optimal</metric>
+    <metric>rel-freq-nash</metric>
+    <metric>mean [q-values-std] of turtles</metric>
+    <metric>mean [sum explorations] of turtles</metric>
+    <metric>count turtles with [is-player-x and last-action = 0]</metric>
+    <metric>count turtles with [is-player-x and last-action = 1]</metric>
+    <metric>count turtles with [is-player-x and last-action = 2]</metric>
+    <metric>count turtles with [is-player-x and last-action = 3]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 0]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 1]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 2]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 3]</metric>
+    <metric>count turtles with [last-field = 0]</metric>
+    <metric>count turtles with [last-field = 1]</metric>
+    <metric>count turtles with [last-field = 2]</metric>
+    <metric>count turtles with [last-field = 3]</metric>
+    <metric>count turtles with [last-field = 4]</metric>
+    <metric>count turtles with [last-field = 5]</metric>
+    <metric>count turtles with [last-field = 6]</metric>
+    <metric>count turtles with [last-field = 7]</metric>
+    <metric>count turtles with [last-field = 8]</metric>
+    <metric>count turtles with [last-field = 9]</metric>
+    <metric>count turtles with [last-field = 10]</metric>
+    <metric>count turtles with [last-field = 11]</metric>
+    <metric>count turtles with [last-field = 12]</metric>
+    <metric>count turtles with [last-field = 13]</metric>
+    <metric>count turtles with [last-field = 14]</metric>
+    <metric>count turtles with [last-field = 15]</metric>
+    <enumeratedValueSet variable="exploration">
+      <value value="&quot;epsilon-greedy&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="n-pairs">
+      <value value="10000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="game-name">
+      <value value="&quot;TransposeMeansX&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="means-x">
+      <value value="&quot;0 10 10\n 5 0 10\n 5 5 0&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="sd">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="experimenting">
+      <value value="0.05"/>
+      <value value="0.1"/>
+      <value value="0.2"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="exp-two-persons-dollar-4-nd-eg" repetitions="1" runMetricsEveryStep="false">
+    <setup>set-game
+setup
+ql:start</setup>
+    <go>wait-for-tick</go>
+    <final>ql:stop
+wait 1</final>
+    <exitCondition>ticks &gt; 1000</exitCondition>
+    <metric>fields</metric>
+    <metric>rel-freq-optimal</metric>
+    <metric>rel-freq-nash</metric>
+    <metric>mean [q-values-std] of turtles</metric>
+    <metric>mean [sum explorations] of turtles</metric>
+    <metric>count turtles with [is-player-x and last-action = 0]</metric>
+    <metric>count turtles with [is-player-x and last-action = 1]</metric>
+    <metric>count turtles with [is-player-x and last-action = 2]</metric>
+    <metric>count turtles with [is-player-x and last-action = 3]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 0]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 1]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 2]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 3]</metric>
+    <metric>count turtles with [last-field = 0]</metric>
+    <metric>count turtles with [last-field = 1]</metric>
+    <metric>count turtles with [last-field = 2]</metric>
+    <metric>count turtles with [last-field = 3]</metric>
+    <metric>count turtles with [last-field = 4]</metric>
+    <metric>count turtles with [last-field = 5]</metric>
+    <metric>count turtles with [last-field = 6]</metric>
+    <metric>count turtles with [last-field = 7]</metric>
+    <metric>count turtles with [last-field = 8]</metric>
+    <metric>count turtles with [last-field = 9]</metric>
+    <metric>count turtles with [last-field = 10]</metric>
+    <metric>count turtles with [last-field = 11]</metric>
+    <metric>count turtles with [last-field = 12]</metric>
+    <metric>count turtles with [last-field = 13]</metric>
+    <metric>count turtles with [last-field = 14]</metric>
+    <metric>count turtles with [last-field = 15]</metric>
+    <enumeratedValueSet variable="exploration">
+      <value value="&quot;epsilon-greedy&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="n-pairs">
+      <value value="10000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="game-name">
+      <value value="&quot;TransposeMeansX&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="means-x">
+      <value value="&quot;0 10 10 10\n 5 0 10 10\n 5 5 0 10\n 5 5 5 0&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="sd">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="experimenting">
+      <value value="0.05"/>
+      <value value="0.1"/>
+      <value value="0.2"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="exp-two-persons-zero-sum-test-nd-eg" repetitions="1" runMetricsEveryStep="false">
+    <setup>set-game
+setup
+ql:start</setup>
+    <go>wait-for-tick</go>
+    <final>ql:stop
+wait 1</final>
+    <exitCondition>ticks &gt; 20000</exitCondition>
+    <metric>fields</metric>
+    <metric>[q-values-std] of turtles</metric>
+    <metric>[(item 0 rel-freqs)] of turtles with [is-player-x]</metric>
+    <metric>[(item 1 rel-freqs)] of turtles with [is-player-x]</metric>
+    <metric>[(item 0 rel-freqs)] of turtles with [not is-player-x]</metric>
+    <metric>[(item 1 rel-freqs)] of turtles with [not is-player-x]</metric>
+    <enumeratedValueSet variable="exploration">
+      <value value="&quot;epsilon-greedy&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="n-pairs">
+      <value value="1000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="sd">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="means-x">
+      <value value="&quot;7 0\n 5 6&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="means-y">
+      <value value="&quot;3 6\n 5 4&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="experimenting">
+      <value value="0.1"/>
+      <value value="0.2"/>
+      <value value="0.3"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="game-name">
+      <value value="&quot;Custom&quot;"/>
     </enumeratedValueSet>
   </experiment>
 </experiments>
