@@ -51,12 +51,11 @@ to set-game
 end
 
 
-
 to setup
-  
+  set-default-shape turtles "circle"
   clear-all  
   
-  let n-patches (1 + floor sqrt (n-groups * 25))
+  let n-patches (1 + floor sqrt (n-groups * 50))
   set-patch-size 400 / n-patches
   resize-world 0 n-patches 0 n-patches
   
@@ -66,19 +65,51 @@ to setup
   set means-max max map [max map [abs ?] ? ](sentence rows-x)
   set rel-freq-optimal 0.0
   
-  let group-structure []
+  let groups []
   create-turtles n-groups [
-    setxy random-xcor random-ycor
+    set size 0.1
     let group (list self)
     hatch group-size - 1 [ ; create partners
-      setxy ((1 - random-float 2) + [xcor] of myself) ((1 - random-float 2) + [ycor] of myself)
       set group lput self group
-      face myself
     ]
-    set group-structure lput (ql:create-group (map [(list ? (n-values n-alt [(word ?)]))] group)) group-structure
+    ;set group-structure lput (ql:create-group (map [(list ? (n-values n-alt [(word ?)]))] group)) group-structure
+    set groups lput group groups
   ]
   
   ql:init turtles experimenting exploration-method
+  
+  ifelse fixed-structure [
+    let group-structure []
+    foreach groups [
+      let group-members ?
+      let gl length group-members
+      let i 0
+      while [i < gl] [
+        let j 0
+        while [j < n-way] [
+          set j j + 1
+          let firstTurtle item i group-members
+          let secondTurtle item ((i + j) mod gl) group-members
+          ask firstTurtle [ create-link-with secondTurtle ]
+          set group-structure lput (ql:create-group (list (list firstTurtle (n-values n-alt [(word ?)])) (list secondTurtle (n-values n-alt [(word ?)])) )) group-structure
+        ]
+        set i i + 1
+      ]
+      layout-circle group-members 1
+      let rxc random-xcor
+      let ryc random-ycor
+      foreach group-members [ ask ? [ setxy xcor + rxc ycor + ryc]]
+    ]
+    ql:set-group-structure group-structure
+  ] [
+    foreach groups [
+      let group-members ?
+      layout-circle group-members 1
+      let rxc random-xcor
+      let ryc random-ycor
+      foreach group-members [ ask ? [ setxy xcor + rxc ycor + ryc]]
+    ]
+  ]
     
   ask turtles [
     set optimal-action false
@@ -119,12 +150,14 @@ to-report reward [group-choice]
   let optimal item field optimal-fields
   let nash item field nash-fields
   ask first agents [
+    set color 10 * (dec-x + 2) + 5
     set last-action dec-x
     set optimal-action optimal 
     set nash-action nash
     set last-field field
   ]
   ask last agents [
+    set color 10 * (dec-y + 2) + 5
     set last-action dec-y
     set optimal-action optimal 
     set nash-action nash
@@ -147,6 +180,7 @@ to wait-for-tick
 end
 
 to update
+  update-slow
   tick
 end
 
@@ -184,13 +218,13 @@ to-report filter? [ n total-n ]
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
-890
+847
 25
-1326
-482
+1291
+490
 -1
 -1
-28.571428571428573
+36.36363636363637
 1
 10
 1
@@ -201,9 +235,9 @@ GRAPHICS-WINDOW
 1
 1
 0
-14
+11
 0
-14
+11
 0
 0
 1
@@ -219,7 +253,7 @@ n-groups
 n-groups
 0
 100
-7
+2
 1
 1
 NIL
@@ -285,8 +319,8 @@ experimenting
 experimenting
 0
 16
-2
-0.005
+0.1
+0.05
 1
 NIL
 HORIZONTAL
@@ -312,7 +346,7 @@ INPUTBOX
 395
 175
 means-x
- 3  0\n 0 10\n
+10  0\n 0 10\n
 1
 1
 String
@@ -325,7 +359,7 @@ CHOOSER
 exploration-method
 exploration-method
 "epsilon-greedy" "softmax"
-1
+0
 
 MONITOR
 30
@@ -344,7 +378,7 @@ INPUTBOX
 625
 330
 fields
-| 1: ( 3, 3)  N| 2: ( 0, 0)   |\n| 3: ( 0, 0)   | 4: (10,10) ON|\n
+| 1: (10,10) ON| 2: ( 0, 0)   |\n| 3: ( 0, 0)   | 4: (10,10) ON|\n
 1
 1
 String
@@ -400,7 +434,7 @@ INPUTBOX
 765
 496
 sample-equilibria
-     x1     x2     y1     y2  |     Ex     Ey  |     mx\n--------------------------------------------------------\n  10/13   3/13  10/13   3/13  |  30/13  30/13  |       \n
+   x1   x2   y1   y2  |   Ex   Ey  |   mx\n----------------------------------------\n  1/2  1/2  1/2  1/2  |    5    5  |     \n
 1
 1
 String
@@ -515,11 +549,37 @@ group-size
 group-size
 0
 100
-18
+47
 1
 1
 NIL
 HORIZONTAL
+
+SLIDER
+400
+60
+572
+93
+n-way
+n-way
+0
+group-size - 1
+8
+1
+1
+NIL
+HORIZONTAL
+
+SWITCH
+400
+95
+570
+128
+fixed-structure
+fixed-structure
+0
+1
+-1000
 
 @#$#@#$#@
 ## WHAT IS IT?
@@ -1384,7 +1444,6 @@ wait 1</final>
     <metric>count turtles with [last-field = 3]</metric>
     <enumeratedValueSet variable="exploration-method">
       <value value="&quot;epsilon-greedy&quot;"/>
-      <value value="&quot;softmax&quot;"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="n-pairs">
       <value value="10000"/>
@@ -1444,9 +1503,10 @@ wait 1</final>
       <value value="&quot; 9 2\n 10 0&quot;"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="experimenting">
-      <value value="0.05"/>
-      <value value="0.1"/>
-      <value value="0.2"/>
+      <value value="0.5"/>
+      <value value="1"/>
+      <value value="2"/>
+      <value value="5"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="game-name">
       <value value="&quot;TransposeMeansX&quot;"/>
@@ -1569,7 +1629,6 @@ wait 1</final>
     <metric>count turtles with [last-field = 3]</metric>
     <enumeratedValueSet variable="exploration-method">
       <value value="&quot;epsilon-greedy&quot;"/>
-      <value value="&quot;softmax&quot;"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="n-pairs">
       <value value="10000"/>
@@ -1629,9 +1688,10 @@ wait 1</final>
       <value value="&quot; 9 0\n 10 2&quot;"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="experimenting">
-      <value value="0.05"/>
-      <value value="0.1"/>
-      <value value="0.2"/>
+      <value value="0.5"/>
+      <value value="1"/>
+      <value value="2"/>
+      <value value="5"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="game-name">
       <value value="&quot;TransposeMeansX&quot;"/>
@@ -2034,7 +2094,6 @@ wait 1</final>
     <metric>[(item 2 rel-freqs)] of turtles with [not is-player-x]</metric>
     <enumeratedValueSet variable="exploration-method">
       <value value="&quot;epsilon-greedy&quot;"/>
-      <value value="&quot;softmax&quot;"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="n-pairs">
       <value value="1000"/>
@@ -2077,9 +2136,10 @@ wait 1</final>
       <value value="1"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="experimenting">
-      <value value="0.1"/>
-      <value value="0.2"/>
-      <value value="0.3"/>
+      <value value="0.5"/>
+      <value value="1"/>
+      <value value="2"/>
+      <value value="5"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="game-name">
       <value value="&quot;ShapleysGame&quot;"/>
@@ -2102,7 +2162,6 @@ wait 1</final>
     <metric>[(item 1 rel-freqs)] of turtles with [not is-player-x]</metric>
     <enumeratedValueSet variable="exploration-method">
       <value value="&quot;epsilon-greedy&quot;"/>
-      <value value="&quot;softmax&quot;"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="n-pairs">
       <value value="1000"/>
@@ -2155,15 +2214,146 @@ wait 1</final>
       <value value="2"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="experimenting">
-      <value value="0.1"/>
-      <value value="0.2"/>
-      <value value="0.3"/>
+      <value value="0.5"/>
+      <value value="1"/>
+      <value value="2"/>
+      <value value="5"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="game-name">
       <value value="&quot;MatchingPennies&quot;"/>
     </enumeratedValueSet>
   </experiment>
-  <experiment name="exp-two-persons-zero-sum-decay" repetitions="1" runMetricsEveryStep="false">
+  <experiment name="exp-two-persons-chicken-softmax-decay" repetitions="1" runMetricsEveryStep="false">
+    <setup>set-game
+setup
+ql:decay-exploration
+ql:start</setup>
+    <go>wait-for-tick</go>
+    <final>ql:stop
+wait 1</final>
+    <exitCondition>ticks &gt; 1000</exitCondition>
+    <metric>fields</metric>
+    <metric>rel-freq-optimal</metric>
+    <metric>rel-freq-nash</metric>
+    <metric>mean [q-values-std] of turtles</metric>
+    <metric>mean [exploration] of turtles</metric>
+    <metric>count turtles with [is-player-x and last-action = 0]</metric>
+    <metric>count turtles with [is-player-x and last-action = 1]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 0]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 1]</metric>
+    <metric>count turtles with [last-field = 0]</metric>
+    <metric>count turtles with [last-field = 1]</metric>
+    <metric>count turtles with [last-field = 2]</metric>
+    <metric>count turtles with [last-field = 3]</metric>
+    <enumeratedValueSet variable="exploration-method">
+      <value value="&quot;softmax&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="n-pairs">
+      <value value="10000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="sd">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="means-x">
+      <value value="&quot; 3 2\n 10 0&quot;"/>
+      <value value="&quot; 5 2\n 10 0&quot;"/>
+      <value value="&quot; 7 2\n 10 0&quot;"/>
+      <value value="&quot; 9 2\n 10 0&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="experimenting">
+      <value value="0.5"/>
+      <value value="1"/>
+      <value value="2"/>
+      <value value="5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="game-name">
+      <value value="&quot;TransposeMeansX&quot;"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="exp-two-persons-prisoner-softmax-decay" repetitions="1" runMetricsEveryStep="false">
+    <setup>set-game
+setup
+ql:decay-exploration
+ql:start</setup>
+    <go>wait-for-tick</go>
+    <final>ql:stop
+wait 1</final>
+    <exitCondition>ticks &gt; 1000</exitCondition>
+    <metric>fields</metric>
+    <metric>rel-freq-optimal</metric>
+    <metric>rel-freq-nash</metric>
+    <metric>mean [q-values-std] of turtles</metric>
+    <metric>mean [exploration] of turtles</metric>
+    <metric>count turtles with [is-player-x and last-action = 0]</metric>
+    <metric>count turtles with [is-player-x and last-action = 1]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 0]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 1]</metric>
+    <metric>count turtles with [last-field = 0]</metric>
+    <metric>count turtles with [last-field = 1]</metric>
+    <metric>count turtles with [last-field = 2]</metric>
+    <metric>count turtles with [last-field = 3]</metric>
+    <enumeratedValueSet variable="exploration-method">
+      <value value="&quot;softmax&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="n-pairs">
+      <value value="10000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="sd">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="means-x">
+      <value value="&quot; 3 0\n 10 2&quot;"/>
+      <value value="&quot; 5 0\n 10 2&quot;"/>
+      <value value="&quot; 7 0\n 10 2&quot;"/>
+      <value value="&quot; 9 0\n 10 2&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="experimenting">
+      <value value="0.5"/>
+      <value value="1"/>
+      <value value="2"/>
+      <value value="5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="game-name">
+      <value value="&quot;TransposeMeansX&quot;"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="exp-two-persons-shapley-softmax-decay" repetitions="1" runMetricsEveryStep="false">
+    <setup>set-game
+setup
+ql:decay-exploration
+ql:start</setup>
+    <go>wait-for-tick</go>
+    <final>ql:stop
+wait 1</final>
+    <exitCondition>ticks &gt; 20000</exitCondition>
+    <metric>fields</metric>
+    <metric>[q-values-std] of turtles</metric>
+    <metric>[(item 0 rel-freqs)] of turtles with [is-player-x]</metric>
+    <metric>[(item 1 rel-freqs)] of turtles with [is-player-x]</metric>
+    <metric>[(item 2 rel-freqs)] of turtles with [is-player-x]</metric>
+    <metric>[(item 0 rel-freqs)] of turtles with [not is-player-x]</metric>
+    <metric>[(item 1 rel-freqs)] of turtles with [not is-player-x]</metric>
+    <metric>[(item 2 rel-freqs)] of turtles with [not is-player-x]</metric>
+    <enumeratedValueSet variable="exploration-method">
+      <value value="&quot;softmax&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="n-pairs">
+      <value value="1000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="sd">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="experimenting">
+      <value value="0.5"/>
+      <value value="1"/>
+      <value value="2"/>
+      <value value="5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="game-name">
+      <value value="&quot;ShapleysGame&quot;"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="exp-two-persons-matching-softmax-decay" repetitions="1" runMetricsEveryStep="false">
     <setup>set-game
 setup
 ql:decay-exploration
@@ -2179,7 +2369,6 @@ wait 1</final>
     <metric>[(item 0 rel-freqs)] of turtles with [not is-player-x]</metric>
     <metric>[(item 1 rel-freqs)] of turtles with [not is-player-x]</metric>
     <enumeratedValueSet variable="exploration-method">
-      <value value="&quot;epsilon-greedy&quot;"/>
       <value value="&quot;softmax&quot;"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="n-pairs">
@@ -2188,57 +2377,20 @@ wait 1</final>
     <enumeratedValueSet variable="sd">
       <value value="1"/>
     </enumeratedValueSet>
-    <enumeratedValueSet variable="means-x">
-      <value value="&quot;7 0\n 5 6&quot;"/>
+    <enumeratedValueSet variable="n-alt-x">
+      <value value="2"/>
     </enumeratedValueSet>
-    <enumeratedValueSet variable="means-y">
-      <value value="&quot;3 10\n 5 4&quot;"/>
+    <enumeratedValueSet variable="n-alt-y">
+      <value value="2"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="experimenting">
-      <value value="0.1"/>
-      <value value="0.2"/>
-      <value value="0.3"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="game-name">
-      <value value="&quot;Custom&quot;"/>
-    </enumeratedValueSet>
-  </experiment>
-  <experiment name="exp-two-persons-zero-sum-softmax" repetitions="1" runMetricsEveryStep="false">
-    <setup>set-game
-setup
-ql:start</setup>
-    <go>wait-for-tick</go>
-    <final>ql:stop
-wait 1</final>
-    <exitCondition>ticks &gt; 20000</exitCondition>
-    <metric>fields</metric>
-    <metric>[q-values-std] of turtles</metric>
-    <metric>[(item 0 rel-freqs)] of turtles with [is-player-x]</metric>
-    <metric>[(item 1 rel-freqs)] of turtles with [is-player-x]</metric>
-    <metric>[(item 0 rel-freqs)] of turtles with [not is-player-x]</metric>
-    <metric>[(item 1 rel-freqs)] of turtles with [not is-player-x]</metric>
-    <enumeratedValueSet variable="exploration-method">
-      <value value="&quot;softmax&quot;"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="n-pairs">
-      <value value="1000"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="sd">
+      <value value="0.5"/>
       <value value="1"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="means-x">
-      <value value="&quot;7 0\n 5 6&quot;"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="means-y">
-      <value value="&quot;3 10\n 5 4&quot;"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="experimenting">
-      <value value="0.1"/>
-      <value value="0.2"/>
-      <value value="0.3"/>
+      <value value="2"/>
+      <value value="5"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="game-name">
-      <value value="&quot;Custom&quot;"/>
+      <value value="&quot;MatchingPennies&quot;"/>
     </enumeratedValueSet>
   </experiment>
 </experiments>

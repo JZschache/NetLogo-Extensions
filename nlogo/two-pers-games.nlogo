@@ -198,15 +198,14 @@ to update-slow
 end
 
 to-report filter? [ n total-n ]
-  ifelse (exploration-method = "epsilon-greedy") [
-    ifelse (is-player-x) [
-      report 2.33 < abs (n / total-n - experimenting / n-alt-x) * (sqrt total-n) / (sqrt (experimenting / n-alt-x * (1 - experimenting / n-alt-x)))
-    ] [
-      report 2.33 < abs (n / total-n - experimenting / n-alt-y) * (sqrt total-n) / (sqrt (experimenting / n-alt-y * (1 - experimenting / n-alt-y)))
-    ]
-  ] [
-    report true  
-  ] 
+  
+  let expectation 0.05
+  if (exploration-method = "epsilon-greedy") [
+    set expectation experimenting / (length frequencies)
+  ]
+  
+  report 2.33 < (n / total-n - expectation) * (sqrt total-n) / (sqrt (expectation * (1 - expectation)))
+  
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
@@ -216,7 +215,7 @@ GRAPHICS-WINDOW
 468
 -1
 -1
-12.903225806451612
+12.121212121212121
 1
 10
 1
@@ -227,9 +226,9 @@ GRAPHICS-WINDOW
 1
 1
 0
-31
+33
 0
-31
+33
 0
 0
 1
@@ -245,7 +244,7 @@ n-pairs
 n-pairs
 0
 10000
-100
+118
 1
 1
 NIL
@@ -311,8 +310,8 @@ experimenting
 experimenting
 0
 16
-2
-0.005
+0.2
+0.05
 1
 NIL
 HORIZONTAL
@@ -338,7 +337,7 @@ INPUTBOX
 395
 175
 means-x
- 7  5\n 0 10\n
+10  0\n 0 10\n
 1
 1
 String
@@ -351,7 +350,7 @@ CHOOSER
 exploration-method
 exploration-method
 "epsilon-greedy" "softmax"
-1
+0
 
 MONITOR
 30
@@ -370,7 +369,7 @@ INPUTBOX
 625
 330
 fields
-| 1: ( 7, 7)  N| 2: ( 5, 5)   |\n| 3: ( 0, 0)   | 4: (10,10) ON|\n
+| 1: (10, 0) O | 2: ( 0,10) O |\n| 3: ( 0,10) O | 4: (10, 0) O |\n
 1
 1
 String
@@ -399,7 +398,7 @@ INPUTBOX
 575
 175
 means-y
- 7  5\n 0 10\n
+ 0 10\n10  0\n
 1
 1
 String
@@ -412,7 +411,7 @@ CHOOSER
 game-name
 game-name
 "Custom" "CopyMeansX" "TransposeMeansX" "BattleOfTheSexes" "Chicken" "CollaborationGame" "CoordinationGame" "DispersionGame" "GrabTheDollar" "GuessTwoThirdsAve" "HawkAndDove" "MajorityVoting" "MatchingPennies" "PrisonersDilemma" "RandomGame" "RandomZeroSum" "RockPaperScissors" "ShapleysGame"
-6
+12
 
 BUTTON
 580
@@ -437,7 +436,7 @@ INPUTBOX
 765
 496
 sample-equilibria
-    x1    x2    y1    y2  |    Ex    Ey  |    mx\n------------------------------------------------\n   5/6   1/6  5/12  7/12  |  35/6  35/6  |      \n
+   x1   x2   y1   y2  |   Ex   Ey  |   mx\n----------------------------------------\n  1/2  1/2  1/2  1/2  |    5    5  |    O\n
 1
 1
 String
@@ -575,6 +574,34 @@ NIL
 NIL
 NIL
 1
+
+BUTTON
+690
+640
+807
+673
+NIL
+update-slow
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+MONITOR
+915
+495
+1167
+540
+NIL
+[item 0 rel-freqs] of turtle 0
+17
+1
+11
 
 @#$#@#$#@
 ## WHAT IS IT?
@@ -1439,7 +1466,6 @@ wait 1</final>
     <metric>count turtles with [last-field = 3]</metric>
     <enumeratedValueSet variable="exploration-method">
       <value value="&quot;epsilon-greedy&quot;"/>
-      <value value="&quot;softmax&quot;"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="n-pairs">
       <value value="10000"/>
@@ -1499,9 +1525,10 @@ wait 1</final>
       <value value="&quot; 9 2\n 10 0&quot;"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="experimenting">
-      <value value="0.05"/>
-      <value value="0.1"/>
-      <value value="0.2"/>
+      <value value="0.5"/>
+      <value value="1"/>
+      <value value="2"/>
+      <value value="5"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="game-name">
       <value value="&quot;TransposeMeansX&quot;"/>
@@ -1600,7 +1627,7 @@ wait 1</final>
       <value value="&quot;TransposeMeansX&quot;"/>
     </enumeratedValueSet>
   </experiment>
-  <experiment name="exp-two-persons-prisoner-decay" repetitions="1" runMetricsEveryStep="false">
+  <experiment name="exp-two-persons-prisoner" repetitions="1" runMetricsEveryStep="false">
     <setup>set-game
 setup
 ql:decay-exploration
@@ -1624,7 +1651,6 @@ wait 1</final>
     <metric>count turtles with [last-field = 3]</metric>
     <enumeratedValueSet variable="exploration-method">
       <value value="&quot;epsilon-greedy&quot;"/>
-      <value value="&quot;softmax&quot;"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="n-pairs">
       <value value="10000"/>
@@ -1684,9 +1710,10 @@ wait 1</final>
       <value value="&quot; 9 0\n 10 2&quot;"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="experimenting">
-      <value value="0.05"/>
-      <value value="0.1"/>
-      <value value="0.2"/>
+      <value value="0.5"/>
+      <value value="1"/>
+      <value value="2"/>
+      <value value="5"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="game-name">
       <value value="&quot;TransposeMeansX&quot;"/>
@@ -2294,6 +2321,100 @@ wait 1</final>
     </enumeratedValueSet>
     <enumeratedValueSet variable="game-name">
       <value value="&quot;Custom&quot;"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="exp-two-persons-chicken-softmax-decay" repetitions="1" runMetricsEveryStep="false">
+    <setup>set-game
+setup
+ql:decay-exploration
+ql:start</setup>
+    <go>wait-for-tick</go>
+    <final>ql:stop
+wait 1</final>
+    <exitCondition>ticks &gt; 1000</exitCondition>
+    <metric>fields</metric>
+    <metric>rel-freq-optimal</metric>
+    <metric>rel-freq-nash</metric>
+    <metric>mean [q-values-std] of turtles</metric>
+    <metric>mean [exploration] of turtles</metric>
+    <metric>count turtles with [is-player-x and last-action = 0]</metric>
+    <metric>count turtles with [is-player-x and last-action = 1]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 0]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 1]</metric>
+    <metric>count turtles with [last-field = 0]</metric>
+    <metric>count turtles with [last-field = 1]</metric>
+    <metric>count turtles with [last-field = 2]</metric>
+    <metric>count turtles with [last-field = 3]</metric>
+    <enumeratedValueSet variable="exploration-method">
+      <value value="&quot;softmax&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="n-pairs">
+      <value value="10000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="sd">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="means-x">
+      <value value="&quot; 3 2\n 10 0&quot;"/>
+      <value value="&quot; 5 2\n 10 0&quot;"/>
+      <value value="&quot; 7 2\n 10 0&quot;"/>
+      <value value="&quot; 9 2\n 10 0&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="experimenting">
+      <value value="0.5"/>
+      <value value="1"/>
+      <value value="2"/>
+      <value value="5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="game-name">
+      <value value="&quot;TransposeMeansX&quot;"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="exp-two-persons-prisoner-softmax-decay" repetitions="1" runMetricsEveryStep="false">
+    <setup>set-game
+setup
+ql:decay-exploration
+ql:start</setup>
+    <go>wait-for-tick</go>
+    <final>ql:stop
+wait 1</final>
+    <exitCondition>ticks &gt; 1000</exitCondition>
+    <metric>fields</metric>
+    <metric>rel-freq-optimal</metric>
+    <metric>rel-freq-nash</metric>
+    <metric>mean [q-values-std] of turtles</metric>
+    <metric>mean [exploration] of turtles</metric>
+    <metric>count turtles with [is-player-x and last-action = 0]</metric>
+    <metric>count turtles with [is-player-x and last-action = 1]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 0]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 1]</metric>
+    <metric>count turtles with [last-field = 0]</metric>
+    <metric>count turtles with [last-field = 1]</metric>
+    <metric>count turtles with [last-field = 2]</metric>
+    <metric>count turtles with [last-field = 3]</metric>
+    <enumeratedValueSet variable="exploration-method">
+      <value value="&quot;softmax&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="n-pairs">
+      <value value="10000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="sd">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="means-x">
+      <value value="&quot; 3 0\n 10 2&quot;"/>
+      <value value="&quot; 5 0\n 10 2&quot;"/>
+      <value value="&quot; 7 0\n 10 2&quot;"/>
+      <value value="&quot; 9 0\n 10 2&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="experimenting">
+      <value value="0.5"/>
+      <value value="1"/>
+      <value value="2"/>
+      <value value="5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="game-name">
+      <value value="&quot;TransposeMeansX&quot;"/>
     </enumeratedValueSet>
   </experiment>
 </experiments>
