@@ -1,7 +1,7 @@
 extensions[ql games]
 
-turtles-own[ q-values frequencies rel-freqs exploration q-values-std last-action nash-action optimal-action last-field]
-globals[ game means-x-matrix means-y-matrix means-max optimal-fields nash-fields rel-freq-optimal rel-freq-nash nextTick ]
+turtles-own[ q-values frequencies rel-freqs exploration q-values-std last-action last-field]
+globals[ game means-x-matrix means-y-matrix means-max groups rel-freq-0 rel-freq-1 rel-freq-2 nextTick ]
 
 to-report read-means-matrix
   let row-string-list []
@@ -45,17 +45,13 @@ to set-game
   set means-x write-means-matrix means-x-matrix
   set sample-equilibria games:get-solutions-string game
   set fields games:get-fields-string game
-  ; update globals
-  set optimal-fields games:game-pure-optima game
-  set nash-fields games:game-pure-solutions game
 end
 
 
 to setup
-  set-default-shape turtles "circle"
   clear-all  
   
-  let n-patches (1 + floor sqrt (n-groups * 50))
+  let n-patches (1 + floor sqrt (n-agents))
   set-patch-size 400 / n-patches
   resize-world 0 n-patches 0 n-patches
   
@@ -63,72 +59,62 @@ to setup
     
   let rows-x read-means-matrix
   set means-max max map [max map [abs ?] ? ](sentence rows-x)
-  set rel-freq-optimal 0.0
   
-  let groups []
+  let n-groups ceiling n-agents / group-size
+  set rel-freq-0 n-values n-groups [0.0]
+  set rel-freq-1 n-values n-groups [0.0]
+  set rel-freq-2 n-values n-groups [0.0]
+  
+  set groups []
+  set-default-shape turtles "circle"
   create-turtles n-groups [
-    set size 0.1
+    set size 0.2
     let group (list self)
     hatch group-size - 1 [ ; create partners
       set group lput self group
     ]
-    ;set group-structure lput (ql:create-group (map [(list ? (n-values n-alt [(word ?)]))] group)) group-structure
     set groups lput group groups
   ]
+  ; reset global
+  set n-agents count turtles
   
-  ql:init turtles experimenting exploration-method
-  
-  ifelse fixed-structure [
-    let group-structure []
-    foreach groups [
-      let group-members ?
-      let gl length group-members
-      let i 0
-      while [i < gl] [
-        let j 0
-        while [j < n-way] [
-          set j j + 1
-          let firstTurtle item i group-members
-          let secondTurtle item ((i + j) mod gl) group-members
-          ask firstTurtle [ create-link-with secondTurtle ]
-          set group-structure lput (ql:create-group (list (list firstTurtle (n-values n-alt [(word ?)])) (list secondTurtle (n-values n-alt [(word ?)])) )) group-structure
+  let group-structure []
+  foreach groups [
+    let group-members ?
+    let gl length group-members
+    let i 0
+    while [i < gl] [
+      let j 0
+      while [j < n-way] [
+        set j j + 1
+        ask (item i group-members) [
+          let anotherTurtle item ((i + j) mod gl) group-members
+          if (random-float 1 < beta) [
+            set anotherTurtle one-of other (turtle-set group-members) with [ not member? self neighbors ]
+          ]
+          create-link-with  anotherTurtle
+          set group-structure lput (ql:create-group (list (list self (n-values n-alt [(word ?)])) (list anotherTurtle (n-values n-alt [(word ?)])) )) group-structure
         ]
-        set i i + 1
       ]
-      layout-circle group-members 1
-      let rxc random-xcor
-      let ryc random-ycor
-      foreach group-members [ ask ? [ setxy xcor + rxc ycor + ryc]]
+      set i i + 1
     ]
-    ql:set-group-structure group-structure
-  ] [
-    foreach groups [
-      let group-members ?
-      layout-circle group-members 1
-      let rxc random-xcor
-      let ryc random-ycor
-      foreach group-members [ ask ? [ setxy xcor + rxc ycor + ryc]]
-    ]
+    layout-circle group-members 1.5
+    let rxc random-xcor
+    let ryc random-ycor
+    foreach group-members [ ask ? [ setxy xcor + rxc ycor + ryc]]
   ]
+  
+  ; setup ql-extension
+  ql:init turtles experimenting exploration-method
+  ql:set-group-structure group-structure
     
   ask turtles [
-    set optimal-action false
-    set nash-action false
     set rel-freqs (n-values n-alt [ 0.0 ])
   ]
   
   set nextTick 0
   
   reset-ticks
-end
-
-to-report get-groups
-  let group-structure []
-  
-  
-  
-  
-  report group-structure
 end
 
 
@@ -147,20 +133,14 @@ to-report reward [group-choice]
   let dec-y (read-from-string last decisions)
   
   let field dec-x * n-alt + dec-y
-  let optimal item field optimal-fields
-  let nash item field nash-fields
   ask first agents [
     set color 10 * (dec-x + 2) + 5
     set last-action dec-x
-    set optimal-action optimal 
-    set nash-action nash
     set last-field field
   ]
   ask last agents [
     set color 10 * (dec-y + 2) + 5
     set last-action dec-y
-    set optimal-action optimal 
-    set nash-action nash
     set last-field field
   ]
     
@@ -186,11 +166,9 @@ end
 
 to update-slow
   
-  let optimal-freq count turtles with [optimal-action]
-  set rel-freq-optimal optimal-freq / group-size / n-groups
-  
-  let nash-freq count turtles with [nash-action]
-  set rel-freq-nash nash-freq / group-size / n-groups
+  set rel-freq-0 map [ (length filter [ 0 = [last-action] of ? ] ? ) / group-size] groups
+  set rel-freq-1 map [ (length filter [ 1 = [last-action] of ? ] ? ) / group-size] groups
+  set rel-freq-2 map [ (length filter [ 2 = [last-action] of ? ] ? ) / group-size] groups
   
   ask turtles [
     let total-n sum frequencies 
@@ -210,21 +188,21 @@ to update-slow
 end
 
 to-report filter? [ n total-n ]
-  ifelse (exploration-method = "epsilon-greedy") [
-    report 2.33 < abs (n / total-n - experimenting / n-alt) * (sqrt total-n) / (sqrt (experimenting / n-alt * (1 - experimenting / n-alt)))
-  ] [
-    report true  
-  ] 
+  let expectation 0.05
+  if (exploration-method = "epsilon-greedy") [
+    set expectation experimenting / n-alt
+  ]
+  report 2.33 < (n / total-n - expectation) * (sqrt total-n) / (sqrt (expectation * (1 - expectation)))
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
-847
+775
 25
-1291
-490
+1200
+471
 -1
 -1
-36.36363636363637
+17.391304347826086
 1
 10
 1
@@ -235,9 +213,9 @@ GRAPHICS-WINDOW
 1
 1
 0
-11
+23
 0
-11
+23
 0
 0
 1
@@ -249,12 +227,12 @@ SLIDER
 25
 215
 58
-n-groups
-n-groups
+n-agents
+n-agents
 0
-100
-2
-1
+10000
+500
+10
 1
 NIL
 HORIZONTAL
@@ -362,12 +340,12 @@ exploration-method
 0
 
 MONITOR
-30
-195
-215
-240
+385
+515
+955
+560
 NIL
-rel-freq-optimal
+rel-freq-0
 2
 1
 11
@@ -473,12 +451,12 @@ PENS
 "default" 0.05 1 -16777216 true "" "histogram [q-values-std] of turtles"
 
 MONITOR
-30
-245
-215
-290
+385
+565
+955
+610
 NIL
-rel-freq-nash
+rel-freq-1
 2
 1
 11
@@ -549,7 +527,7 @@ group-size
 group-size
 0
 100
-47
+10
 1
 1
 NIL
@@ -563,23 +541,46 @@ SLIDER
 n-way
 n-way
 0
-group-size - 1
-8
+group-size / 2
+5
 1
 1
 NIL
 HORIZONTAL
 
-SWITCH
+SLIDER
 400
 95
-570
+572
 128
-fixed-structure
-fixed-structure
+beta
+beta
 0
 1
--1000
+0
+0.01
+1
+NIL
+HORIZONTAL
+
+PLOT
+510
+630
+710
+780
+plot 1
+NIL
+NIL
+0.0
+1.1
+0.0
+10.0
+true
+false
+"" ""
+PENS
+"default" 0.05 1 -16777216 true "" "histogram rel-freq-0"
+"pen-1" 0.05 1 -7500403 true "" "histogram rel-freq-1"
 
 @#$#@#$#@
 ## WHAT IS IT?

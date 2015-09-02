@@ -145,6 +145,13 @@ class NetLogoSupervisor(netLogoRouter: ActorRef) extends Actor with FSM[NetLogoS
       goto(Supervising) using WithGroupReporter(groupReporter, workspace, remainingBatches, headlessIds, updateCommand, tickCount)
     }
     
+    // restart without fixed GroupStructure
+    // the group-reporter is called repeatedly in order to get a list NLGroups 
+    case Event(Start, WithGroupReporter(_,_,_,_,_,_)) => {
+      hundredTicksPerf send { _.start(scala.compat.Platform.currentTime)}
+      goto(Supervising)
+    }
+    
     // start with fixed GroupStructure
     case Event(Start, WithGroupStructure(_,_,_,_,_,_)) => {
       hundredTicksPerf send { _.start(scala.compat.Platform.currentTime)}

@@ -257,14 +257,17 @@ class CreateGroup extends DefaultReporter {
   
   def report(args: Array[Argument], context: Context): AnyRef = {
     
-    val (nlAgents, alternatives) = args(0).getList.map(entry => {
+    val (nlAgents, qlAgents, alternatives) = args(0).getList.map(entry => {
       val ll = entry.asInstanceOf[LogoList]
       val nlAgent = ll.first.asInstanceOf[org.nlogo.api.Agent]
-      val alt = ll.butFirst.first.asInstanceOf[LogoList].map(s => s.asInstanceOf[String]).toList 
-      (nlAgent, alt)
-    }).toList.unzip
+      val alt = ll.butFirst.first.asInstanceOf[LogoList].map(s => s.asInstanceOf[String]).toList
+      val qlAgent = QLSystem.qlDataMap.get().get(nlAgent)
+      if (qlAgent.isDefined)
+        qlAgent.get send { _.setAlternatives(alt) }
+      (nlAgent, qlAgent, alt)
+    }).toList.unzip3
        
-    NLGroup(nlAgents, Nil, alternatives)
+    NLGroup(nlAgents, qlAgents.filter(_.isDefined).map(_.get), alternatives)
   }
 }
 
