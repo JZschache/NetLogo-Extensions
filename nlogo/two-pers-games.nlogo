@@ -2387,6 +2387,124 @@ wait 1</final>
       <value value="&quot;ShapleysGame&quot;"/>
     </enumeratedValueSet>
   </experiment>
+  <experiment name="exp-two-persons-zero-sum-decay" repetitions="1" runMetricsEveryStep="false">
+    <setup>set-game
+setup
+ql:decay-exploration
+ql:start</setup>
+    <go>wait-for-tick</go>
+    <final>ql:stop
+wait 1</final>
+    <exitCondition>ticks &gt; 20000</exitCondition>
+    <metric>fields</metric>
+    <metric>[q-values-std] of turtles</metric>
+    <metric>[(item 0 rel-freqs)] of turtles with [is-player-x]</metric>
+    <metric>[(item 1 rel-freqs)] of turtles with [is-player-x]</metric>
+    <metric>[(item 0 rel-freqs)] of turtles with [not is-player-x]</metric>
+    <metric>[(item 1 rel-freqs)] of turtles with [not is-player-x]</metric>
+    <enumeratedValueSet variable="exploration-method">
+      <value value="&quot;epsilon-greedy&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="n-pairs">
+      <value value="1000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="sd">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="means-x">
+      <value value="&quot;7 0\n 5 6&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="means-y">
+      <value value="&quot;3 6\n 5 4&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="experimenting">
+      <value value="0.1"/>
+      <value value="0.2"/>
+      <value value="0.3"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="game-name">
+      <value value="&quot;Custom&quot;"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="exp-two-persons-zero-sum-softmax" repetitions="1" runMetricsEveryStep="false">
+    <setup>set-game
+setup
+ql:start</setup>
+    <go>wait-for-tick</go>
+    <final>ql:stop
+wait 1</final>
+    <exitCondition>ticks &gt; 20000</exitCondition>
+    <metric>fields</metric>
+    <metric>[q-values-std] of turtles</metric>
+    <metric>[(item 0 rel-freqs)] of turtles with [is-player-x]</metric>
+    <metric>[(item 1 rel-freqs)] of turtles with [is-player-x]</metric>
+    <metric>[(item 0 rel-freqs)] of turtles with [not is-player-x]</metric>
+    <metric>[(item 1 rel-freqs)] of turtles with [not is-player-x]</metric>
+    <enumeratedValueSet variable="exploration-method">
+      <value value="&quot;softmax&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="n-pairs">
+      <value value="1000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="sd">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="means-x">
+      <value value="&quot;7 0\n 5 6&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="means-y">
+      <value value="&quot;3 6\n 5 4&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="experimenting">
+      <value value="0.5"/>
+      <value value="1"/>
+      <value value="2"/>
+      <value value="5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="game-name">
+      <value value="&quot;Custom&quot;"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="exp-two-persons-zero-sum-softmax-decay" repetitions="1" runMetricsEveryStep="false">
+    <setup>set-game
+setup
+ql:decay-exploration
+ql:start</setup>
+    <go>wait-for-tick</go>
+    <final>ql:stop
+wait 1</final>
+    <exitCondition>ticks &gt; 20000</exitCondition>
+    <metric>fields</metric>
+    <metric>[q-values-std] of turtles</metric>
+    <metric>[(item 0 rel-freqs)] of turtles with [is-player-x]</metric>
+    <metric>[(item 1 rel-freqs)] of turtles with [is-player-x]</metric>
+    <metric>[(item 0 rel-freqs)] of turtles with [not is-player-x]</metric>
+    <metric>[(item 1 rel-freqs)] of turtles with [not is-player-x]</metric>
+    <enumeratedValueSet variable="exploration-method">
+      <value value="&quot;softmax&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="n-pairs">
+      <value value="1000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="sd">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="means-x">
+      <value value="&quot;7 0\n 5 6&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="means-y">
+      <value value="&quot;3 6\n 5 4&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="experimenting">
+      <value value="0.5"/>
+      <value value="1"/>
+      <value value="2"/>
+      <value value="5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="game-name">
+      <value value="&quot;Custom&quot;"/>
+    </enumeratedValueSet>
+  </experiment>
 </experiments>
 @#$#@#$#@
 @#$#@#$#@

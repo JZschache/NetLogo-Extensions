@@ -134,15 +134,18 @@ class NetLogoSupervisor(netLogoRouter: ActorRef) extends Actor with FSM[NetLogoS
       
     // SetGroupStructure message only works if Initialized
     case Event(SetGroupStructure(structure: List[NLGroup]), Initialized(ws, remainingBatches, headlessIds, updateCommand, tickCount)) => {
-      stay using WithGroupStructure(cutToBatches(structure), ws, remainingBatches, headlessIds, updateCommand, tickCount)
+      stay using WithGroupStructure(cutToBatches(structure), ws, cutToBatches(structure), headlessIds, updateCommand, tickCount)
     }
     
     // start without fixed GroupStructure
     // the group-reporter is called repeatedly in order to get a list NLGroups 
     case Event(Start, Initialized(workspace, remainingBatches, headlessIds, updateCommand, tickCount)) => {
       val groupReporter = workspace.compileReporter(groupRepName)
+      val owner = if (workspace.isHeadless()) workspace.asInstanceOf[HeadlessWorkspace].defaultOwner else nlApp.owner
+      val logolist = workspace.runCompiledReporter(owner, groupReporter).asInstanceOf[org.nlogo.api.LogoList]
+      val firstBatches = cutToBatches(logolist.map(_.asInstanceOf[NLGroup]).toList)
       hundredTicksPerf send { _.start(scala.compat.Platform.currentTime)}
-      goto(Supervising) using WithGroupReporter(groupReporter, workspace, remainingBatches, headlessIds, updateCommand, tickCount)
+      goto(Supervising) using WithGroupReporter(groupReporter, workspace, firstBatches, headlessIds, updateCommand, tickCount)
     }
     
     // restart without fixed GroupStructure
@@ -184,8 +187,11 @@ class NetLogoSupervisor(netLogoRouter: ActorRef) extends Actor with FSM[NetLogoS
       val time1 = scala.compat.Platform.currentTime
       QLSystem.nlSuperIdlePerf send { _.end(time1) }
       QLSystem.nlSuperHandleGroupsPerf send { _.start(time1)}
-            
-      val batches = if (d.remainingBatches.isEmpty) {
+      
+      // there should always be headlessIds and batches left
+      netLogoRouter ! NLGroupsList(d.headlessIds.first, d.remainingBatches.first)
+      
+      val batches = if (d.remainingBatches.tail.isEmpty) { // if this batch was the last one
         self ! UpdateNetLogo
         d match {
           case WithGroupStructure(groups, ws, remainingBatches, headlessIds,_,_) => groups
@@ -198,18 +204,17 @@ class NetLogoSupervisor(netLogoRouter: ActorRef) extends Actor with FSM[NetLogoS
             Nil
         }
       } else {
-        d.remainingBatches
+        d.remainingBatches.tail
       }
-           
-      netLogoRouter ! NLGroupsList(d.headlessIds.first, batches.first)
       
-      if (!d.headlessIds.tail.isEmpty) tick(d.workspace.isHeadless())
+      if (!d.headlessIds.tail.isEmpty) 
+        tick(d.workspace.isHeadless())
       
       val time2 = scala.compat.Platform.currentTime
       QLSystem.nlSuperHandleGroupsPerf send { _.end(time2)}
       QLSystem.nlSuperIdlePerf send { _.start(time2) }
       
-      stay using d.copy(batches.tail, d.headlessIds.tail)
+      stay using d.copy(batches, d.headlessIds.tail)
     }
     
     case Event(UpdateNetLogo, d: InitializedTrait) => {
