@@ -51,8 +51,8 @@ end
 to setup
   clear-all  
   
-  let n-patches (1 + floor sqrt (n-agents))
-  set-patch-size 400 / n-patches
+  let n-patches (1 + floor sqrt (n-agents / 4))
+  set-patch-size 500 / n-patches
   resize-world 0 n-patches 0 n-patches
   
   set-game
@@ -81,8 +81,8 @@ to setup
   ql:init turtles experimenting exploration-method
   
   set group-structure []
-  foreach groups [
-    let group-members ?
+  (foreach groups (n-values n-groups [floor (? / 3)]) (n-values n-groups [? mod 3]) [
+    let group-members ?1
     let gl length group-members
     let i 0
     while [i < gl] [
@@ -101,10 +101,10 @@ to setup
       set i i + 1
     ]
     layout-circle group-members 1.5
-    let rxc random-xcor
-    let ryc random-ycor
+    let rxc (1 - ?2) * 3.5
+    let ryc (1 - ?3) * 3.5
     foreach group-members [ ask ? [ setxy xcor + rxc ycor + ryc]]
-  ]
+  ])
   
   set next-groups n-of floor (n-agents / 2) group-structure
   set updated true
@@ -145,12 +145,12 @@ to-report reward [group-choice]
   
   let field dec-x * n-alt + dec-y
   ask first agents [
-    set color 10 * (dec-x + 2) + 5
+    set color 10 * (dec-x + 3) + 5
     set last-action dec-x
     set last-field field
   ]
   ask last agents [
-    set color 10 * (dec-y + 2) + 5
+    set color 10 * (dec-y + 3) + 5
     set last-action dec-y
     set last-field field
   ]
@@ -212,11 +212,11 @@ end
 GRAPHICS-WINDOW
 775
 25
-1201
-472
+1322
+593
 -1
 -1
-21.05263157894737
+45.45454545454545
 1
 10
 1
@@ -227,9 +227,9 @@ GRAPHICS-WINDOW
 1
 1
 0
-19
+11
 0
-19
+11
 0
 0
 1
@@ -245,7 +245,7 @@ n-agents
 n-agents
 0
 10000
-350
+450
 10
 1
 NIL
@@ -311,7 +311,7 @@ experimenting
 experimenting
 0
 16
-0.05
+0.1
 0.05
 1
 NIL
@@ -338,7 +338,7 @@ INPUTBOX
 395
 175
 means-x
-10  0\n 0  2\n
+10  0\n 0 10\n
 1
 1
 String
@@ -359,7 +359,7 @@ INPUTBOX
 625
 290
 fields
-| 1: (10,10) ON| 2: ( 0, 0)   |\n| 3: ( 0, 0)   | 4: ( 2, 2)  N|\n
+| 1: (10,10) ON| 2: ( 0, 0)   |\n| 3: ( 0, 0)   | 4: (10,10) ON|\n
 1
 1
 String
@@ -415,7 +415,7 @@ INPUTBOX
 765
 425
 sample-equilibria
-   x1   x2   y1   y2  |   Ex   Ey  |   mx\n----------------------------------------\n  1/6  5/6  1/6  5/6  |  5/3  5/3  |     \n
+   x1   x2   y1   y2  |   Ex   Ey  |   mx\n----------------------------------------\n  1/2  1/2  1/2  1/2  |    5    5  |     \n
 1
 1
 String
@@ -519,7 +519,7 @@ group-size
 group-size
 0
 100
-25
+50
 1
 1
 NIL
@@ -997,7 +997,7 @@ wait 1</final>
       <value value="1"/>
     </enumeratedValueSet>
   </experiment>
-  <experiment name="exp-n-way-coordination-1-test" repetitions="1" runMetricsEveryStep="false">
+  <experiment name="exp-n-way-coordination-2" repetitions="1" runMetricsEveryStep="false">
     <setup>set-game
 setup
 ql:start</setup>
@@ -1015,12 +1015,12 @@ wait 1</final>
     <metric>count turtles with [last-field = 1]</metric>
     <metric>count turtles with [last-field = 2]</metric>
     <metric>count turtles with [last-field = 3]</metric>
-    <metric>rel-freq-1</metric>
+    <metric>rel-freq-0</metric>
     <enumeratedValueSet variable="exploration-method">
       <value value="&quot;epsilon-greedy&quot;"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="n-agents">
-      <value value="100"/>
+      <value value="10000"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="sd">
       <value value="1"/>
@@ -1031,20 +1031,64 @@ wait 1</final>
     <enumeratedValueSet variable="experimenting">
       <value value="0.1"/>
     </enumeratedValueSet>
+    <enumeratedValueSet variable="group-size">
+      <value value="50"/>
+    </enumeratedValueSet>
     <enumeratedValueSet variable="n-way">
-      <value value="1"/>
+      <value value="5"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="means-x">
-      <value value="&quot;10  0\n 0 2\n&quot;"/>
+      <value value="&quot;10  0\n 0 8\n&quot;"/>
+      <value value="&quot;10  0\n 0 10\n&quot;"/>
     </enumeratedValueSet>
-    <enumeratedValueSet variable="group-size">
-      <value value="100"/>
+    <steppedValueSet variable="beta" first="0" step="0.1" last="1"/>
+  </experiment>
+  <experiment name="exp-n-way-coordination-3" repetitions="1" runMetricsEveryStep="false">
+    <setup>set-game
+setup
+ql:start</setup>
+    <go>if ticks &gt; 990 [ update-slow ]
+wait-for-tick</go>
+    <final>ql:stop
+wait 1</final>
+    <exitCondition>ticks &gt; 1000</exitCondition>
+    <metric>fields</metric>
+    <metric>mean [q-values-std] of turtles</metric>
+    <metric>mean [exploration] of turtles</metric>
+    <metric>count turtles with [last-action = 0]</metric>
+    <metric>count turtles with [last-action = 1]</metric>
+    <metric>count turtles with [last-field = 0]</metric>
+    <metric>count turtles with [last-field = 1]</metric>
+    <metric>count turtles with [last-field = 2]</metric>
+    <metric>count turtles with [last-field = 3]</metric>
+    <metric>rel-freq-0</metric>
+    <enumeratedValueSet variable="exploration-method">
+      <value value="&quot;epsilon-greedy&quot;"/>
     </enumeratedValueSet>
-    <enumeratedValueSet variable="beta">
-      <value value="0"/>
-      <value value="0.5"/>
+    <enumeratedValueSet variable="n-agents">
+      <value value="10000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="sd">
       <value value="1"/>
     </enumeratedValueSet>
+    <enumeratedValueSet variable="game-name">
+      <value value="&quot;TransposeMeansX&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="experimenting">
+      <value value="0.1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="group-size">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="n-way">
+      <value value="1"/>
+      <value value="10"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="means-x">
+      <value value="&quot;10  0\n 0 8\n&quot;"/>
+      <value value="&quot;10  0\n 0 10\n&quot;"/>
+    </enumeratedValueSet>
+    <steppedValueSet variable="beta" first="0" step="0.1" last="1"/>
   </experiment>
 </experiments>
 @#$#@#$#@
