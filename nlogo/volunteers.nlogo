@@ -1,46 +1,149 @@
 extensions[ql]
-patches-own[ q-values ]
+
+patches-own[ q-values frequencies rel-freqs q-values-std last-action]
+globals[ alternatives patches-list n-groups next-groups updated nextTick no-coop ]
 
 to setup
   clear-all
   set-patch-size 400 / n-patches  
   resize-world 0 (n-patches - 1) 0 (n-patches - 1)
   ql:init patches experimenting "epsilon-greedy"
-  let choices ["0" "1"]
-  let groups [ql:create-group (list (list self choices))] of patches
-  ql:set-group-structure groups
+  
+  ask patches [
+    set rel-freqs [0 0]
+    ifelse (random 2 = 1) [set pcolor blue] [set pcolor red]
+  ]
+  
+  set alternatives ["C" "D"]
+  set patches-list [self] of patches
+  set n-groups floor (n-patches ^ 2 / group-size)
+  set next-groups get-next-groups n-groups
+  set updated true  
+  set nextTick 0
+  set no-coop 0
+    
   reset-ticks
 end
 
-to-report get-rewards [ headless-id ]
-  let group-list ql:get-group-list headless-id
-  report map [reward ?] group-list
-end
-
-to-report reward [group-choice]
-  let agent first ql:get-agents group-choice
-  let decision first ql:get-decisions group-choice
-  ifelse decision = "0" [
-    ask agent [set pcolor blue]
-    report ql:set-rewards group-choice (list random-normal mean-1 sd)
-  ] [
-    ask agent [set pcolor red]
-    report ql:set-rewards group-choice (list random-normal mean-2 sd)
+to-report get-next-groups [number]
+  ifelse spatial [
+    report map [ ql:create-group map [(list ? alternatives)] (get-close-patches ?) ] n-of number patches-list
+  ][
+    let group-structure []
+    let random-patches shuffle patches-list
+    let i 0
+    while [i < number] [
+      set i i + 1
+      set group-structure lput ql:create-group map [(list ? alternatives)] sublist random-patches 0 group-size group-structure
+      set random-patches sublist random-patches group-size length random-patches
+    ]
+    report group-structure
   ]
 end
 
+to-report get-close-patches [p]
+  let group (list p)
+  ask p [
+    ifelse group-size < 10 
+    [ set group sentence group ([self] of (n-of (group-size - 1) neighbors)) ]
+    [ set group sentence group ([self] of neighbors) ]
+  ]
+  report group
+end
+
+
+to-report get-groups
+  ifelse updated [
+    set updated false
+    report next-groups
+  ] [
+    set updated false
+    report get-next-groups n-groups
+  ]
+end
+
+
+to-report get-rewards [ env-id ]
+  let dec-list ql:get-group-list env-id
+  let result map [reward ?] dec-list
+  report result
+end
+
+to-report reward [group-choice]
+  
+  let agents ql:get-agents group-choice
+  let decisions ql:get-decisions group-choice
+  (foreach agents decisions [
+    ask ?1 [
+      ifelse (?2 = "C") [ 
+        set last-action 0
+        set pcolor blue
+      ] [
+        set last-action 1
+        set pcolor red
+      ]
+    ]
+  ])
+  
+  ifelse (member? "C" decisions) [
+    report ql:set-rewards group-choice map [ifelse-value (? = "C") [ C-reward - C-costs ] [ C-reward ] ] decisions
+  ] [
+    report ql:set-rewards group-choice map [0.0] decisions
+  ]
+  
+end
+
+to wait-for-tick
+  set nextTick nextTick + 1
+  while [ticks < nextTick] [
+    set next-groups get-next-groups n-groups
+    set updated true
+  ]
+  ;while [ticks < nextTick] [ 
+  ;  update-slow
+  ;]
+end
+
 to update
+  ;update-slow
   tick
+end
+
+to update-slow
+  set no-coop sum (map [ifelse-value (member? 0 map [[last-action] of ?] ql:get-agents ?) [0] [1]] next-groups)
+  ask patches [
+    let total-n sum frequencies 
+    set rel-freqs map [? / total-n] frequencies
+    set q-values-std 0
+    if (total-n > 0) [
+      let zipped (map [ (list ?1 ?2) ] q-values frequencies)
+      let filtered filter [ ( filter? (item 1 ?) total-n) ] zipped
+      let qvs map [ (item 0 ?) / C-reward ] filtered
+      if (length qvs > 1) [ 
+        set q-values-std precision (standard-deviation qvs) 2
+      ]
+    ]
+  ]
+  
+  ;tick
+end
+
+to-report filter? [ n total-n ]
+  let expectation 0.05
+  if (exploration-method = "epsilon-greedy") [
+    set expectation experimenting / 2
+  ]
+  report 2.33 < (n / total-n - expectation) * (sqrt total-n) / (sqrt (expectation * (1 - expectation)))
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
-355
-35
-765
-466
+590
+25
+1000
+456
 -1
 -1
-8.0
+40.0
 1
 10
 1
@@ -51,9 +154,9 @@ GRAPHICS-WINDOW
 1
 1
 0
-49
+9
 0
-49
+9
 0
 0
 1
@@ -61,25 +164,25 @@ ticks
 30.0
 
 SLIDER
-50
-35
-222
-68
+30
+25
+215
+58
 n-patches
 n-patches
-0
-200
-50
+1
+100
+10
 1
 1
 ^2
 HORIZONTAL
 
 BUTTON
-230
-35
-350
-68
+395
+25
+530
+58
 NIL
 setup
 NIL
@@ -93,10 +196,10 @@ NIL
 1
 
 BUTTON
-230
-70
-350
-103
+395
+60
+530
+93
 NIL
 ql:start
 NIL
@@ -109,41 +212,11 @@ NIL
 NIL
 1
 
-SLIDER
-50
-140
-222
-173
-mean-1
-mean-1
-0
-100
-50
-1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-50
-175
-222
-208
-mean-2
-mean-2
-0
-100
-75
-1
-1
-NIL
-HORIZONTAL
-
 BUTTON
-230
-106
-350
-139
+395
+95
+530
+128
 NIL
 ql:stop
 NIL
@@ -157,141 +230,171 @@ NIL
 1
 
 SLIDER
-50
-70
-222
-103
+30
+60
+215
+93
 experimenting
 experimenting
 0
-1
+16
 0.05
-0.01
+0.05
+1
+NIL
+HORIZONTAL
+
+CHOOSER
+30
+95
+215
+140
+exploration-method
+exploration-method
+"epsilon-greedy" "softmax"
+0
+
+PLOT
+30
+175
+215
+310
+q-values-std-hist
+NIL
+NIL
+0.0
+1.0
+0.0
+10.0
+true
+false
+"" ""
+PENS
+"default" 0.05 1 -16777216 true "" "histogram [q-values-std] of patches"
+
+MONITOR
+30
+315
+215
+360
+mean [q-values-std]
+mean [q-values-std] of patches
+2
+1
+11
+
+PLOT
+220
+175
+390
+310
+freq-hist
+NIL
+NIL
+0.0
+10.0
+0.0
+10.0
+true
+false
+"" ""
+PENS
+"default" 1.0 1 -16777216 true "set-plot-x-range 0 2" "histogram [last-action] of patches"
+
+SLIDER
+220
+25
+390
+58
+group-size
+group-size
+2
+10
+2
+1
+1
+NIL
+HORIZONTAL
+
+BUTTON
+30
+370
+215
+405
+NIL
+update-slow\n
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+SLIDER
+220
+60
+390
+93
+C-reward
+C-reward
+0
+10
+10
+1
 1
 NIL
 HORIZONTAL
 
 SLIDER
-50
-105
-222
-138
-sd
-sd
-0
-100
-10
-0.1
+220
+95
+390
+128
+C-costs
+C-costs
+1
+C-reward - 1
+3
+1
 1
 NIL
 HORIZONTAL
 
-PLOT
-50
-215
-350
+MONITOR
+220
+315
+390
+360
+mean [last-action]
+mean [last-action] of patches
+17
+1
+11
+
+MONITOR
+220
 365
-means of qv-1 and qv-2
+390
+410
 NIL
-NIL
-0.0
-10.0
-0.0
-10.0
-true
-true
-"" ""
-PENS
-"qv-1" 1.0 0 -16777216 true "" "plot mean [first q-values] of patches"
-"qv-2" 1.0 0 -7500403 true "" "plot mean [last q-values] of patches"
-
-MONITOR
-50
-520
-345
-565
-NIL
-ql:get-performance \"NLSuperIdle\"
+no-coop / n-groups
 17
 1
 11
 
-MONITOR
-50
-570
-345
-615
-NIL
-ql:get-performance \"NLSuperHandleGroups\"
-17
+SWITCH
+220
+130
+390
+163
+spatial
+spatial
 1
-11
-
-MONITOR
-50
-620
-345
-665
-NIL
-ql:get-performance \"NLSuperUpdate\"
-17
 1
-11
-
-MONITOR
-350
-470
-670
-515
-NIL
-ql:get-performance \"HeadlessIdle 1\"
-17
-1
-11
-
-MONITOR
-350
-520
-670
-565
-NIL
-ql:get-performance \"HeadlessHandleGroups 1\"
-17
-1
-11
-
-MONITOR
-350
-570
-670
-615
-NIL
-ql:get-performance \"HeadlessHandleChoices 1\"
-17
-1
-11
-
-MONITOR
-350
-620
-670
-665
-NIL
-ql:get-performance \"HeadlessAnswering 1\"
-17
-1
-11
-
-MONITOR
-50
-470
-345
-515
-NIL
-ql:get-performance \"HundredTicks\"
-17
-1
-11
+-1000
 
 @#$#@#$#@
 ## WHAT IS IT?
@@ -641,49 +744,44 @@ NetLogo 5.2.0
 @#$#@#$#@
 @#$#@#$#@
 <experiments>
-  <experiment name="performance-experiment" repetitions="10" runMetricsEveryStep="false">
+  <experiment name="exp-volunteers-overview" repetitions="1" runMetricsEveryStep="false">
     <setup>setup
 ql:start</setup>
-    <final>ql:stop</final>
+    <go>if ticks &gt; 990 [ update-slow ]
+wait-for-tick</go>
+    <final>ql:stop
+wait 1</final>
     <exitCondition>ticks &gt; 1000</exitCondition>
-    <metric>ql:get-performance "HundredTicks"</metric>
-    <metric>ql:get-performance "NLSuperIdle"</metric>
-    <metric>ql:get-performance "NLSuperHandleGroups"</metric>
-    <metric>ql:get-performance "NLSuperUpdate"</metric>
-    <metric>ql:get-performance "HeadlessAnswering 1"</metric>
-    <metric>ql:get-performance "HeadlessIdle 1"</metric>
-    <metric>ql:get-performance "HeadlessHandleGroups 1"</metric>
-    <metric>ql:get-performance "HeadlessHandleChoices 1"</metric>
-    <metric>ql:get-performance "HeadlessAnswering 2"</metric>
-    <metric>ql:get-performance "HeadlessIdle 2"</metric>
-    <metric>ql:get-performance "HeadlessHandleGroups 2"</metric>
-    <metric>ql:get-performance "HeadlessHandleChoices 2"</metric>
-    <metric>ql:get-performance "HeadlessAnswering 3"</metric>
-    <metric>ql:get-performance "HeadlessIdle 3"</metric>
-    <metric>ql:get-performance "HeadlessHandleGroups 3"</metric>
-    <metric>ql:get-performance "HeadlessHandleChoices 3"</metric>
-    <metric>ql:get-performance "HeadlessAnswering 4"</metric>
-    <metric>ql:get-performance "HeadlessIdle 4"</metric>
-    <metric>ql:get-performance "HeadlessHandleGroups 4"</metric>
-    <metric>ql:get-performance "HeadlessHandleChoices 4"</metric>
-    <enumeratedValueSet variable="sd">
-      <value value="10"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="mean-1">
-      <value value="50"/>
-    </enumeratedValueSet>
+    <metric>mean [q-values-std] of patches</metric>
+    <metric>count patches with [last-action = 0]</metric>
+    <metric>no-coop</metric>
+    <metric>[first rel-freqs] of patches</metric>
     <enumeratedValueSet variable="n-patches">
-      <value value="50"/>
       <value value="100"/>
-      <value value="150"/>
-      <value value="200"/>
     </enumeratedValueSet>
-    <enumeratedValueSet variable="mean-2">
-      <value value="75"/>
+    <enumeratedValueSet variable="exploration-method">
+      <value value="&quot;epsilon-greedy&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="spatial">
+      <value value="false"/>
+      <value value="true"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="experimenting">
       <value value="0.05"/>
+      <value value="0.1"/>
+      <value value="0.2"/>
     </enumeratedValueSet>
+    <enumeratedValueSet variable="C-reward">
+      <value value="10"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="C-costs">
+      <value value="1"/>
+      <value value="3"/>
+      <value value="5"/>
+      <value value="7"/>
+      <value value="9"/>
+    </enumeratedValueSet>
+    <steppedValueSet variable="group-size" first="2" step="1" last="10"/>
   </experiment>
 </experiments>
 @#$#@#$#@
