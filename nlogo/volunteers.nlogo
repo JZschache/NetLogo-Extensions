@@ -27,7 +27,16 @@ end
 
 to-report get-next-groups [number]
   ifelse spatial [
-    report map [ ql:create-group map [(list ? alternatives)] (get-close-patches ?) ] n-of number patches-list
+    ;report map [ ql:create-group map [(list ? alternatives)] (get-close-patches ?) ] n-of number patches-list
+    let group-structure []
+    let fixed-patches patches-list
+    let i 0
+    while [i < number] [
+      set i i + 1
+      set group-structure lput ql:create-group map [(list ? alternatives)] sublist fixed-patches 0 group-size group-structure
+      set fixed-patches sublist fixed-patches group-size length fixed-patches
+    ]
+    report group-structure
   ][
     let group-structure []
     let random-patches shuffle patches-list
@@ -112,8 +121,12 @@ end
 to update-slow
   set no-coop sum (map [ifelse-value (member? 0 map [[last-action] of ?] ql:get-agents ?) [0] [1]] next-groups)
   ask patches [
-    let total-n sum frequencies 
-    set rel-freqs map [? / total-n] frequencies
+    let total-n sum frequencies
+    ifelse (total-n > 0) [
+      set rel-freqs map [? / total-n] frequencies
+    ] [
+      set rel-freqs [0 0]
+    ]
     set q-values-std 0
     if (total-n > 0) [
       let zipped (map [ (list ?1 ?2) ] q-values frequencies)
@@ -143,7 +156,7 @@ GRAPHICS-WINDOW
 456
 -1
 -1
-40.0
+20.0
 1
 10
 1
@@ -154,9 +167,9 @@ GRAPHICS-WINDOW
 1
 1
 0
-9
+19
 0
-9
+19
 0
 0
 1
@@ -172,7 +185,7 @@ n-patches
 n-patches
 1
 100
-10
+20
 1
 1
 ^2
@@ -238,7 +251,7 @@ experimenting
 experimenting
 0
 16
-0.05
+0.1
 0.05
 1
 NIL
@@ -310,7 +323,7 @@ group-size
 group-size
 2
 10
-2
+3
 1
 1
 NIL
@@ -357,7 +370,7 @@ C-costs
 C-costs
 1
 C-reward - 1
-3
+5
 1
 1
 NIL
@@ -393,6 +406,35 @@ SWITCH
 spatial
 spatial
 1
+1
+-1000
+
+PLOT
+130
+460
+330
+610
+plot 1
+NIL
+NIL
+0.0
+1.0
+0.0
+10.0
+true
+false
+"" ""
+PENS
+"default" 0.01 1 -16777216 true "" "histogram [first rel-freqs] of patches"
+
+SWITCH
+395
+130
+537
+163
+asymmetric
+asymmetric
+0
 1
 -1000
 
@@ -768,6 +810,81 @@ wait 1</final>
     </enumeratedValueSet>
     <enumeratedValueSet variable="experimenting">
       <value value="0.05"/>
+      <value value="0.1"/>
+      <value value="0.2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="C-reward">
+      <value value="10"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="C-costs">
+      <value value="1"/>
+      <value value="3"/>
+      <value value="5"/>
+      <value value="7"/>
+      <value value="9"/>
+    </enumeratedValueSet>
+    <steppedValueSet variable="group-size" first="2" step="1" last="10"/>
+  </experiment>
+  <experiment name="exp-volunteers-spatial" repetitions="1" runMetricsEveryStep="false">
+    <setup>setup
+ql:start</setup>
+    <go>if ticks &gt; 990 [ update-slow ]
+wait-for-tick</go>
+    <final>ql:stop
+wait 1</final>
+    <exitCondition>ticks &gt; 1000</exitCondition>
+    <metric>mean [q-values-std] of patches</metric>
+    <metric>count patches with [last-action = 0]</metric>
+    <metric>no-coop</metric>
+    <metric>[first rel-freqs] of patches</metric>
+    <enumeratedValueSet variable="n-patches">
+      <value value="100"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="exploration-method">
+      <value value="&quot;epsilon-greedy&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="spatial">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="experimenting">
+      <value value="0.05"/>
+      <value value="0.1"/>
+      <value value="0.2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="C-reward">
+      <value value="10"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="C-costs">
+      <value value="1"/>
+      <value value="3"/>
+      <value value="5"/>
+      <value value="7"/>
+      <value value="9"/>
+    </enumeratedValueSet>
+    <steppedValueSet variable="group-size" first="2" step="1" last="10"/>
+  </experiment>
+  <experiment name="exp-volunteers-spatial-2" repetitions="1" runMetricsEveryStep="false">
+    <setup>setup
+ql:start</setup>
+    <go>if ticks &gt; 990 [ update-slow ]
+wait-for-tick</go>
+    <final>ql:stop
+wait 1</final>
+    <exitCondition>ticks &gt; 1000</exitCondition>
+    <metric>mean [q-values-std] of patches</metric>
+    <metric>count patches with [last-action = 0]</metric>
+    <metric>no-coop</metric>
+    <metric>[first rel-freqs] of patches</metric>
+    <enumeratedValueSet variable="n-patches">
+      <value value="100"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="exploration-method">
+      <value value="&quot;epsilon-greedy&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="spatial">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="experimenting">
       <value value="0.1"/>
       <value value="0.2"/>
     </enumeratedValueSet>

@@ -1,131 +1,75 @@
-extensions[ql games]
+extensions[ql]
 
-turtles-own[ q-values frequencies rel-freqs exploration q-values-std last-action last-field]
-globals[ game means-x-matrix means-y-matrix means-max groups group-structure rel-freq-0 rel-freq-1 nextTick next-groups updated]
-
-to-report read-means-matrix
-  let row-string-list []
-  let temp means-x
-  while [temp != ""] [
-    let line-break position "\n" temp
-    ifelse line-break = false [ 
-      set row-string-list lput temp row-string-list
-      set temp ""
-    ] [
-      set row-string-list lput (substring temp 0 line-break) row-string-list
-      set temp substring temp (line-break + 1) (length temp)
-    ]
-  ]
-  report (map [read-from-string (word "[ " ? " ]")] row-string-list)
-end
-
-to-report write-means-matrix [ matrix ]
-  let strings games:matrix-as-pretty-strings matrix
-  let result ""
-  foreach strings [ set result (word result (reduce [(word ?1 " " ?2 )] ?) "\n") ]
-  report result
-end
-
-
-to set-game
-    
-  ifelse (game-name = "TransposeMeansX") [
-      set means-x-matrix games:matrix-from-row-list read-means-matrix
-      set means-y-matrix games:matrix-transpose means-x-matrix
-      set game games:two-persons-game means-x-matrix means-y-matrix
-  ][ ; else: use gamut
-    set game games:two-persons-gamut-game game-name n-alt n-alt
-    set means-x-matrix games:game-matrix game 1
-    set means-y-matrix games:game-matrix game 2
-  ]
-  
-  ; update interface
-  let m games:matrix-as-pretty-strings means-x-matrix
-  set n-alt length m
-  set means-x write-means-matrix means-x-matrix
-  set sample-equilibria games:get-solutions-string game
-  set fields games:get-fields-string game
-end
-
+patches-own[ is-best q-values frequencies rel-freqs q-values-std last-action]
+globals[ alternatives patches-list n-groups next-groups updated nextTick no-coop ]
 
 to setup
-  clear-all  
+  clear-all
+  set-patch-size 400 / n-patches  
+  resize-world 0 (n-patches - 1) 0 (n-patches - 1)
+  ql:init patches experimenting "epsilon-greedy"
   
-  let n-patches (1 + floor sqrt (n-agents / 4))
-  set-patch-size 500 / n-patches
-  resize-world 0 n-patches 0 n-patches
-  
-  set-game
-    
-  let rows-x read-means-matrix
-  set means-max max map [max map [abs ?] ? ](sentence rows-x)
-  
-  let n-groups ceiling n-agents / group-size
-  set rel-freq-0 n-values n-groups [0.0]
-  set rel-freq-1 n-values n-groups [0.0]
-  
-  set groups []
-  set-default-shape turtles "circle"
-  create-turtles n-groups [
-    set size 0.2
-    let group (list self)
-    hatch group-size - 1 [ ; create partners
-      set group lput self group
-    ]
-    set groups lput group groups
-  ]
-  ; reset global
-  set n-agents count turtles
-  
-  ; it is important that the ql-extension is initialised before the groups are created (because of the dynamic group structure)
-  ql:init turtles experimenting exploration-method
-  
-  set group-structure []
-  (foreach groups (n-values n-groups [floor (? / 3)]) (n-values n-groups [? mod 3]) [
-    let group-members ?1
-    let gl length group-members
-    let i 0
-    while [i < gl] [
-      let j 0
-      while [j < n-way] [
-        set j j + 1
-        ask (item i group-members) [
-          let anotherTurtle item ((i + j) mod gl) group-members
-          if (random-float 1 < beta) [
-            set anotherTurtle one-of other (turtle-set group-members) with [ not member? self neighbors ]
-          ]
-          create-link-with  anotherTurtle
-          set group-structure lput (ql:create-group (list (list self (n-values n-alt [(word ?)])) (list anotherTurtle (n-values n-alt [(word ?)])) )) group-structure
-        ]
-      ]
-      set i i + 1
-    ]
-    layout-circle group-members 1.5
-    let rxc (1 - ?2) * 3.5
-    let ryc (1 - ?3) * 3.5
-    foreach group-members [ ask ? [ setxy xcor + rxc ycor + ryc]]
-  ])
-  
-  set next-groups n-of floor (n-agents / 2) group-structure
-  set updated true
-    
-  ask turtles [
-    set rel-freqs (n-values n-alt [ 0.0 ])
+  ask patches [
+    set rel-freqs [0 0]
+    ifelse (random 2 = 1) [set pcolor blue] [set pcolor red]
+    set is-best (random 2 = 1)
   ]
   
+  set alternatives ["C" "D"]
+  set patches-list [self] of patches
+  set n-groups floor (n-patches ^ 2 / group-size)
+  set next-groups get-next-groups n-groups
+  set updated true  
   set nextTick 0
-  
+  set no-coop 0
+    
   reset-ticks
 end
+
+to-report get-next-groups [number]
+  ifelse spatial [
+    ;report map [ ql:create-group map [(list ? alternatives)] (get-close-patches ?) ] n-of number patches-list
+    let group-structure []
+    let fixed-patches patches-list
+    let i 0
+    while [i < number] [
+      set i i + 1
+      set group-structure lput ql:create-group map [(list ? alternatives)] sublist fixed-patches 0 group-size group-structure
+      set fixed-patches sublist fixed-patches group-size length fixed-patches
+    ]
+    report group-structure
+  ][
+    let group-structure []
+    let random-patches shuffle patches-list
+    let i 0
+    while [i < number] [
+      set i i + 1
+      set group-structure lput ql:create-group map [(list ? alternatives)] sublist random-patches 0 group-size group-structure
+      set random-patches sublist random-patches group-size length random-patches
+    ]
+    report group-structure
+  ]
+end
+
+to-report get-close-patches [p]
+  let group (list p)
+  ask p [
+    ifelse group-size < 10 
+    [ set group sentence group ([self] of (n-of (group-size - 1) neighbors)) ]
+    [ set group sentence group ([self] of neighbors) ]
+  ]
+  report group
+end
+
 
 to-report get-groups
   ifelse updated [
     set updated false
     report next-groups
   ] [
-    report n-of floor (n-agents / 2) group-structure
+    set updated false
+    report get-next-groups n-groups
   ]
-  
 end
 
 
@@ -139,34 +83,37 @@ to-report reward [group-choice]
   
   let agents ql:get-agents group-choice
   let decisions ql:get-decisions group-choice
+  (foreach agents decisions [
+    ask ?1 [
+      ifelse (?2 = "C") [ 
+        set last-action 0
+        set pcolor blue
+      ] [
+        set last-action 1
+        set pcolor red
+      ]
+    ]
+  ])
   
-  let dec-x (read-from-string first decisions) 
-  let dec-y (read-from-string last decisions)
-  
-  let field dec-x * n-alt + dec-y
-  ask first agents [
-    set color 10 * (dec-x + 3) + 5
-    set last-action dec-x
-    set last-field field
+  ifelse (member? "C" decisions) [
+    ifelse asymmetric [
+      report ql:set-rewards group-choice (map [
+        ifelse-value (?1 = "C") [ 
+          ifelse-value ([is-best] of ?2) [C-reward - (C-costs / 2)] [C-reward - C-costs] ] [ C-reward ] 
+      ] decisions agents)
+    ][
+      report ql:set-rewards group-choice map [ ifelse-value (? = "C") [ C-reward - C-costs ] [ C-reward ] ] decisions
+    ]
+  ] [
+    report ql:set-rewards group-choice map [0.0] decisions
   ]
-  ask last agents [
-    set color 10 * (dec-y + 3) + 5
-    set last-action dec-y
-    set last-field field
-  ]
-    
-  let m1 games:get-reward means-x-matrix dec-x dec-y
-  let m2 games:get-reward means-y-matrix dec-x dec-y
-   
-  let rewards (list (random-normal m1 sd) (random-normal m2 sd))
-  report ql:set-rewards group-choice rewards
   
 end
 
 to wait-for-tick
   set nextTick nextTick + 1
   while [ticks < nextTick] [
-    set next-groups n-of floor (n-agents / 2) group-structure
+    set next-groups get-next-groups n-groups
     set updated true
   ]
   ;while [ticks < nextTick] [ 
@@ -180,18 +127,19 @@ to update
 end
 
 to update-slow
-  
-  set rel-freq-0 map [ (length filter [ 0 = [last-action] of ? ] ? ) / group-size] groups
-  set rel-freq-1 map [ (length filter [ 1 = [last-action] of ? ] ? ) / group-size] groups
-  
-  ask turtles [
-    let total-n sum frequencies 
+  set no-coop sum (map [ifelse-value (member? 0 map [[last-action] of ?] ql:get-agents ?) [0] [1]] next-groups)
+  ask patches [
+    let total-n sum frequencies
+    ifelse (total-n > 0) [
+      set rel-freqs map [? / total-n] frequencies
+    ] [
+      set rel-freqs [0 0]
+    ]
     set q-values-std 0
     if (total-n > 0) [
-      set rel-freqs map [ precision (? / total-n) 10] frequencies   
       let zipped (map [ (list ?1 ?2) ] q-values frequencies)
       let filtered filter [ ( filter? (item 1 ?) total-n) ] zipped
-      let qvs map [ (item 0 ?) / means-max ] filtered
+      let qvs map [ (item 0 ?) / C-reward ] filtered
       if (length qvs > 1) [ 
         set q-values-std precision (standard-deviation qvs) 2
       ]
@@ -204,19 +152,19 @@ end
 to-report filter? [ n total-n ]
   let expectation 0.05
   if (exploration-method = "epsilon-greedy") [
-    set expectation experimenting / n-alt
+    set expectation experimenting / 2
   ]
   report 2.33 < (n / total-n - expectation) * (sqrt total-n) / (sqrt (expectation * (1 - expectation)))
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
-775
+590
 25
-1330
-601
+1000
+456
 -1
 -1
-45.45454545454545
+20.0
 1
 10
 1
@@ -227,9 +175,9 @@ GRAPHICS-WINDOW
 1
 1
 0
-11
+19
 0
-11
+19
 0
 0
 1
@@ -241,21 +189,21 @@ SLIDER
 25
 215
 58
-n-agents
-n-agents
-0
-10000
-450
-10
+n-patches
+n-patches
 1
-NIL
+100
+20
+1
+1
+^2
 HORIZONTAL
 
 BUTTON
-630
-185
-765
-218
+395
+25
+530
+58
 NIL
 setup
 NIL
@@ -269,10 +217,10 @@ NIL
 1
 
 BUTTON
-630
-220
-765
-253
+395
+60
+530
+93
 NIL
 ql:start
 NIL
@@ -286,10 +234,10 @@ NIL
 1
 
 BUTTON
-630
-255
-765
-288
+395
+95
+530
+128
 NIL
 ql:stop
 NIL
@@ -317,32 +265,6 @@ experimenting
 NIL
 HORIZONTAL
 
-SLIDER
-580
-75
-765
-108
-sd
-sd
-0
-10
-1
-0.1
-1
-NIL
-HORIZONTAL
-
-INPUTBOX
-220
-60
-395
-175
-means-x
-10  0\n 0  10\n
-1
-1
-String
-
 CHOOSER
 30
 95
@@ -353,93 +275,11 @@ exploration-method
 "epsilon-greedy" "softmax"
 0
 
-INPUTBOX
-220
-185
-625
-290
-fields
-| 1: (10,10) ON| 2: ( 0, 0)   |\n| 3: ( 0, 0)   | 4: ( 2, 2)  N|\n
-1
-1
-String
-
-PLOT
-385
-430
-575
-555
-fields-histogram
-NIL
-NIL
-0.0
-10.0
-0.0
-10.0
-true
-false
-"" ""
-PENS
-"default" 1.0 1 -16777216 false "set-plot-x-range 0 (n-alt * n-alt)" "histogram [last-field] of turtles"
-
-CHOOSER
-580
-25
-765
-70
-game-name
-game-name
-"TransposeMeansX" "Chicken" "DispersionGame" "GrabTheDollar" "GuessTwoThirdsAve" "HawkAndDove" "PrisonersDilemma" "RockPaperScissors" "ShapleysGame"
-0
-
-BUTTON
-580
-110
-765
-143
-NIL
-set-game
-NIL
-1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
-1
-
-INPUTBOX
-220
-295
-765
-425
-sample-equilibria
-   x1   x2   y1   y2  |   Ex   Ey  |   mx\n----------------------------------------\n  1/6  5/6  1/6  5/6  |  5/3  5/3  |     \n
-1
-1
-String
-
-SLIDER
-220
-25
-395
-58
-n-alt
-n-alt
-1
-10
-2
-1
-1
-NIL
-HORIZONTAL
-
 PLOT
 30
-370
+175
 215
-505
+310
 q-values-std-hist
 NIL
 NIL
@@ -451,35 +291,24 @@ true
 false
 "" ""
 PENS
-"default" 0.05 1 -16777216 true "" "histogram [q-values-std] of turtles"
+"default" 0.05 1 -16777216 true "" "histogram [q-values-std] of patches"
 
 MONITOR
 30
-510
+315
 215
-555
+360
 mean [q-values-std]
-mean [q-values-std] of turtles
+mean [q-values-std] of patches
 2
-1
-11
-
-MONITOR
-30
-145
-217
-190
-mean [exploration]
-mean [exploration] of turtles
-5
 1
 11
 
 PLOT
 220
-430
-380
-555
+175
+390
+310
 freq-hist
 NIL
 NIL
@@ -491,93 +320,28 @@ true
 false
 "" ""
 PENS
-"default" 1.0 1 -16777216 true "set-plot-x-range 0 n-alt" "histogram [last-action] of turtles"
-
-BUTTON
-580
-145
-765
-178
-NIL
-ql:decay-exploration
-NIL
-1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
-1
+"default" 1.0 1 -16777216 true "set-plot-x-range 0 2" "histogram [last-action] of patches with [not is-best]"
 
 SLIDER
-400
+220
 25
-572
+390
 58
 group-size
 group-size
-0
-100
-50
+2
+10
+3
 1
 1
 NIL
 HORIZONTAL
-
-SLIDER
-400
-60
-572
-93
-n-way
-n-way
-1
-group-size / 2
-1
-1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-400
-95
-572
-128
-beta
-beta
-0
-1
-0
-0.01
-1
-NIL
-HORIZONTAL
-
-PLOT
-30
-225
-215
-365
-rel-freq-hist
-NIL
-NIL
-0.0
-1.1
-0.0
-10.0
-true
-false
-"" ""
-PENS
-"default" 0.05 1 -16777216 true "" "histogram rel-freq-0"
 
 BUTTON
-580
-430
-697
-463
+30
+370
+215
+405
 NIL
 update-slow\n
 NIL
@@ -589,6 +353,127 @@ NIL
 NIL
 NIL
 1
+
+SLIDER
+220
+60
+390
+93
+C-reward
+C-reward
+0
+10
+10
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+220
+95
+390
+128
+C-costs
+C-costs
+1
+C-reward - 1
+5
+1
+1
+NIL
+HORIZONTAL
+
+MONITOR
+220
+315
+390
+360
+mean [last-action]
+mean [last-action] of patches with [not is-best]
+17
+1
+11
+
+MONITOR
+220
+365
+390
+410
+NIL
+no-coop / n-groups
+17
+1
+11
+
+SWITCH
+220
+130
+390
+163
+spatial
+spatial
+1
+1
+-1000
+
+PLOT
+130
+460
+330
+610
+plot 1
+NIL
+NIL
+0.0
+1.0
+0.0
+10.0
+true
+false
+"" ""
+PENS
+"default" 0.01 1 -16777216 true "" "histogram [first rel-freqs] of patches"
+
+SWITCH
+395
+130
+537
+163
+asymmetric
+asymmetric
+0
+1
+-1000
+
+PLOT
+395
+175
+565
+310
+freq-hist of best
+NIL
+NIL
+0.0
+2.0
+0.0
+10.0
+true
+false
+"" ""
+PENS
+"default" 1.0 1 -16777216 true "" "histogram [last-action] of patches with [is-best]"
+
+MONITOR
+395
+315
+565
+360
+mean [last-action] of best
+mean [last-action] of patches with [is-best]
+17
+1
+11
 
 @#$#@#$#@
 ## WHAT IS IT?
@@ -938,157 +823,130 @@ NetLogo 5.2.0
 @#$#@#$#@
 @#$#@#$#@
 <experiments>
-  <experiment name="exp-n-way-coordination-1" repetitions="1" runMetricsEveryStep="false">
-    <setup>set-game
-setup
+  <experiment name="exp-volunteers-overview" repetitions="1" runMetricsEveryStep="false">
+    <setup>setup
 ql:start</setup>
     <go>if ticks &gt; 990 [ update-slow ]
 wait-for-tick</go>
     <final>ql:stop
 wait 1</final>
     <exitCondition>ticks &gt; 1000</exitCondition>
-    <metric>fields</metric>
-    <metric>mean [q-values-std] of turtles</metric>
-    <metric>mean [exploration] of turtles</metric>
-    <metric>count turtles with [last-action = 0]</metric>
-    <metric>count turtles with [last-action = 1]</metric>
-    <metric>count turtles with [last-field = 0]</metric>
-    <metric>count turtles with [last-field = 1]</metric>
-    <metric>count turtles with [last-field = 2]</metric>
-    <metric>count turtles with [last-field = 3]</metric>
-    <metric>rel-freq-0</metric>
+    <metric>mean [q-values-std] of patches</metric>
+    <metric>count patches with [last-action = 0]</metric>
+    <metric>no-coop</metric>
+    <metric>[first rel-freqs] of patches</metric>
+    <enumeratedValueSet variable="n-patches">
+      <value value="100"/>
+    </enumeratedValueSet>
     <enumeratedValueSet variable="exploration-method">
       <value value="&quot;epsilon-greedy&quot;"/>
     </enumeratedValueSet>
-    <enumeratedValueSet variable="n-agents">
-      <value value="10000"/>
+    <enumeratedValueSet variable="asymmetric">
+      <value value="false"/>
     </enumeratedValueSet>
-    <enumeratedValueSet variable="sd">
-      <value value="1"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="game-name">
-      <value value="&quot;TransposeMeansX&quot;"/>
+    <enumeratedValueSet variable="spatial">
+      <value value="false"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="experimenting">
       <value value="0.05"/>
       <value value="0.1"/>
       <value value="0.2"/>
     </enumeratedValueSet>
-    <enumeratedValueSet variable="n-way">
-      <value value="1"/>
-      <value value="5"/>
+    <enumeratedValueSet variable="C-reward">
       <value value="10"/>
     </enumeratedValueSet>
-    <enumeratedValueSet variable="means-x">
-      <value value="&quot;10  0\n 0 2\n&quot;"/>
-      <value value="&quot;10  0\n 0 4\n&quot;"/>
-      <value value="&quot;10  0\n 0 6\n&quot;"/>
-      <value value="&quot;10  0\n 0 8\n&quot;"/>
-      <value value="&quot;10  0\n 0 10\n&quot;"/>
+    <enumeratedValueSet variable="C-costs">
+      <value value="1"/>
+      <value value="3"/>
+      <value value="5"/>
+      <value value="7"/>
+      <value value="9"/>
     </enumeratedValueSet>
-    <enumeratedValueSet variable="group-size">
-      <value value="25"/>
-      <value value="50"/>
+    <steppedValueSet variable="group-size" first="2" step="1" last="10"/>
+  </experiment>
+  <experiment name="exp-volunteers-spatial" repetitions="1" runMetricsEveryStep="false">
+    <setup>setup
+ql:start</setup>
+    <go>if ticks &gt; 990 [ update-slow ]
+wait-for-tick</go>
+    <final>ql:stop
+wait 1</final>
+    <exitCondition>ticks &gt; 1000</exitCondition>
+    <metric>mean [q-values-std] of patches</metric>
+    <metric>count patches with [last-action = 0]</metric>
+    <metric>no-coop</metric>
+    <metric>[first rel-freqs] of patches</metric>
+    <enumeratedValueSet variable="n-patches">
       <value value="100"/>
     </enumeratedValueSet>
-    <enumeratedValueSet variable="beta">
-      <value value="0"/>
-      <value value="0.5"/>
-      <value value="1"/>
-    </enumeratedValueSet>
-  </experiment>
-  <experiment name="exp-n-way-coordination-2" repetitions="1" runMetricsEveryStep="false">
-    <setup>set-game
-setup
-ql:start</setup>
-    <go>if ticks &gt; 990 [ update-slow ]
-wait-for-tick</go>
-    <final>ql:stop
-wait 1</final>
-    <exitCondition>ticks &gt; 1000</exitCondition>
-    <metric>fields</metric>
-    <metric>mean [q-values-std] of turtles</metric>
-    <metric>mean [exploration] of turtles</metric>
-    <metric>count turtles with [last-action = 0]</metric>
-    <metric>count turtles with [last-action = 1]</metric>
-    <metric>count turtles with [last-field = 0]</metric>
-    <metric>count turtles with [last-field = 1]</metric>
-    <metric>count turtles with [last-field = 2]</metric>
-    <metric>count turtles with [last-field = 3]</metric>
-    <metric>rel-freq-0</metric>
     <enumeratedValueSet variable="exploration-method">
       <value value="&quot;epsilon-greedy&quot;"/>
     </enumeratedValueSet>
-    <enumeratedValueSet variable="n-agents">
-      <value value="10000"/>
+    <enumeratedValueSet variable="asymmetric">
+      <value value="false"/>
     </enumeratedValueSet>
-    <enumeratedValueSet variable="sd">
-      <value value="1"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="game-name">
-      <value value="&quot;TransposeMeansX&quot;"/>
+    <enumeratedValueSet variable="spatial">
+      <value value="true"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="experimenting">
+      <value value="0.05"/>
       <value value="0.1"/>
+      <value value="0.2"/>
     </enumeratedValueSet>
-    <enumeratedValueSet variable="group-size">
-      <value value="50"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="n-way">
-      <value value="5"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="means-x">
-      <value value="&quot;10  0\n 0 8\n&quot;"/>
-      <value value="&quot;10  0\n 0 10\n&quot;"/>
-    </enumeratedValueSet>
-    <steppedValueSet variable="beta" first="0" step="0.1" last="1"/>
-  </experiment>
-  <experiment name="exp-n-way-coordination-3" repetitions="1" runMetricsEveryStep="false">
-    <setup>set-game
-setup
-ql:start</setup>
-    <go>if ticks &gt; 990 [ update-slow ]
-wait-for-tick</go>
-    <final>ql:stop
-wait 1</final>
-    <exitCondition>ticks &gt; 1000</exitCondition>
-    <metric>fields</metric>
-    <metric>mean [q-values-std] of turtles</metric>
-    <metric>mean [exploration] of turtles</metric>
-    <metric>count turtles with [last-action = 0]</metric>
-    <metric>count turtles with [last-action = 1]</metric>
-    <metric>count turtles with [last-field = 0]</metric>
-    <metric>count turtles with [last-field = 1]</metric>
-    <metric>count turtles with [last-field = 2]</metric>
-    <metric>count turtles with [last-field = 3]</metric>
-    <metric>rel-freq-0</metric>
-    <enumeratedValueSet variable="exploration-method">
-      <value value="&quot;epsilon-greedy&quot;"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="n-agents">
-      <value value="10000"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="sd">
-      <value value="1"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="game-name">
-      <value value="&quot;TransposeMeansX&quot;"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="experimenting">
-      <value value="0.1"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="group-size">
-      <value value="50"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="n-way">
-      <value value="1"/>
+    <enumeratedValueSet variable="C-reward">
       <value value="10"/>
     </enumeratedValueSet>
-    <enumeratedValueSet variable="means-x">
-      <value value="&quot;10  0\n 0 8\n&quot;"/>
-      <value value="&quot;10  0\n 0 10\n&quot;"/>
+    <enumeratedValueSet variable="C-costs">
+      <value value="1"/>
+      <value value="3"/>
+      <value value="5"/>
+      <value value="7"/>
+      <value value="9"/>
     </enumeratedValueSet>
-    <steppedValueSet variable="beta" first="0" step="0.1" last="1"/>
+    <steppedValueSet variable="group-size" first="2" step="1" last="10"/>
+  </experiment>
+  <experiment name="exp-volunteers-asymmetric" repetitions="1" runMetricsEveryStep="false">
+    <setup>setup
+ql:start</setup>
+    <go>if ticks &gt; 990 [ update-slow ]
+wait-for-tick</go>
+    <final>ql:stop
+wait 1</final>
+    <exitCondition>ticks &gt; 1000</exitCondition>
+    <metric>mean [q-values-std] of patches</metric>
+    <metric>count patches with [last-action = 0 and is-best]</metric>
+    <metric>count patches with [last-action = 0 and not is-best]</metric>
+    <metric>no-coop</metric>
+    <metric>[first rel-freqs] of patches with [is-best]</metric>
+    <metric>[first rel-freqs] of patches with [not is-best]</metric>
+    <enumeratedValueSet variable="n-patches">
+      <value value="100"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="exploration-method">
+      <value value="&quot;epsilon-greedy&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="asymmetric">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="spatial">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="experimenting">
+      <value value="0.05"/>
+      <value value="0.1"/>
+      <value value="0.2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="C-reward">
+      <value value="10"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="C-costs">
+      <value value="1"/>
+      <value value="3"/>
+      <value value="5"/>
+      <value value="7"/>
+      <value value="9"/>
+    </enumeratedValueSet>
+    <steppedValueSet variable="group-size" first="2" step="1" last="10"/>
   </experiment>
 </experiments>
 @#$#@#$#@
