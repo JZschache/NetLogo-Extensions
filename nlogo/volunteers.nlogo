@@ -1,6 +1,6 @@
 extensions[ql]
 
-patches-own[ q-values frequencies rel-freqs q-values-std last-action]
+patches-own[ is-best q-values frequencies rel-freqs q-values-std last-action]
 globals[ alternatives patches-list n-groups next-groups updated nextTick no-coop ]
 
 to setup
@@ -12,6 +12,7 @@ to setup
   ask patches [
     set rel-freqs [0 0]
     ifelse (random 2 = 1) [set pcolor blue] [set pcolor red]
+    set is-best (random 2 = 1)
   ]
   
   set alternatives ["C" "D"]
@@ -95,9 +96,16 @@ to-report reward [group-choice]
   ])
   
   ifelse (member? "C" decisions) [
-    report ql:set-rewards group-choice map [ifelse-value (? = "C") [ C-reward - C-costs ] [ C-reward ] ] decisions
+    ifelse asymmetric [
+      report ql:set-rewards group-choice (map [
+        ifelse-value (?1 = "C") [ 
+          ifelse-value ([is-best] of ?2) [C-reward - (C-costs / 2)] [C-reward - C-costs] ] [ C-reward ] 
+      ] decisions agents)
+    ][
+      report ql:set-rewards group-choice map [ ifelse-value (? = "C") [ C-reward - C-costs ] [ C-reward ] ] decisions
+    ]
   ] [
-    report ql:set-rewards group-choice map [0.0] decisions
+    report ql:set-rewards group-choice map [default-reward] decisions
   ]
   
 end
@@ -269,9 +277,9 @@ exploration-method
 
 PLOT
 30
-175
+210
 215
-310
+345
 q-values-std-hist
 NIL
 NIL
@@ -287,9 +295,9 @@ PENS
 
 MONITOR
 30
-315
+350
 215
-360
+395
 mean [q-values-std]
 mean [q-values-std] of patches
 2
@@ -298,9 +306,9 @@ mean [q-values-std] of patches
 
 PLOT
 220
-175
+210
 390
-310
+345
 freq-hist
 NIL
 NIL
@@ -312,7 +320,7 @@ true
 false
 "" ""
 PENS
-"default" 1.0 1 -16777216 true "set-plot-x-range 0 2" "histogram [last-action] of patches"
+"default" 1.0 1 -16777216 true "set-plot-x-range 0 2" "histogram [last-action] of patches with [not is-best]"
 
 SLIDER
 220
@@ -331,9 +339,9 @@ HORIZONTAL
 
 BUTTON
 30
-370
-215
 405
+215
+440
 NIL
 update-slow\n
 NIL
@@ -370,7 +378,7 @@ C-costs
 C-costs
 1
 C-reward - 1
-5
+3
 1
 1
 NIL
@@ -378,20 +386,20 @@ HORIZONTAL
 
 MONITOR
 220
-315
+350
 390
-360
+395
 mean [last-action]
-mean [last-action] of patches
+mean [last-action] of patches with [not is-best]
 17
 1
 11
 
 MONITOR
 220
-365
+400
 390
-410
+445
 NIL
 no-coop / n-groups
 17
@@ -400,9 +408,9 @@ no-coop / n-groups
 
 SWITCH
 220
-130
+170
 390
-163
+203
 spatial
 spatial
 1
@@ -411,9 +419,9 @@ spatial
 
 PLOT
 130
-460
+495
 330
-610
+645
 plot 1
 NIL
 NIL
@@ -429,14 +437,58 @@ PENS
 
 SWITCH
 395
-130
+170
 537
-163
+203
 asymmetric
 asymmetric
 0
 1
 -1000
+
+PLOT
+395
+210
+565
+345
+freq-hist of best
+NIL
+NIL
+0.0
+2.0
+0.0
+10.0
+true
+false
+"" ""
+PENS
+"default" 1.0 1 -16777216 true "" "histogram [last-action] of patches with [is-best]"
+
+MONITOR
+395
+350
+565
+395
+mean [last-action] of best
+mean [last-action] of patches with [is-best]
+17
+1
+11
+
+SLIDER
+220
+130
+392
+163
+default-reward
+default-reward
+0
+10
+0
+1
+1
+NIL
+HORIZONTAL
 
 @#$#@#$#@
 ## WHAT IS IT?
@@ -804,9 +856,11 @@ wait 1</final>
     <enumeratedValueSet variable="exploration-method">
       <value value="&quot;epsilon-greedy&quot;"/>
     </enumeratedValueSet>
+    <enumeratedValueSet variable="asymmetric">
+      <value value="false"/>
+    </enumeratedValueSet>
     <enumeratedValueSet variable="spatial">
       <value value="false"/>
-      <value value="true"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="experimenting">
       <value value="0.05"/>
@@ -843,6 +897,9 @@ wait 1</final>
     <enumeratedValueSet variable="exploration-method">
       <value value="&quot;epsilon-greedy&quot;"/>
     </enumeratedValueSet>
+    <enumeratedValueSet variable="asymmetric">
+      <value value="false"/>
+    </enumeratedValueSet>
     <enumeratedValueSet variable="spatial">
       <value value="true"/>
     </enumeratedValueSet>
@@ -863,7 +920,50 @@ wait 1</final>
     </enumeratedValueSet>
     <steppedValueSet variable="group-size" first="2" step="1" last="10"/>
   </experiment>
-  <experiment name="exp-volunteers-spatial-2" repetitions="1" runMetricsEveryStep="false">
+  <experiment name="exp-volunteers-asymmetric" repetitions="1" runMetricsEveryStep="false">
+    <setup>setup
+ql:start</setup>
+    <go>if ticks &gt; 990 [ update-slow ]
+wait-for-tick</go>
+    <final>ql:stop
+wait 1</final>
+    <exitCondition>ticks &gt; 1000</exitCondition>
+    <metric>mean [q-values-std] of patches</metric>
+    <metric>count patches with [last-action = 0 and is-best]</metric>
+    <metric>count patches with [last-action = 0 and not is-best]</metric>
+    <metric>no-coop</metric>
+    <metric>[first rel-freqs] of patches with [is-best]</metric>
+    <metric>[first rel-freqs] of patches with [not is-best]</metric>
+    <enumeratedValueSet variable="n-patches">
+      <value value="100"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="exploration-method">
+      <value value="&quot;epsilon-greedy&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="asymmetric">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="spatial">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="experimenting">
+      <value value="0.05"/>
+      <value value="0.1"/>
+      <value value="0.2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="C-reward">
+      <value value="10"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="C-costs">
+      <value value="1"/>
+      <value value="3"/>
+      <value value="5"/>
+      <value value="7"/>
+      <value value="9"/>
+    </enumeratedValueSet>
+    <steppedValueSet variable="group-size" first="2" step="1" last="10"/>
+  </experiment>
+  <experiment name="exp-volunteers-goeree" repetitions="1" runMetricsEveryStep="false">
     <setup>setup
 ql:start</setup>
     <go>if ticks &gt; 990 [ update-slow ]
@@ -881,10 +981,15 @@ wait 1</final>
     <enumeratedValueSet variable="exploration-method">
       <value value="&quot;epsilon-greedy&quot;"/>
     </enumeratedValueSet>
+    <enumeratedValueSet variable="asymmetric">
+      <value value="false"/>
+    </enumeratedValueSet>
     <enumeratedValueSet variable="spatial">
+      <value value="false"/>
       <value value="true"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="experimenting">
+      <value value="0.05"/>
       <value value="0.1"/>
       <value value="0.2"/>
     </enumeratedValueSet>
@@ -892,13 +997,12 @@ wait 1</final>
       <value value="10"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="C-costs">
-      <value value="1"/>
-      <value value="3"/>
-      <value value="5"/>
-      <value value="7"/>
-      <value value="9"/>
+      <value value="2"/>
     </enumeratedValueSet>
-    <steppedValueSet variable="group-size" first="2" step="1" last="10"/>
+    <enumeratedValueSet variable="default-reward">
+      <value value="2"/>
+    </enumeratedValueSet>
+    <steppedValueSet variable="group-size" first="2" step="1" last="12"/>
   </experiment>
 </experiments>
 @#$#@#$#@
