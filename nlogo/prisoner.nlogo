@@ -1,7 +1,7 @@
 extensions[ql]
 
-patches-own[ is-best q-values frequencies rel-freqs q-values-std last-action]
-globals[ alternatives patches-list n-groups next-groups updated nextTick no-coop ]
+patches-own[ q-values frequencies rel-freqs q-values-std last-action]
+globals[ alternative-ids alternative-names alternative-colors patches-list n-groups next-groups updated nextTick]
 
 to setup
   clear-all
@@ -12,43 +12,47 @@ to setup
   ask patches [
     set rel-freqs [0 0]
     ifelse (random 2 = 1) [set pcolor blue] [set pcolor red]
-    set is-best (random 2 = 1)
   ]
   
-  set alternatives ["C" "D"]
+  set alternative-names [ "C" "D" "P" "E"]
+  set alternative-colors [ blue red green yellow ]
+  set alternative-ids [ 0 1 ]
+  if enable-punishment [ set alternative-ids lput 2 alternative-ids ]
+  if enable-exit [ set alternative-ids lput 3 alternative-ids ]
+  
   set patches-list [self] of patches
   set n-groups floor (n-patches ^ 2 / group-size)
-  set next-groups get-next-groups n-groups
-  set updated true  
-  set nextTick 0
-  set no-coop 0
-    
-  reset-ticks
-end
-
-to-report get-next-groups [number]
+  
   ifelse spatial [
-    ;report map [ ql:create-group map [(list ? alternatives)] (get-close-patches ?) ] n-of number patches-list
     let group-structure []
     let fixed-patches patches-list
     let i 0
-    while [i < number] [
+    while [i < n-groups] [
       set i i + 1
-      set group-structure lput ql:create-group map [(list ? alternatives)] sublist fixed-patches 0 group-size group-structure
+      set group-structure lput ql:create-group map [(list ?  map [(word ?)] alternative-ids)] sublist fixed-patches 0 group-size group-structure
       set fixed-patches sublist fixed-patches group-size length fixed-patches
     ]
-    report group-structure
-  ][
-    let group-structure []
-    let random-patches shuffle patches-list
-    let i 0
-    while [i < number] [
-      set i i + 1
-      set group-structure lput ql:create-group map [(list ? alternatives)] sublist random-patches 0 group-size group-structure
-      set random-patches sublist random-patches group-size length random-patches
-    ]
-    report group-structure
+    ql:set-group-structure group-structure
+  ] [
+    set next-groups get-next-groups
+    set updated true  
+  ] 
+  
+  set nextTick 0
+  
+  reset-ticks
+end
+
+to-report get-next-groups
+  let group-structure []
+  let random-patches shuffle patches-list
+  let i 0
+  while [i < n-groups] [
+    set i i + 1
+    set group-structure lput ql:create-group map [(list ? map [(word ?)] alternative-ids)] sublist random-patches 0 group-size group-structure
+    set random-patches sublist random-patches group-size length random-patches
   ]
+  report group-structure
 end
 
 to-report get-groups
@@ -57,7 +61,7 @@ to-report get-groups
     report next-groups
   ] [
     set updated false
-    report get-next-groups n-groups
+    report get-next-groups
   ]
 end
 
@@ -72,38 +76,38 @@ to-report reward [group-choice]
   
   let agents ql:get-agents group-choice
   let decisions ql:get-decisions group-choice
+  let n 0
+  let nc 0
+  let np 0
   (foreach agents decisions [
     ask ?1 [
-      ifelse (?2 = "C") [ 
-        set last-action 0
-        set pcolor blue
-      ] [
-        set last-action 1
-        set pcolor red
-      ]
+      let alt-id read-from-string ?2
+      set last-action alt-id
+      set pcolor item alt-id alternative-colors
+      if (alt-id != 3) [set n n + 1]
+      if (alt-id = 0 or alt-id = 2) [set nc nc + 1]
+      if (alt-id = 2) [set np np + 1]
     ]
   ])
   
-  ifelse (member? "C" decisions) [
-    ifelse asymmetric [
-      report ql:set-rewards group-choice (map [
-        ifelse-value (?1 = "C") [ 
-          ifelse-value ([is-best] of ?2) [C-reward - (C-costs / 2)] [C-reward - C-costs] ] [ C-reward ] 
-      ] decisions agents)
-    ][
-      report ql:set-rewards group-choice map [ ifelse-value (? = "C") [ C-reward - C-costs ] [ C-reward ] ] decisions
-    ]
-  ] [
-    report ql:set-rewards group-choice map [default-reward] decisions
-  ]
+  let nd n - nc 
+  let pool 0
+  if n > 0 [ set pool nc * r / n ]
+  let rewards (list (pool - 1) (pool - np * s) (pool - 1 - nd * c) l )
+
+  report ql:set-rewards group-choice map [ item ( read-from-string ? ) rewards ] decisions
   
 end
 
 to wait-for-tick
   set nextTick nextTick + 1
   while [ticks < nextTick] [
-    set next-groups get-next-groups n-groups
-    set updated true
+    ifelse not spatial [
+      set next-groups get-next-groups
+      set updated true
+    ] [
+      set updated random 1
+    ]
   ]
   ;while [ticks < nextTick] [ 
   ;  update-slow
@@ -116,19 +120,19 @@ to update
 end
 
 to update-slow
-  set no-coop sum (map [ifelse-value (member? 0 map [[last-action] of ?] ql:get-agents ?) [0] [1]] next-groups)
+
   ask patches [
     let total-n sum frequencies
     ifelse (total-n > 0) [
       set rel-freqs map [? / total-n] frequencies
     ] [
-      set rel-freqs [0 0]
+      set rel-freqs [0 0 0 0]
     ]
     set q-values-std 0
     if (total-n > 0) [
       let zipped (map [ (list ?1 ?2) ] q-values frequencies)
       let filtered filter [ ( filter? (item 1 ?) total-n) ] zipped
-      let qvs map [ (item 0 ?) / C-reward ] filtered
+      let qvs map [ (item 0 ?) / r ] filtered
       if (length qvs > 1) [ 
         set q-values-std precision (standard-deviation qvs) 2
       ]
@@ -309,7 +313,7 @@ true
 false
 "" ""
 PENS
-"default" 1.0 1 -16777216 true "set-plot-x-range 0 2" "histogram [last-action] of patches with [not is-best]"
+"default" 1.0 1 -16777216 true "set-plot-x-range 0 1 + max alternative-ids" "histogram [last-action] of patches"
 
 SLIDER
 220
@@ -320,7 +324,7 @@ group-size
 group-size
 2
 10
-3
+5
 1
 1
 NIL
@@ -348,11 +352,11 @@ SLIDER
 60
 390
 93
-C-reward
-C-reward
-0
-10
-10
+r
+r
+1
+group-size - 1
+3
 1
 1
 NIL
@@ -363,12 +367,12 @@ SLIDER
 95
 390
 128
-C-costs
-C-costs
+s
+s
+0
+5
 1
-C-reward - 1
-3
-1
+0.1
 1
 NIL
 HORIZONTAL
@@ -379,105 +383,73 @@ MONITOR
 390
 395
 mean [last-action]
-mean [last-action] of patches with [not is-best]
-17
-1
-11
-
-MONITOR
-220
-400
-390
-445
-NIL
-no-coop / n-groups
+mean [last-action] of patches
 17
 1
 11
 
 SWITCH
-220
-170
-390
-203
+395
+200
+570
+233
 spatial
 spatial
 1
 1
 -1000
-
-PLOT
-130
-495
-330
-645
-plot 1
-NIL
-NIL
-0.0
-1.0
-0.0
-10.0
-true
-false
-"" ""
-PENS
-"default" 0.01 1 -16777216 true "" "histogram [first rel-freqs] of patches"
-
-SWITCH
-395
-170
-537
-203
-asymmetric
-asymmetric
-0
-1
--1000
-
-PLOT
-395
-210
-565
-345
-freq-hist of best
-NIL
-NIL
-0.0
-2.0
-0.0
-10.0
-true
-false
-"" ""
-PENS
-"default" 1.0 1 -16777216 true "" "histogram [last-action] of patches with [is-best]"
-
-MONITOR
-395
-350
-565
-395
-mean [last-action] of best
-mean [last-action] of patches with [is-best]
-17
-1
-11
 
 SLIDER
 220
 130
-392
+390
 163
-default-reward
-default-reward
+c
+c
 0
-10
+1
+0.5
+0.1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+220
+165
+390
+198
+l
+l
+0
+r - 1
 0
 1
 1
 NIL
 HORIZONTAL
+
+SWITCH
+395
+130
+570
+163
+enable-punishment
+enable-punishment
+0
+1
+-1000
+
+SWITCH
+395
+165
+570
+198
+enable-exit
+enable-exit
+1
+1
+-1000
 
 @#$#@#$#@
 ## WHAT IS IT?
@@ -827,171 +799,267 @@ NetLogo 5.2.0
 @#$#@#$#@
 @#$#@#$#@
 <experiments>
-  <experiment name="exp-volunteers-overview" repetitions="1" runMetricsEveryStep="false">
+  <experiment name="exp-pri-plain-gs05" repetitions="1" runMetricsEveryStep="false">
     <setup>setup
 ql:start</setup>
-    <go>if ticks &gt; 990 [ update-slow ]
+    <go>if ticks &gt; 990 [update-slow]
 wait-for-tick</go>
-    <final>ql:stop
+    <final>ql:stop 
 wait 1</final>
     <exitCondition>ticks &gt; 1000</exitCondition>
     <metric>mean [q-values-std] of patches</metric>
+    <metric>standard-deviation [q-values-std] of patches</metric>
     <metric>count patches with [last-action = 0]</metric>
-    <metric>no-coop</metric>
-    <metric>[first rel-freqs] of patches</metric>
     <enumeratedValueSet variable="n-patches">
       <value value="100"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="exploration-method">
       <value value="&quot;epsilon-greedy&quot;"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="asymmetric">
-      <value value="false"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="spatial">
-      <value value="false"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="experimenting">
       <value value="0.05"/>
       <value value="0.1"/>
       <value value="0.2"/>
     </enumeratedValueSet>
-    <enumeratedValueSet variable="C-reward">
-      <value value="10"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="C-costs">
-      <value value="1"/>
-      <value value="3"/>
-      <value value="5"/>
-      <value value="7"/>
-      <value value="9"/>
-    </enumeratedValueSet>
-    <steppedValueSet variable="group-size" first="2" step="1" last="10"/>
-  </experiment>
-  <experiment name="exp-volunteers-spatial" repetitions="1" runMetricsEveryStep="false">
-    <setup>setup
-ql:start</setup>
-    <go>if ticks &gt; 990 [ update-slow ]
-wait-for-tick</go>
-    <final>ql:stop
-wait 1</final>
-    <exitCondition>ticks &gt; 1000</exitCondition>
-    <metric>mean [q-values-std] of patches</metric>
-    <metric>count patches with [last-action = 0]</metric>
-    <metric>no-coop</metric>
-    <metric>[first rel-freqs] of patches</metric>
-    <enumeratedValueSet variable="n-patches">
-      <value value="100"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="exploration-method">
-      <value value="&quot;epsilon-greedy&quot;"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="asymmetric">
+    <enumeratedValueSet variable="enable-exit">
       <value value="false"/>
     </enumeratedValueSet>
-    <enumeratedValueSet variable="spatial">
-      <value value="true"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="experimenting">
-      <value value="0.05"/>
-      <value value="0.1"/>
-      <value value="0.2"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="C-reward">
-      <value value="10"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="C-costs">
-      <value value="1"/>
-      <value value="3"/>
-      <value value="5"/>
-      <value value="7"/>
-      <value value="9"/>
-    </enumeratedValueSet>
-    <steppedValueSet variable="group-size" first="2" step="1" last="10"/>
-  </experiment>
-  <experiment name="exp-volunteers-asymmetric" repetitions="1" runMetricsEveryStep="false">
-    <setup>setup
-ql:start</setup>
-    <go>if ticks &gt; 990 [ update-slow ]
-wait-for-tick</go>
-    <final>ql:stop
-wait 1</final>
-    <exitCondition>ticks &gt; 1000</exitCondition>
-    <metric>mean [q-values-std] of patches</metric>
-    <metric>count patches with [last-action = 0 and is-best]</metric>
-    <metric>count patches with [last-action = 0 and not is-best]</metric>
-    <metric>no-coop</metric>
-    <metric>[first rel-freqs] of patches with [is-best]</metric>
-    <metric>[first rel-freqs] of patches with [not is-best]</metric>
-    <enumeratedValueSet variable="n-patches">
-      <value value="100"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="exploration-method">
-      <value value="&quot;epsilon-greedy&quot;"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="asymmetric">
-      <value value="true"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="spatial">
-      <value value="false"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="experimenting">
-      <value value="0.05"/>
-      <value value="0.1"/>
-      <value value="0.2"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="C-reward">
-      <value value="10"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="C-costs">
-      <value value="1"/>
-      <value value="3"/>
-      <value value="5"/>
-      <value value="7"/>
-      <value value="9"/>
-    </enumeratedValueSet>
-    <steppedValueSet variable="group-size" first="2" step="1" last="10"/>
-  </experiment>
-  <experiment name="exp-volunteers-goeree" repetitions="1" runMetricsEveryStep="false">
-    <setup>setup
-ql:start</setup>
-    <go>if ticks &gt; 990 [ update-slow ]
-wait-for-tick</go>
-    <final>ql:stop
-wait 1</final>
-    <exitCondition>ticks &gt; 1000</exitCondition>
-    <metric>mean [q-values-std] of patches</metric>
-    <metric>count patches with [last-action = 0]</metric>
-    <metric>no-coop</metric>
-    <metric>[first rel-freqs] of patches</metric>
-    <enumeratedValueSet variable="n-patches">
-      <value value="100"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="exploration-method">
-      <value value="&quot;epsilon-greedy&quot;"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="asymmetric">
+    <enumeratedValueSet variable="enable-punishment">
       <value value="false"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="spatial">
       <value value="false"/>
       <value value="true"/>
     </enumeratedValueSet>
+    <enumeratedValueSet variable="group-size">
+      <value value="5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="r">
+      <value value="1"/>
+      <value value="2"/>
+      <value value="3"/>
+      <value value="4"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="s">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="c">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="l">
+      <value value="0"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="exp-pri-plain-gs10" repetitions="1" runMetricsEveryStep="false">
+    <setup>setup
+ql:start</setup>
+    <go>if ticks &gt; 990 [update-slow]
+wait-for-tick</go>
+    <final>ql:stop 
+wait 1</final>
+    <exitCondition>ticks &gt; 1000</exitCondition>
+    <metric>mean [q-values-std] of patches</metric>
+    <metric>standard-deviation [q-values-std] of patches</metric>
+    <metric>count patches with [last-action = 0]</metric>
+    <enumeratedValueSet variable="n-patches">
+      <value value="100"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="exploration-method">
+      <value value="&quot;epsilon-greedy&quot;"/>
+    </enumeratedValueSet>
     <enumeratedValueSet variable="experimenting">
       <value value="0.05"/>
       <value value="0.1"/>
       <value value="0.2"/>
     </enumeratedValueSet>
-    <enumeratedValueSet variable="C-reward">
+    <enumeratedValueSet variable="enable-exit">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="enable-punishment">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="spatial">
+      <value value="false"/>
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="group-size">
       <value value="10"/>
     </enumeratedValueSet>
-    <enumeratedValueSet variable="C-costs">
+    <enumeratedValueSet variable="r">
+      <value value="2"/>
+      <value value="4"/>
+      <value value="6"/>
+      <value value="8"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="s">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="c">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="l">
+      <value value="0"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="exp-pri-plain-gs20" repetitions="1" runMetricsEveryStep="false">
+    <setup>setup
+ql:start</setup>
+    <go>if ticks &gt; 990 [update-slow]
+wait-for-tick</go>
+    <final>ql:stop 
+wait 1</final>
+    <exitCondition>ticks &gt; 1000</exitCondition>
+    <metric>mean [q-values-std] of patches</metric>
+    <metric>standard-deviation [q-values-std] of patches</metric>
+    <metric>count patches with [last-action = 0]</metric>
+    <enumeratedValueSet variable="n-patches">
+      <value value="100"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="exploration-method">
+      <value value="&quot;epsilon-greedy&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="experimenting">
+      <value value="0.05"/>
+      <value value="0.1"/>
+      <value value="0.2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="enable-exit">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="enable-punishment">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="spatial">
+      <value value="false"/>
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="group-size">
+      <value value="20"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="r">
+      <value value="4"/>
+      <value value="8"/>
+      <value value="12"/>
+      <value value="16"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="s">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="c">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="l">
+      <value value="0"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="exp-pri-punish-gs05" repetitions="1" runMetricsEveryStep="false">
+    <setup>setup
+ql:start</setup>
+    <go>if ticks &gt; 990 [update-slow]
+wait-for-tick</go>
+    <final>ql:stop 
+wait 1</final>
+    <exitCondition>ticks &gt; 1000</exitCondition>
+    <metric>mean [q-values-std] of patches</metric>
+    <metric>standard-deviation [q-values-std] of patches</metric>
+    <metric>count patches with [last-action = 0]</metric>
+    <metric>count patches with [last-action = 1]</metric>
+    <metric>count patches with [last-action = 2]</metric>
+    <enumeratedValueSet variable="n-patches">
+      <value value="100"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="exploration-method">
+      <value value="&quot;epsilon-greedy&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="experimenting">
+      <value value="0.05"/>
+      <value value="0.1"/>
+      <value value="0.2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="enable-exit">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="enable-punishment">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="spatial">
+      <value value="false"/>
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="group-size">
+      <value value="5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="r">
       <value value="2"/>
     </enumeratedValueSet>
-    <enumeratedValueSet variable="default-reward">
+    <enumeratedValueSet variable="s">
+      <value value="0.5"/>
+      <value value="1"/>
+      <value value="1.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="c">
+      <value value="0"/>
+      <value value="0.5"/>
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="l">
+      <value value="0"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="exp-pri-exit-gs05" repetitions="1" runMetricsEveryStep="false">
+    <setup>setup
+ql:start</setup>
+    <go>if ticks &gt; 990 [update-slow]
+wait-for-tick</go>
+    <final>ql:stop 
+wait 1</final>
+    <exitCondition>ticks &gt; 1000</exitCondition>
+    <metric>mean [q-values-std] of patches</metric>
+    <metric>standard-deviation [q-values-std] of patches</metric>
+    <metric>count patches with [last-action = 0]</metric>
+    <metric>count patches with [last-action = 1]</metric>
+    <metric>count patches with [last-action = 2]</metric>
+    <enumeratedValueSet variable="n-patches">
+      <value value="100"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="exploration-method">
+      <value value="&quot;epsilon-greedy&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="experimenting">
+      <value value="0.05"/>
+      <value value="0.1"/>
+      <value value="0.2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="enable-exit">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="enable-punishment">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="spatial">
+      <value value="false"/>
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="group-size">
+      <value value="5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="r">
       <value value="2"/>
     </enumeratedValueSet>
-    <steppedValueSet variable="group-size" first="2" step="1" last="12"/>
+    <enumeratedValueSet variable="s">
+      <value value="0"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="c">
+      <value value="0"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="l">
+      <value value="0"/>
+      <value value="0.2"/>
+      <value value="0.4"/>
+      <value value="0.6"/>
+      <value value="0.8"/>
+      <value value="1"/>
+    </enumeratedValueSet>
   </experiment>
 </experiments>
 @#$#@#$#@
