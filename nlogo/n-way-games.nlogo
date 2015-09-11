@@ -338,7 +338,7 @@ INPUTBOX
 395
 175
 means-x
-10  0\n 0  10\n
+ 8  0\n10  2\n
 1
 1
 String
@@ -359,7 +359,7 @@ INPUTBOX
 625
 290
 fields
-| 1: (10,10) ON| 2: ( 0, 0)   |\n| 3: ( 0, 0)   | 4: ( 2, 2)  N|\n
+| 1: ( 8, 8) O | 2: ( 0,10) O |\n| 3: (10, 0) O | 4: ( 2, 2)  N|\n
 1
 1
 String
@@ -390,7 +390,7 @@ CHOOSER
 game-name
 game-name
 "TransposeMeansX" "Chicken" "DispersionGame" "GrabTheDollar" "GuessTwoThirdsAve" "HawkAndDove" "PrisonersDilemma" "RockPaperScissors" "ShapleysGame"
-0
+6
 
 BUTTON
 580
@@ -415,7 +415,7 @@ INPUTBOX
 765
 425
 sample-equilibria
-   x1   x2   y1   y2  |   Ex   Ey  |   mx\n----------------------------------------\n  1/6  5/6  1/6  5/6  |  5/3  5/3  |     \n
+ x1 x2 y1 y2  | Ex Ey  | mx\n------------------------\n
 1
 1
 String
@@ -519,7 +519,7 @@ group-size
 group-size
 0
 100
-50
+20
 1
 1
 NIL
@@ -534,7 +534,7 @@ n-way
 n-way
 1
 group-size / 2
-1
+10
 1
 1
 NIL

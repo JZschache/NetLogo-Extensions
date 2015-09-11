@@ -1,7 +1,7 @@
 extensions[ql]
 
-patches-own[ q-values frequencies rel-freqs q-values-std last-action]
-globals[ alternative-ids alternative-names alternative-colors patches-list n-groups next-groups updated nextTick]
+patches-own[ q-values frequencies rel-freqs q-values-std last-action last-field]
+globals[ alternative-ids alternative-names alternative-colors patches-list n-groups next-groups updated nextTick groups group-fields]
 
 to setup
   clear-all
@@ -23,6 +23,8 @@ to setup
   set patches-list [self] of patches
   set n-groups floor (n-patches ^ 2 / group-size)
   
+  set groups []
+  set group-fields n-values (group-size + 1) [0]
   ifelse spatial [
     let group-structure []
     let fixed-patches patches-list
@@ -30,6 +32,7 @@ to setup
     while [i < n-groups] [
       set i i + 1
       set group-structure lput ql:create-group map [(list ?  map [(word ?)] alternative-ids)] sublist fixed-patches 0 group-size group-structure
+      set groups lput sublist fixed-patches 0 group-size groups
       set fixed-patches sublist fixed-patches group-size length fixed-patches
     ]
     ql:set-group-structure group-structure
@@ -79,10 +82,12 @@ to-report reward [group-choice]
   let n 0
   let nc 0
   let np 0
+  let field sum map [read-from-string ?] decisions
   (foreach agents decisions [
     ask ?1 [
       let alt-id read-from-string ?2
       set last-action alt-id
+      set last-field field
       set pcolor item alt-id alternative-colors
       if (alt-id != 3) [set n n + 1]
       if (alt-id = 0 or alt-id = 2) [set nc nc + 1]
@@ -120,7 +125,13 @@ to update
 end
 
 to update-slow
-
+  
+  set group-fields map [[last-field] of (first ?)] groups
+  ;let idx ([last-field] of first first groups)
+  ;set group-fields replace-item idx group-fields (1 + (item idx group-fields))
+    
+    
+  
   ask patches [
     let total-n sum frequencies
     ifelse (total-n > 0) [
@@ -157,7 +168,7 @@ GRAPHICS-WINDOW
 456
 -1
 -1
-20.0
+4.0
 1
 10
 1
@@ -168,9 +179,9 @@ GRAPHICS-WINDOW
 1
 1
 0
-19
+99
 0
-19
+99
 0
 0
 1
@@ -186,7 +197,7 @@ n-patches
 n-patches
 1
 100
-20
+100
 1
 1
 ^2
@@ -323,8 +334,8 @@ SLIDER
 group-size
 group-size
 2
-10
-5
+100
+20
 1
 1
 NIL
@@ -356,7 +367,7 @@ r
 r
 1
 group-size - 1
-3
+16
 1
 1
 NIL
@@ -371,7 +382,7 @@ s
 s
 0
 5
-1
+1.1
 0.1
 1
 NIL
@@ -395,7 +406,7 @@ SWITCH
 233
 spatial
 spatial
-1
+0
 1
 -1000
 
@@ -436,7 +447,7 @@ SWITCH
 163
 enable-punishment
 enable-punishment
-0
+1
 1
 -1000
 
@@ -450,6 +461,118 @@ enable-exit
 1
 1
 -1000
+
+PLOT
+80
+460
+1485
+780
+plot-rate-def
+NIL
+NIL
+0.0
+10.0
+0.0
+1.0
+true
+false
+"" ""
+PENS
+"default" 1.0 0 -16777216 true "" "if (ticks mod 10) = 0\n[plot mean [last-action] of patches]"
+
+BUTTON
+395
+235
+570
+268
+NIL
+ql:decay-exploration
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+MONITOR
+1210
+20
+1622
+65
+NIL
+length filter [? > mean group-fields] group-fields
+17
+1
+11
+
+MONITOR
+1210
+70
+1622
+115
+NIL
+length filter [? < mean group-fields] group-fields
+17
+1
+11
+
+PLOT
+1005
+180
+1620
+440
+plot 1
+NIL
+NIL
+0.0
+10.0
+0.0
+10.0
+true
+false
+"" ""
+PENS
+"default" 1.0 0 -16777216 true "" "plot length filter [? > mean group-fields] group-fields"
+"pen-1" 1.0 0 -7500403 true "" "plot length filter [? < mean group-fields] group-fields"
+
+PLOT
+1000
+20
+1200
+170
+plot 2
+NIL
+NIL
+0.0
+20.0
+0.0
+10.0
+true
+false
+"" ""
+PENS
+"default" 1.0 1 -16777216 true "" "histogram group-fields"
+
+PLOT
+395
+275
+575
+425
+plot 3
+NIL
+NIL
+0.0
+1.0
+0.0
+10.0
+true
+false
+"" ""
+PENS
+"default" 0.05 1 -16777216 true "" "histogram [first rel-freqs] of patches"
 
 @#$#@#$#@
 ## WHAT IS IT?
@@ -1059,6 +1182,49 @@ wait 1</final>
       <value value="0.6"/>
       <value value="0.8"/>
       <value value="1"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="exp-pri-plain-gs20-coop-dev" repetitions="1" runMetricsEveryStep="true">
+    <setup>setup
+ql:start</setup>
+    <go>wait-for-tick</go>
+    <final>ql:stop 
+wait 1</final>
+    <exitCondition>ticks &gt; 1000000</exitCondition>
+    <metric>count patches with [last-action = 0]</metric>
+    <enumeratedValueSet variable="n-patches">
+      <value value="100"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="exploration-method">
+      <value value="&quot;epsilon-greedy&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="experimenting">
+      <value value="0.1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="enable-exit">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="enable-punishment">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="spatial">
+      <value value="false"/>
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="group-size">
+      <value value="20"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="r">
+      <value value="16"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="s">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="c">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="l">
+      <value value="0"/>
     </enumeratedValueSet>
   </experiment>
 </experiments>
