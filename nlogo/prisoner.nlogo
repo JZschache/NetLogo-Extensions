@@ -341,7 +341,7 @@ group-size
 group-size
 2
 20
-5
+20
 1
 1
 NIL
@@ -373,7 +373,7 @@ r-by-n
 r-by-n
 0
 0.9
-0.6
+0.8
 0.1
 1
 NIL
@@ -412,7 +412,7 @@ SWITCH
 233
 spatial
 spatial
-1
+0
 1
 -1000
 
@@ -464,7 +464,7 @@ SWITCH
 198
 enable-exit
 enable-exit
-0
+1
 1
 -1000
 

@@ -59,6 +59,7 @@ object QLSystem {
   val qvListName = QLSystem.config.getString(QLExtension.cfgstr + ".q-values-list")
   val freqListName = QLSystem.config.getString(QLExtension.cfgstr + ".frequencies-list")
   val explListName = QLSystem.config.getString(QLExtension.cfgstr + ".explorations-list")
+  val gammaName = QLSystem.config.getString(QLExtension.cfgstr + ".gamma")
 }
 
 
@@ -229,6 +230,7 @@ class Init extends DefaultCommand {
       val idxQ = (0 until vLength).toList.find(i => agent.variableName(i) == qvListName.toUpperCase())
       val idxN = (0 until vLength).toList.find(i => agent.variableName(i) == freqListName.toUpperCase())
       val idxE = (0 until vLength).toList.find(i => agent.variableName(i) == explListName.toUpperCase())
+      val idxG = (0 until vLength).toList.find(i => agent.variableName(i) == gammaName.toUpperCase())
       if (idxA.isDefined) 
         agent.setVariable(idxA.get, LogoList())
       if (idxQ.isDefined) 
@@ -237,8 +239,12 @@ class Init extends DefaultCommand {
         agent.setVariable(idxN.get, LogoList())
       if (idxE.isDefined) 
         agent.setVariable(idxE.get, LogoList())
+      val gamma = if (idxG.isDefined) 
+          agent.getVariable(idxG.get).asInstanceOf[Double]
+        else
+          0.0
       // return mapping
-      a -> AkkaAgent(QLAgent(exploration, experimenting, agent))
+      a -> AkkaAgent(QLAgent(exploration, experimenting, gamma, agent))
     }).toMap }
     // must wait for new agents to be set
     qlDataMap.await

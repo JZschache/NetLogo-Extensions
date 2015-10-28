@@ -1,12 +1,16 @@
+extensions [ql]
+
 patches-own [isRessource resType resColor]
-turtles-own [p dest nA nB vA vB v avA avB rnA]
+turtles-own [gamma dest nA nB vA vB v avA avB rnA]
 
 to setup
   clear-all
+  
   ; resize world
   let noOfPatches noOfTurtles * 9
-  resize-world 0 floor (sqrt (noOfPatches)) 0 floor (sqrt (noOfPatches))
   set-patch-size 400 / floor(sqrt(noOfPatches))
+  resize-world 0 floor (sqrt (noOfPatches)) 0 floor (sqrt (noOfPatches))
+  
   ; setup patches
   ask patches [ set isRessource false ]
   ask n-of floor (noOfPatches * resources / 100) patches [
@@ -16,21 +20,46 @@ to setup
     set resColor last pair
     set pcolor resColor
   ]
+  
   ; setup turtles
   crt noOfTurtles [
     setxy random-xcor random-ycor
     set dest 0
-    set p p-value
   ]
+  
+  ; setup ql-extension
+  ql:init turtles exploration-rate "epsilon-greedy"
+  let choices (list "A" "B")
+  let groups [ql:create-group (list (list self choices))] of turtles  
+  ql:set-group-structure groups
+  
   reset-ticks
+end
+
+to-report get-rewards [ headless-id ]
+  let group-list ql:get-group-list headless-id
+  let result map [reward ?] group-list
+  report result
+end
+
+to-report reward [group-choice]
+  let agent first ql:get-agents group-choice
+  let decision first ql:get-decisions group-choice
+  ifelse decision = "forward" [
+    ask agent [fd 1]
+    report ql:set-rewards group-choice (list forward-reward)
+  ] [
+    ask agent [right 90]
+    report ql:set-rewards group-choice (list right-reward)
+  ]
 end
 
 ; the action of a turtle in the search for resources
 to forage
   ifelse dest = 0 [ ; no destination
     ; choose a resource type of new destination
-    let destType "B"
-    if (random-float 1) < p [ set destType "A" ]
+    let destType one-of ["A" "B" ]
+    
     ; choose destination
     set dest min-one-of (patches with [isRessource and resType = destType]) [distance myself]
     ifelse dest = nobody [set dest 0] 
@@ -88,40 +117,7 @@ to update-values
     ifelse (nA + nB) > 0 [set rnA nA / (nA + nB)] [set rnA 0]
     ifelse (nA + nB) > 0 [set v ((vA + vB) / (nA + nB))] [set v 0]
  ]
-end
-
-to p-value-sweep 
-  ;let p-value-list n-values 11 [ ? / 10 ]
-  let p-value-list [ 0.01 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 0.99 ]
-  foreach p-value-list [
-    set p-value ?
-    ask turtles [
-      set dest 0
-      set vA 0
-      set vB 0
-      set nA 0
-      set nB 0
-      set p p-value
-   ]
-   repeat forageLength [ 
-     go
-   ] 
-   manually-update-plots
-  ]
-end
-
-to manually-update-plots
-  set-current-plot "average-value-plot"
-  set-current-plot-pen "total"
-  let mean-rf-a mean [v] of turtles
-  plotxy p-value mean [v] of turtles
-  set-current-plot-pen "A"
-  plotxy p-value mean [avA] of turtles
-  set-current-plot-pen "B"
-  plotxy p-value mean [avB] of turtles
-end
-  
-  
+end  
   
   
   
@@ -129,8 +125,8 @@ end
 GRAPHICS-WINDOW
 430
 10
-850
-451
+852
+453
 -1
 -1
 13.333333333333334
@@ -169,10 +165,10 @@ NIL
 HORIZONTAL
 
 SLIDER
-10
-50
-182
-83
+185
+45
+357
+78
 resources
 resources
 0
@@ -185,30 +181,15 @@ HORIZONTAL
 
 SLIDER
 185
-85
+115
 360
-118
+148
 resValueB
 resValueB
 0
 100
-100
+90
 5
-1
-NIL
-HORIZONTAL
-
-SLIDER
-10
-285
-182
-318
-forageLength
-forageLength
-0
-10000
-1000
-100
 1
 NIL
 HORIZONTAL
@@ -247,48 +228,11 @@ NIL
 NIL
 1
 
-PLOT
-10
-325
-410
-540
-average-value-plot
-NIL
-NIL
-0.0
-1.0
-0.0
-10.0
-true
-true
-"" ""
-PENS
-"A" 1.0 0 -16777216 true "" ""
-"B" 1.0 0 -9276814 true "" ""
-"total" 1.0 0 -2674135 true "" ""
-
-BUTTON
-185
-285
-355
-318
-NIL
-p-value-sweep
-NIL
-1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
-1
-
 SLIDER
 185
-50
+80
 360
-83
+113
 growthrate
 growthrate
 0
@@ -299,26 +243,11 @@ growthrate
 NIL
 HORIZONTAL
 
-SLIDER
-10
-85
-182
-118
-p-value
-p-value
-0
-1
-0.5
-0.1
-1
-NIL
-HORIZONTAL
-
 PLOT
 10
-120
+170
 180
-265
+315
 hist rel-freq-A
 NIL
 NIL
@@ -334,9 +263,9 @@ PENS
 
 PLOT
 185
-120
+170
 410
-265
+315
 hist averge-values
 NIL
 NIL
@@ -351,6 +280,21 @@ PENS
 "A" 2.0 1 -16777216 true "" "histogram [avA] of turtles"
 "B" 2.0 1 -7500403 true "" "histogram [avB] of turtles"
 "total" 2.0 1 -2674135 true "" "histogram [v] of turtles"
+
+SLIDER
+10
+45
+180
+78
+exploration-rate
+exploration-rate
+0
+1
+0.05
+0.01
+1
+NIL
+HORIZONTAL
 
 @#$#@#$#@
 ## WHAT IS IT?
@@ -700,7 +644,7 @@ NetLogo 5.2.0
 @#$#@#$#@
 @#$#@#$#@
 <experiments>
-  <experiment name="p-value-sweep" repetitions="1" runMetricsEveryStep="false">
+  <experiment name="q1-sweep" repetitions="1" runMetricsEveryStep="false">
     <setup>setup</setup>
     <go>go</go>
     <timeLimit steps="10000"/>
@@ -733,7 +677,7 @@ NetLogo 5.2.0
       <value value="80"/>
       <value value="90"/>
     </enumeratedValueSet>
-    <steppedValueSet variable="p-value" first="0.02" step="0.04" last="0.98"/>
+    <steppedValueSet variable="q1" first="0.02" step="0.04" last="0.98"/>
   </experiment>
 </experiments>
 @#$#@#$#@
