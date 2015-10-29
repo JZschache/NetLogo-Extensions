@@ -1,11 +1,14 @@
 extensions[ql]
-patches-own[ q-values ]
+patches-own[ exploration-rate q-values ]
 
 to setup
   clear-all
   set-patch-size 400 / n-patches  
   resize-world 0 (n-patches - 1) 0 (n-patches - 1)
-  ql:init patches experimenting "epsilon-greedy"
+  ask patches [
+    set exploration-rate experimenting
+  ]
+  ql:init patches
   let choices ["0" "1"]
   let groups [ql:create-group (list (list self choices))] of patches
   ql:set-group-structure groups

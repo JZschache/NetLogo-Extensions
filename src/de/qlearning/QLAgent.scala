@@ -105,7 +105,7 @@ object QLAgent {
     val idxA = (0 until vLength).toList.find(i => nlAgent.variableName(i) == altListName.toUpperCase())
     val idxQ = (0 until vLength).toList.find(i => nlAgent.variableName(i) == qvListName.toUpperCase())
     val idxN = (0 until vLength).toList.find(i => nlAgent.variableName(i) == freqListName.toUpperCase())
-    val idxE = (0 until vLength).toList.find(i => nlAgent.variableName(i) == explListName.toUpperCase())
+    val idxE = (0 until vLength).toList.find(i => nlAgent.variableName(i) == explRateName.toUpperCase())
     
     (experimenting: Double, qValues: List[QLAgent.QValue]) => {
       if (idxA.isDefined) 
@@ -136,7 +136,7 @@ case class QLAgent(experimenting: Double, gamma: Double, qValuesMap: Map[String,
   def updated(alt:String, reward: Double) : QLAgent = {
     val newExperimenting = getNextExperimening(expDecay, qValuesMap.values)
     val qValues = qValuesMap.values.map(_.value)
-    val maxValue = qValues.tail.foldLeft(qValues.first)(Math.max(_,_))
+    val maxValue = if (qValues.isEmpty) 0.0 else qValues.tail.foldLeft(qValues.first)(Math.max(_,_))
     val newQvalue = qValuesMap.getOrElse(alt, new QLAgent.QValue(alt, 0.0, 0.0, gamma, 0.0)).updated(reward, maxValue, expDecay)
     val newQvaluesMap = qValuesMap.updated(alt, newQvalue)
     updateNLogo(newExperimenting, newQvaluesMap.values.toList)

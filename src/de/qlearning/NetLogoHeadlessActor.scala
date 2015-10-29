@@ -46,7 +46,7 @@ class NetLogoHeadlessActor(val id: Int) extends Actor with FSM[NetLogoHeadlessAc
 
 //  val workspace = HeadlessWorkspace.newInstance(classOf[MyHeadlessWorkspace])
   val workspace = HeadlessWorkspace.newInstance
-  val rewardRepName = config.getString(QLExtension.cfgstr + ".reward-reporter-name")
+  val rewardRepName = config.getString(QLExtension.cfgstr + ".parallel.reward-reporter-name")
 //  val setupComName = config.getString(QLExtension.cfgstr + ".setup-command-name")
   
   override def postStop() {
@@ -81,8 +81,8 @@ class NetLogoHeadlessActor(val id: Int) extends Actor with FSM[NetLogoHeadlessAc
     case Event(NetLogoSupervisor.NLGroupsList(_, groups), _) => {
       
       val time1 = scala.compat.Platform.currentTime
-      headlessIdlePerf send { m => m.updated(id, m(id).end(time1)) }
-      headlessHandleGroupsPerf send {m => m.updated(id, m(id).start(time1))}
+      QLSystem.perfMeasures.stopHeadlessIdlePerf(id, time1)
+      QLSystem.perfMeasures.startHeadlessHandleGroupsPerf(id, time1)
       
       Future.sequence(groups.map(group => Future.sequence((group.qlAgents zip group.alternatives).map(pair => 
         pair._1.future map {_.choose(pair._2)}
@@ -95,8 +95,8 @@ class NetLogoHeadlessActor(val id: Int) extends Actor with FSM[NetLogoHeadlessAc
       }
       
       val time2 = scala.compat.Platform.currentTime
-      headlessHandleGroupsPerf send {m => m.updated(id, m(id).end(time2))}
-      headlessIdlePerf send {m => m.updated(id, m(id).start(time2))}
+      QLSystem.perfMeasures.stopHeadlessHandleGroupsPerf(id, time2)
+      QLSystem.perfMeasures.startHeadlessIdlePerf(id, time2)
       
       goto(Waiting)
     }
@@ -114,9 +114,9 @@ class NetLogoHeadlessActor(val id: Int) extends Actor with FSM[NetLogoHeadlessAc
     case Event(NLGroupChoicesList(list), Initialized(reporter, _)) => {
       
       val time1 = scala.compat.Platform.currentTime
-      headlessIdlePerf send {m => m.updated(id, m(id).end(time1))}
-      headlessHandleChoicesPerf send {m => m.updated(id, m(id).start(time1))}
-      
+      QLSystem.perfMeasures.stopHeadlessIdlePerf(id, time1)
+      QLSystem.perfMeasures.startHeadlessHandleChoicesPerf(id, time1)
+            
       Future {
           workspace.runCompiledReporter(workspace.defaultOwner, reporter).asInstanceOf[org.nlogo.api.LogoList]
       } onSuccess {
@@ -129,19 +129,19 @@ class NetLogoHeadlessActor(val id: Int) extends Actor with FSM[NetLogoHeadlessAc
       }
       
       val time2 = scala.compat.Platform.currentTime
-      headlessHandleChoicesPerf send {m => m.updated(id, m(id).end(time2))}
-      headlessIdlePerf send {m => m.updated(id, m(id).start(time2))}
+      QLSystem.perfMeasures.stopHeadlessHandleChoicesPerf(id, time2)
+      QLSystem.perfMeasures.startHeadlessIdlePerf(id, time2)
       
       stay using Initialized(reporter, list)
     }
     
     case Event(GetNLGroupChoices(_), Initialized(_, data)) => {
       
-      headlessIdlePerf send {m => m.updated(id, m(id).end(scala.compat.Platform.currentTime))}
-            
+      QLSystem.perfMeasures.stopHeadlessIdlePerf(id, scala.compat.Platform.currentTime)
+      
       sender ! 	NLGroupChoicesList(data)
       
-      headlessIdlePerf send {m => m.updated(id, m(id).start(scala.compat.Platform.currentTime))}
+      QLSystem.perfMeasures.startHeadlessIdlePerf(id, scala.compat.Platform.currentTime)
       
       netLogoSuper ! IAmReady(id)
       goto(Ready)

@@ -49,44 +49,50 @@ object QLExtension {
       System.err.println("FileNotFoundException: extensions/ql/application.conf") 
       exit(0)
   }
-  // additional jars that are needed
+  
+  // load configuration file
   val config = ConfigFactory.parseFile(confFile)
-  val jarList =  List[String]("extensions/ql/ql.jar",
+  val inParallelMode = config.getBoolean("netlogo.enable-parallel-mode")
+    
+  // additional jars that are needed
+  val defaultJarList =  List[String]("extensions/ql/ql.jar",
                               "extensions/ql/qlearning.jar", 
                               "extensions/ql/akka-actor-2.0.5.jar",
                               "extensions/ql/akka-agent-2.0.5.jar",
                               "extensions/ql/config-1.0.2.jar", 
                               "extensions/ql/colt-1.2.0.jar", 
-                              "extensions/ql/scala-stm_2.9.1-0.5.jar",
-                              "extensions/games/games.jar",
-                              "extensions/games/gamut.jar") ++ config.getStringList("netlogo.additional-jars").asScala
+                              "extensions/ql/scala-stm_2.9.1-0.5.jar") 
+                              
+  val jarList = if (inParallelMode) defaultJarList ++ config.getStringList("netlogo.parallel.additional-jars").asScala else defaultJarList
   
-  // adding the jars to the system class loader
   val sysloader = ClassLoader.getSystemClassLoader().asInstanceOf[URLClassLoader]
-  val sysclass = classOf[URLClassLoader]
-  try {
-     val method = sysclass.getDeclaredMethod("addURL", classOf[URL])
-     method.setAccessible(true)
-     jarList.foreach(jarName => {
-       val file = new File(jarName)
-       // check whether jar exists
-       new FileReader(file)
-       // load jar
-       method.invoke(sysloader, file.toURL())
-     })
-  } catch {
-    case e: FileNotFoundException =>
-      val newLine = System.getProperty("line.separator")
-      System.err.println("FileNotFoundException: Check if all required jars exists: " + newLine +  
-          jarList.tail.foldLeft(jarList.first)((s, el) => s + "," + newLine + el)) + "." + newLine + 
-      exit(0)
-    case t: Throwable => 
-      val newLine = System.getProperty("line.separator")
-      System.err.println("Setting additional jars failed. A SecurityManager may prevent the adding of jars to the class path at runtime." + newLine + 
-          "Manually add the names of the jars to the variable 'Class-Path' of the manifest file of NetLogo.jar.")
-      t.printStackTrace()
-  }
-    
+  
+  if (inParallelMode) {                              
+    // adding the jars to the system class loader
+    val sysclass = classOf[URLClassLoader]
+    try {
+      val method = sysclass.getDeclaredMethod("addURL", classOf[URL])
+      method.setAccessible(true)
+      jarList.foreach(jarName => {
+        val file = new File(jarName)
+        // check whether jar exists
+        new FileReader(file)
+        // load jar
+        method.invoke(sysloader, file.toURL())
+      })
+    } catch {
+      case e: FileNotFoundException =>
+        val newLine = System.getProperty("line.separator")
+        System.err.println("FileNotFoundException: Check if all required jars exists: " + newLine +  
+            jarList.tail.foldLeft(jarList.first)((s, el) => s + "," + newLine + el)) + "." + newLine + 
+        exit(0)
+      case t: Throwable => 
+        val newLine = System.getProperty("line.separator")
+        System.err.println("Setting additional jars failed. A SecurityManager may prevent the adding of jars to the class path at runtime." + newLine + 
+            "Manually add the names of the jars to the variable 'Class-Path' of the manifest file of NetLogo.jar.")
+        t.printStackTrace()
+    }
+  } 
 }
 
 /**
@@ -111,6 +117,9 @@ class QLExtension extends DefaultClassManager {
     manager.addPrimitive("get-decisions", getPrimitive("de.qlearning.GetDecisions"))
     manager.addPrimitive("set-rewards", getPrimitive("de.qlearning.SetRewards"))
     manager.addPrimitive("get-performance", getPrimitive("de.qlearning.GetPerformance"))
+    
+    manager.addPrimitive("one-of", getPrimitive("de.qlearning.OneOf"))
+    manager.addPrimitive("set-reward", getPrimitive("de.qlearning.SetReward"))
   }
     
   

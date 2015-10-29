@@ -31,36 +31,47 @@ object QLSystem {
   val defaultWaitDuration = config.getInt(QLExtension.cfgstr + ".timeout_ms") milliseconds
   implicit val timeout = Timeout(defaultWaitDuration)
   
-  // a number of headless instances of NetLogo are loaded in the background
-  // they are used to simultaneousely execute reward procedures
-  // a router is used to distribute jobs to the headless instances
-  val conHeadlessEnv = config.getInt(QLExtension.cfgstr + ".headless-workspaces")
-  val netLogoRouter = system.actorOf(Props().withRouter(NetLogoHeadlessRouter(conHeadlessEnv)))
+  val inParallelMode = config.getBoolean("netlogo.enable-parallel-mode")
+  val usePerformanceMeasures = if (inParallelMode) config.getBoolean("netlogo.parallel.enable-performance-measures") else false
   
-  // the supervisor controls the simulation
-  val netLogoSuper = system.actorOf(Props(new NetLogoSupervisor(netLogoRouter)))
-      
+  val netLogoRouter = if (inParallelMode) {
+      println("Parallel mode is enabled")
+	  // a number of headless instances of NetLogo are loaded in the background
+	  // they are used to simultaneousely execute reward procedures
+	  // a router is used to distribute jobs to the headless instances
+	  val conHeadlessEnv = config.getInt(QLExtension.cfgstr + ".parallel.headless-workspaces")
+	  system.actorOf(Props().withRouter(NetLogoHeadlessRouter(conHeadlessEnv)))
+	  } else {
+	    println("Parallel mode is disabled")
+	    system.deadLetters
+	  }
+  
+  val netLogoSuper = if (inParallelMode) {
+	  // the supervisor controls the simulation
+	  system.actorOf(Props(new NetLogoSupervisor(netLogoRouter)))
+	  } else system.deadLetters
+  
+  // an object to handle the performance measures (works only in parallel-mode)
+  val perfMeasures = if (usePerformanceMeasures) new PerformanceMeasures() else new EmptyPerformanceMeasures()
+	  
   // this map connects an NetLogo-agent (turtle / patch) to a QLAgent that performs the learning 
   // it therefore also holds all data about the agents
-  val qlDataMap = AkkaAgent(Map[Agent, AkkaAgent[QLAgent]]())
+  val qlDataMap = AkkaAgent(Map[Agent, AkkaAgent[QLAgent]]())  
   
-  // various AkkaAgents that measure performance of the program
-  val hundredTicksPerf = AkkaAgent(PerformanceMeasure())
-  val nlSuperIdlePerf = AkkaAgent(PerformanceMeasure())
-  val nlSuperHandleGroupsPerf = AkkaAgent(PerformanceMeasure())
-  val nlSuperUpdatePerf = AkkaAgent(PerformanceMeasure())
-  val headlessIdlePerf = AkkaAgent(Map[Int,PerformanceMeasure]().withDefault(id => PerformanceMeasure()))
-  val headlessHandleGroupsPerf = AkkaAgent(Map[Int,PerformanceMeasure]().withDefault(id => PerformanceMeasure()))
-  val headlessHandleChoicesPerf = AkkaAgent(Map[Int,PerformanceMeasure]().withDefault(id => PerformanceMeasure()))
-  val headlessAnsweringPerf = AkkaAgent(Map[Int,PerformanceMeasure]().withDefault(id => PerformanceMeasure()))
-   
   // names of agent variables
   val altListName = QLSystem.config.getString(QLExtension.cfgstr + ".alternatives-list")
   val qvListName = QLSystem.config.getString(QLExtension.cfgstr + ".q-values-list")
   val freqListName = QLSystem.config.getString(QLExtension.cfgstr + ".frequencies-list")
-  val explListName = QLSystem.config.getString(QLExtension.cfgstr + ".explorations-list")
+  val explRateName = QLSystem.config.getString(QLExtension.cfgstr + ".exploration-rate")
+  val explMethodName = QLSystem.config.getString(QLExtension.cfgstr + ".exploration-method")
   val gammaName = QLSystem.config.getString(QLExtension.cfgstr + ".gamma")
+  
+  val defaultExploraionRate = QLSystem.config.getDouble(QLExtension.cfgstr + ".default-exploration-rate")
+  val defaultExploraionMethod = QLSystem.config.getString(QLExtension.cfgstr + ".default-exploration-method")
+  
 }
+
+
 
 
 //////////////////////////////////////////////
@@ -120,8 +131,8 @@ class GetGroupList extends DefaultReporter {
     
     val id = args(0).getIntValue
     
-    headlessAnsweringPerf send {m => m.updated(id, m(id).start(scala.compat.Platform.currentTime))} 
-    
+    perfMeasures.startHeadlessAnsweringPerf(id, scala.compat.Platform.currentTime)
+        
     val future = (netLogoRouter ? GetNLGroupChoices(id)).mapTo[NLGroupChoicesList]
     
     // we have to block because NetLogo is waiting for a result
@@ -133,8 +144,8 @@ class GetGroupList extends DefaultReporter {
         Nil
     }
     
-    headlessAnsweringPerf send {m => m.updated(id, m(id).end(scala.compat.Platform.currentTime))}
-      
+    perfMeasures.stopHeadlessAnsweringPerf(id, scala.compat.Platform.currentTime)
+          
     result.toLogoList
   }
 }
@@ -189,7 +200,7 @@ class Init extends DefaultCommand {
   import QLSystem._
   
   override def getAgentClassString = "O"
-  override def getSyntax = commandSyntax(Array( TurtlesetType | PatchsetType, NumberType, StringType))
+  override def getSyntax = commandSyntax(Array( TurtlesetType | PatchsetType))
 
   def perform(args: Array[Argument], c: Context) {
         
@@ -203,33 +214,26 @@ class Init extends DefaultCommand {
     qlDataMap.await
     
     // init performance measures
-    hundredTicksPerf update PerformanceMeasure()
-    nlSuperIdlePerf update PerformanceMeasure()
-    nlSuperHandleGroupsPerf update PerformanceMeasure()
-    nlSuperUpdatePerf update PerformanceMeasure()
-    headlessIdlePerf update Map[Int,PerformanceMeasure]().withDefault(id => PerformanceMeasure()) 
-    headlessHandleGroupsPerf update Map[Int,PerformanceMeasure]().withDefault(id => PerformanceMeasure())
-    headlessHandleChoicesPerf update Map[Int,PerformanceMeasure]().withDefault(id => PerformanceMeasure())
+    perfMeasures.init
     
     // the groups structure is deleted, 
     // the NetLogo-model is reloaded,
     // and the commands and reporters are recompiled
     netLogoSuper ! NetLogoSupervisor.InitNetLogoActors(c.asInstanceOf[org.nlogo.nvm.ExtensionContext].workspace())
     
-    // read parameters
+    // read parameter
     val newNLAgents = args(0).getAgentSet.agents.asScala.toList
-    val experimenting = args(1).getDoubleValue
-    val exploration = args(2).getString
-
-    // create a QLData-object that holds all the information about the Q-learning process
+    
+    // create the QLAgents
     qlDataMap send { newNLAgents.map(a => {
       val agent = a.asInstanceOf[org.nlogo.agent.Agent]
-      // set variables
+      // read and set variables
       val vLength = agent.variables.size
       val idxA = (0 until vLength).toList.find(i => agent.variableName(i) == altListName.toUpperCase())
       val idxQ = (0 until vLength).toList.find(i => agent.variableName(i) == qvListName.toUpperCase())
       val idxN = (0 until vLength).toList.find(i => agent.variableName(i) == freqListName.toUpperCase())
-      val idxE = (0 until vLength).toList.find(i => agent.variableName(i) == explListName.toUpperCase())
+      val idxER = (0 until vLength).toList.find(i => agent.variableName(i) == explRateName.toUpperCase())
+      val idxEM = (0 until vLength).toList.find(i => agent.variableName(i) == explMethodName.toUpperCase())
       val idxG = (0 until vLength).toList.find(i => agent.variableName(i) == gammaName.toUpperCase())
       if (idxA.isDefined) 
         agent.setVariable(idxA.get, LogoList())
@@ -237,14 +241,20 @@ class Init extends DefaultCommand {
         agent.setVariable(idxQ.get, LogoList())
       if (idxN.isDefined)
         agent.setVariable(idxN.get, LogoList())
-      if (idxE.isDefined) 
-        agent.setVariable(idxE.get, LogoList())
+      val explorationRate = if (idxER.isDefined)
+          agent.getVariable(idxER.get).asInstanceOf[Double]
+        else
+          defaultExploraionRate
+      val explorationMethod = if (idxEM.isDefined)
+          agent.getVariable(idxEM.get).asInstanceOf[String]
+        else
+          defaultExploraionMethod
       val gamma = if (idxG.isDefined) 
           agent.getVariable(idxG.get).asInstanceOf[Double]
         else
           0.0
       // return mapping
-      a -> AkkaAgent(QLAgent(exploration, experimenting, gamma, agent))
+      a -> AkkaAgent(QLAgent(explorationMethod, explorationRate, gamma, agent))
     }).toMap }
     // must wait for new agents to be set
     qlDataMap.await
@@ -349,38 +359,30 @@ class DecreaseExperimenting extends DefaultCommand {
 }
 
 
-class GetPerformance extends DefaultReporter {
-  override def getAgentClassString = "O"    
-  override def getSyntax = reporterSyntax(Array[Int](StringType), NumberType)
-  def report(args: Array[Argument], c: Context): AnyRef = { 
-    val s = args(0).getString
-    val strings = s.split(' ')
-    if (strings.size == 2)  {
-      val id = strings(1).toInt - 1
-      strings(0) match {
-        case "HeadlessIdle" => 
-          QLSystem.headlessIdlePerf.get.apply(id).average.toLogoObject
-        case "HeadlessHandleGroups" => 
-          QLSystem.headlessHandleGroupsPerf.get.apply(id).average.toLogoObject
-        case "HeadlessHandleChoices" => 
-          QLSystem.headlessHandleChoicesPerf.get.apply(id).average.toLogoObject
-        case "HeadlessAnswering" => 
-          QLSystem.headlessAnsweringPerf.get.apply(id).average.toLogoObject
-      }
-    } else {
-      strings(0) match {
-        case "NLSuperIdle" =>
-          QLSystem.nlSuperIdlePerf.get.average.toLogoObject
-        case "NLSuperHandleGroups" => 
-          QLSystem.nlSuperHandleGroupsPerf.get.average.toLogoObject
-        case "NLSuperUpdate" =>
-          QLSystem.nlSuperUpdatePerf.get.average.toLogoObject
-        case "HundredTicks" =>
-          QLSystem.hundredTicksPerf.get.average.toLogoObject
-      }
-    }
+class OneOf extends DefaultReporter {
+  
+  override def getAgentClassString = "TP"
+  override def getSyntax = reporterSyntax(Array( ListType), StringType)
+  
+  def report(args: Array[Argument], context: Context): AnyRef = {
+    val alternatives = args(0).getList.map(s => s.asInstanceOf[String]).toList
+    QLSystem.qlDataMap.get.apply(context.getAgent).get.choose(alternatives)
   }
 }
+
+class SetReward extends DefaultCommand {
+  
+  override def getAgentClassString = "TP"
+  override def getSyntax = commandSyntax(Array(StringType, NumberType))
+  
+  def perform(args: Array[Argument], context: Context) {
+    val alternative = args(0).getString
+    val reward = args(1).getDoubleValue
+    QLSystem.qlDataMap.get.apply(context.getAgent) send { _.updated(alternative, reward)}
+  }
+}
+
+
 
 
 

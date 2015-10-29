@@ -70,17 +70,18 @@ object NetLogoSupervisor {
  */
 class NetLogoSupervisor(netLogoRouter: ActorRef) extends Actor with FSM[NetLogoSupervisor.State, NetLogoSupervisor.Data]{
   import NetLogoSupervisor._
-  import QLSystem._
+//  import QLSystem._
   
   val nlApp = org.nlogo.app.App.app
     
-  val groupRepName = config.getString(QLExtension.cfgstr + ".group-reporter-name")
-  val updateComName = config.getString(QLExtension.cfgstr + ".update-command-name")
+  val groupRepName = QLSystem.config.getString(QLExtension.cfgstr + ".parallel.group-reporter-name")
+  val updateComName = QLSystem.config.getString(QLExtension.cfgstr + ".parallel.update-command-name")
+  val conHeadlessEnv = QLSystem.config.getInt(QLExtension.cfgstr + ".parallel.headless-workspaces")
   
   //private message
   case object Tick
   case object UpdateNetLogo
-  
+     
   //private functions
   private def cutToBatches(list: List[NLGroup]) = {
     if (conHeadlessEnv > 1) {
@@ -144,20 +145,20 @@ class NetLogoSupervisor(netLogoRouter: ActorRef) extends Actor with FSM[NetLogoS
       val owner = if (workspace.isHeadless()) workspace.asInstanceOf[HeadlessWorkspace].defaultOwner else nlApp.owner
       val logolist = workspace.runCompiledReporter(owner, groupReporter).asInstanceOf[org.nlogo.api.LogoList]
       val firstBatches = cutToBatches(logolist.map(_.asInstanceOf[NLGroup]).toList)
-      hundredTicksPerf send { _.start(scala.compat.Platform.currentTime)}
+      QLSystem.perfMeasures.startHundredTicksPerf(scala.compat.Platform.currentTime)
       goto(Supervising) using WithGroupReporter(groupReporter, workspace, firstBatches, headlessIds, updateCommand, tickCount)
     }
     
     // restart without fixed GroupStructure
     // the group-reporter is called repeatedly in order to get a list NLGroups 
     case Event(Start, WithGroupReporter(_,_,_,_,_,_)) => {
-      hundredTicksPerf send { _.start(scala.compat.Platform.currentTime)}
+      QLSystem.perfMeasures.startHundredTicksPerf(scala.compat.Platform.currentTime)
       goto(Supervising)
     }
     
     // start with fixed GroupStructure
     case Event(Start, WithGroupStructure(_,_,_,_,_,_)) => {
-      hundredTicksPerf send { _.start(scala.compat.Platform.currentTime)}
+      QLSystem.perfMeasures.startHundredTicksPerf(scala.compat.Platform.currentTime)
       goto(Supervising)
     }
     
@@ -185,9 +186,9 @@ class NetLogoSupervisor(netLogoRouter: ActorRef) extends Actor with FSM[NetLogoS
     case Event(Tick, d: InitializedTrait) => {
       
       val time1 = scala.compat.Platform.currentTime
-      QLSystem.nlSuperIdlePerf send { _.end(time1) }
-      QLSystem.nlSuperHandleGroupsPerf send { _.start(time1)}
-      
+      QLSystem.perfMeasures.stopNlSuperIdlePerf(time1)
+      QLSystem.perfMeasures.startNlSuperHandleGroupsPerf(time1)
+            
       // there should always be headlessIds and batches left
       netLogoRouter ! NLGroupsList(d.headlessIds.first, d.remainingBatches.first)
       
@@ -211,8 +212,8 @@ class NetLogoSupervisor(netLogoRouter: ActorRef) extends Actor with FSM[NetLogoS
         tick(d.workspace.isHeadless())
       
       val time2 = scala.compat.Platform.currentTime
-      QLSystem.nlSuperHandleGroupsPerf send { _.end(time2)}
-      QLSystem.nlSuperIdlePerf send { _.start(time2) }
+      QLSystem.perfMeasures.stopNlSuperHandleGroupsPerf(time2)
+      QLSystem.perfMeasures.startNlSuperIdlePerf(time2)
       
       stay using d.copy(batches, d.headlessIds.tail)
     }
@@ -220,24 +221,24 @@ class NetLogoSupervisor(netLogoRouter: ActorRef) extends Actor with FSM[NetLogoS
     case Event(UpdateNetLogo, d: InitializedTrait) => {
       
       val time1 = scala.compat.Platform.currentTime
-      QLSystem.nlSuperIdlePerf send { _.end(time1) }
-      QLSystem.nlSuperUpdatePerf send { _.start(time1) }
-      
+      QLSystem.perfMeasures.stopNlSuperIdlePerf(time1)
+      QLSystem.perfMeasures.startNlSuperUpdatePerf(time1)
+            
       val owner = if (d.workspace.isHeadless()) d.workspace.asInstanceOf[HeadlessWorkspace].defaultOwner else nlApp.owner
       d.workspace.runCompiledCommands(owner, d.updateCommand)
       
       val nextTick = if (d.tickCount == 99) {
         val time = scala.compat.Platform.currentTime
-        hundredTicksPerf send { _.end(time)}
-        hundredTicksPerf send { _.start(time)}
+        QLSystem.perfMeasures.stopHundredTicksPerf(time)
+        QLSystem.perfMeasures.startHundredTicksPerf(time)
         0
       } else {
         d.tickCount + 1
       }
       
       val time2 = scala.compat.Platform.currentTime
-      QLSystem.nlSuperUpdatePerf send { _.end(time2) }
-      QLSystem.nlSuperIdlePerf send { _.start(time2) }
+      QLSystem.perfMeasures.stopNlSuperUpdatePerf(time2)
+      QLSystem.perfMeasures.startNlSuperIdlePerf(time2)
       
       stay using d.copy(nextTick)
     }

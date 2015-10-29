@@ -1,7 +1,7 @@
 extensions [ql]
 
 patches-own [isRessource resType resColor]
-turtles-own [gamma dest nA nB vA vB v avA avB rnA]
+turtles-own [exploration-rate gamma q-values dest nA nB vA vB v avA avB rnA]
 
 to setup
   clear-all
@@ -25,41 +25,27 @@ to setup
   crt noOfTurtles [
     setxy random-xcor random-ycor
     set dest 0
+    set exploration-rate global-expl-rate
+    set gamma 0.9
   ]
   
   ; setup ql-extension
-  ql:init turtles exploration-rate "epsilon-greedy"
+  ql:init turtles
   let choices (list "A" "B")
   let groups [ql:create-group (list (list self choices))] of turtles  
   ql:set-group-structure groups
   
+  ql:decay-exploration
+  
   reset-ticks
 end
 
-to-report get-rewards [ headless-id ]
-  let group-list ql:get-group-list headless-id
-  let result map [reward ?] group-list
-  report result
-end
-
-to-report reward [group-choice]
-  let agent first ql:get-agents group-choice
-  let decision first ql:get-decisions group-choice
-  ifelse decision = "forward" [
-    ask agent [fd 1]
-    report ql:set-rewards group-choice (list forward-reward)
-  ] [
-    ask agent [right 90]
-    report ql:set-rewards group-choice (list right-reward)
-  ]
-end
 
 ; the action of a turtle in the search for resources
 to forage
   ifelse dest = 0 [ ; no destination
     ; choose a resource type of new destination
-    let destType one-of ["A" "B" ]
-    
+    let destType ql:one-of ["A" "B" ]
     ; choose destination
     set dest min-one-of (patches with [isRessource and resType = destType]) [distance myself]
     ifelse dest = nobody [set dest 0] 
@@ -74,13 +60,19 @@ to forage
       forward 1 
     ][ ; else: turtles has arrived at its destination
       ifelse "A" = [resType] of patch-here [
-        if isRessource [
+        ifelse isRessource [
+          ql:set-reward "A" 100
           set vA vA + 100
+        ] [
+          ql:set-reward "A" 0
         ]
         set nA nA + 1
       ] [
-        if isRessource [
+        ifelse isRessource [
+          ql:set-reward "B" resValueB
           set vB vB + resValueB
+        ] [
+          ql:set-reward "B" 0
         ]
         set nB nB + 1
       ]
@@ -125,8 +117,8 @@ end
 GRAPHICS-WINDOW
 430
 10
-852
-453
+853
+454
 -1
 -1
 13.333333333333334
@@ -188,7 +180,7 @@ resValueB
 resValueB
 0
 100
-90
+50
 5
 1
 NIL
@@ -237,7 +229,7 @@ growthrate
 growthrate
 0
 100
-20
+5
 1
 1
 NIL
@@ -286,15 +278,74 @@ SLIDER
 45
 180
 78
-exploration-rate
-exploration-rate
+global-expl-rate
+global-expl-rate
 0
 1
-0.05
+0.1
 0.01
 1
 NIL
 HORIZONTAL
+
+PLOT
+220
+380
+420
+530
+plot 1
+NIL
+NIL
+-10.0
+10.0
+0.0
+10.0
+true
+false
+"" ""
+PENS
+"default" 1.0 1 -16777216 true "" "histogram [avA - avB] of turtles"
+
+MONITOR
+15
+330
+177
+375
+NIL
+mean [v] of turtles
+17
+1
+11
+
+PLOT
+15
+380
+215
+530
+plot 2
+NIL
+NIL
+0.0
+500.0
+0.0
+10.0
+true
+false
+"" ""
+PENS
+"default" 10.0 1 -16777216 true "" "histogram [first q-values] of turtles"
+"pen-1" 10.0 1 -7500403 true "" "histogram [last q-values] of turtles"
+
+MONITOR
+995
+165
+1282
+210
+NIL
+mean [exploration-rate] of turtles
+17
+1
+11
 
 @#$#@#$#@
 ## WHAT IS IT?
