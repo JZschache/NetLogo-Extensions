@@ -24,6 +24,8 @@ import akka.util.duration._
 
 object QLSystem {
   
+  val defaultState = 0
+  
   // starting the ActorSystem
   implicit val system = ActorSystem("QLSystem", ConfigFactory.parseFile(QLExtension.confFile))
   val config = system.settings.config
@@ -86,7 +88,7 @@ trait hasNLAgents { val nlAgents: List[org.nlogo.api.Agent] }
  */
 case class NLGroup(nlAgents: List[org.nlogo.api.Agent], 
                    qlAgents: List[AkkaAgent[QLAgent]], 
-                   alternatives: List[List[String]]) extends org.nlogo.api.ExtensionObject with hasNLAgents {
+                   alternatives: List[List[Int]]) extends org.nlogo.api.ExtensionObject with hasNLAgents {
   require(nlAgents.size == alternatives.size)
   
   def dump(readable: Boolean, exporting: Boolean, reference: Boolean): String = toString
@@ -100,8 +102,9 @@ case class NLGroup(nlAgents: List[org.nlogo.api.Agent],
  */
 case class NLGroupChoice(nlAgents: List[org.nlogo.api.Agent], 
                          qlAgents: List[AkkaAgent[QLAgent]], 
-                         choices: List[String], 
-                         rewards: List[Double]) extends org.nlogo.api.ExtensionObject with hasNLAgents {
+                         choices: List[Int], 
+                         rewards: List[Double],
+                         newStates: List[Int]) extends org.nlogo.api.ExtensionObject with hasNLAgents {
   require(nlAgents.size == qlAgents.size && qlAgents.size == choices.size)
   
   def dump(readable: Boolean, exporting: Boolean, reference: Boolean): String = toString
@@ -186,7 +189,24 @@ class SetRewards extends DefaultReporter {
   def report(args: Array[Argument], c: Context): AnyRef = {
     val nlGroupChoice =  args(0).get.asInstanceOf[NLGroupChoice]
     val rewards = args(1).getList.map(_.asInstanceOf[Double]).toList
-    return NLGroupChoice(nlGroupChoice.nlAgents, nlGroupChoice.qlAgents, nlGroupChoice.choices, rewards)
+    return NLGroupChoice(nlGroupChoice.nlAgents, nlGroupChoice.qlAgents, nlGroupChoice.choices, rewards, 
+        if (nlGroupChoice.newStates.isEmpty) rewards.map(_ => QLSystem.defaultState) else nlGroupChoice.newStates)
+  }
+}
+
+/**
+ * takes an NLGroupChoice and a list of Integers
+ * returns a new NLGroupChoice with new states set to the list of Integers
+ */
+class SetNewStates extends DefaultReporter {
+  
+  override def getAgentClassString = "O"
+  override def getSyntax = reporterSyntax(Array[Int](WildcardType, ListType), WildcardType)
+  
+  def report(args: Array[Argument], c: Context): AnyRef = {
+    val nlGroupChoice =  args(0).get.asInstanceOf[NLGroupChoice]
+    val newStates = args(1).getList.map(_.asInstanceOf[Double].toInt).toList
+    return NLGroupChoice(nlGroupChoice.nlAgents, nlGroupChoice.qlAgents, nlGroupChoice.choices, nlGroupChoice.rewards, newStates)
   }
 }
   
@@ -254,7 +274,7 @@ class Init extends DefaultCommand {
         else
           0.0
       // return mapping
-      a -> AkkaAgent(QLAgent(explorationMethod, explorationRate, gamma, agent))
+      a -> AkkaAgent(QLAgent(defaultState, explorationMethod, explorationRate, gamma, agent))
     }).toMap }
     // must wait for new agents to be set
     qlDataMap.await
@@ -276,7 +296,7 @@ class CreateGroup extends DefaultReporter {
     val (nlAgents, qlAgents, alternatives) = args(0).getList.map(entry => {
       val ll = entry.asInstanceOf[LogoList]
       val nlAgent = ll.first.asInstanceOf[org.nlogo.api.Agent]
-      val alt = ll.butFirst.first.asInstanceOf[LogoList].map(s => s.asInstanceOf[String]).toList
+      val alt = ll.butFirst.first.asInstanceOf[LogoList].map(s => s.asInstanceOf[Double].toInt).toList
       val qlAgent = QLSystem.qlDataMap.get().get(nlAgent)
       if (qlAgent.isDefined)
         qlAgent.get send { _.setAlternatives(alt) }
@@ -358,30 +378,58 @@ class DecreaseExperimenting extends DefaultCommand {
   }
 }
 
-
+/**
+ * an agent is asked to choose one of the given alternatives
+ * 
+ * this method is non-blocking
+ */
 class OneOf extends DefaultReporter {
   
   override def getAgentClassString = "TP"
-  override def getSyntax = reporterSyntax(Array( ListType), StringType)
+  override def getSyntax = reporterSyntax(Array( ListType), NumberType)
   
   def report(args: Array[Argument], context: Context): AnyRef = {
-    val alternatives = args(0).getList.map(s => s.asInstanceOf[String]).toList
-    QLSystem.qlDataMap.get.apply(context.getAgent).get.choose(alternatives)
+    val alternatives = args(0).getList.map(s => s.asInstanceOf[Double].toInt).toList
+    Double.box(QLSystem.qlDataMap.get.apply(context.getAgent).get.choose(alternatives))
   }
 }
 
+/**
+ * a reward is set
+ * 
+ * the first argument is the previously chosen alternative
+ * 
+ */
 class SetReward extends DefaultCommand {
   
   override def getAgentClassString = "TP"
-  override def getSyntax = commandSyntax(Array(StringType, NumberType))
+  override def getSyntax = commandSyntax(Array(NumberType, NumberType))
   
   def perform(args: Array[Argument], context: Context) {
-    val alternative = args(0).getString
+    val alternative = args(0).getIntValue
     val reward = args(1).getDoubleValue
-    QLSystem.qlDataMap.get.apply(context.getAgent) send { _.updated(alternative, reward)}
+    QLSystem.qlDataMap.get.apply(context.getAgent) send { _.updated(alternative, reward, QLSystem.defaultState)}
   }
 }
 
+/**
+ * a reward and new state is set 
+ * 
+ * the first argument is the previously chosen alternative
+ * 
+ */
+class SetRewardAndState extends DefaultCommand {
+  
+  override def getAgentClassString = "TP"
+  override def getSyntax = commandSyntax(Array(NumberType, NumberType, NumberType))
+  
+  def perform(args: Array[Argument], context: Context) {
+    val alternative = args(0).getIntValue
+    val reward = args(1).getDoubleValue
+    val newState = args(2).getIntValue
+    QLSystem.qlDataMap.get.apply(context.getAgent) send { _.updated(alternative, reward, newState)}
+  }
+}
 
 
 

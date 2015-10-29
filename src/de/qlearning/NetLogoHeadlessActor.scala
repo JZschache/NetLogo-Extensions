@@ -89,7 +89,7 @@ class NetLogoHeadlessActor(val id: Int) extends Actor with FSM[NetLogoHeadlessAc
       )))) onSuccess {
         case list =>  {
           // forward choices of agents to self
-          val groupsChoices = (groups zip list).map(pair => NLGroupChoice(pair._1.nlAgents, pair._1.qlAgents, pair._2, Nil))
+          val groupsChoices = (groups zip list).map(pair => NLGroupChoice(pair._1.nlAgents, pair._1.qlAgents, pair._2, Nil, Nil))
           self ! NLGroupChoicesList(groupsChoices)
         }
       }
@@ -124,7 +124,8 @@ class NetLogoHeadlessActor(val id: Int) extends Actor with FSM[NetLogoHeadlessAc
           result.foreach(ar => {
             // forwards rewards to agents
             val groupChoice = ar.asInstanceOf[NLGroupChoice]
-            (groupChoice.qlAgents, groupChoice.choices, groupChoice.rewards).zipped.foreach((agent, alt, r) => agent send {_.updated(alt, r)})    
+            val ars = (groupChoice.choices, groupChoice.rewards, groupChoice.newStates).zipped.map((a,r,s) => (a,r,s))
+            (groupChoice.qlAgents, ars).zipped.foreach((agent, ars) => agent send {_.updated(ars._1, ars._2, ars._3) }) 
           })
       }
       

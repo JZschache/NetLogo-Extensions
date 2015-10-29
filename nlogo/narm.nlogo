@@ -9,7 +9,7 @@ to setup
     set exploration-rate experimenting
   ]
   ql:init patches
-  let choices ["0" "1"]
+  let choices [0 1]
   let groups [ql:create-group (list (list self choices))] of patches
   ql:set-group-structure groups
   reset-ticks
@@ -23,7 +23,7 @@ end
 to-report reward [group-choice]
   let agent first ql:get-agents group-choice
   let decision first ql:get-decisions group-choice
-  ifelse decision = "0" [
+  ifelse decision = 0 [
     ask agent [set pcolor blue]
     report ql:set-rewards group-choice (list random-normal mean-1 sd)
   ] [

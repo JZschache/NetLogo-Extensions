@@ -116,10 +116,12 @@ class QLExtension extends DefaultClassManager {
     manager.addPrimitive("get-agents", getPrimitive("de.qlearning.GetAgents"))
     manager.addPrimitive("get-decisions", getPrimitive("de.qlearning.GetDecisions"))
     manager.addPrimitive("set-rewards", getPrimitive("de.qlearning.SetRewards"))
+    manager.addPrimitive("set-new-states", getPrimitive("de.qlearning.SetNewStates"))
     manager.addPrimitive("get-performance", getPrimitive("de.qlearning.GetPerformance"))
     
     manager.addPrimitive("one-of", getPrimitive("de.qlearning.OneOf"))
     manager.addPrimitive("set-reward", getPrimitive("de.qlearning.SetReward"))
+    manager.addPrimitive("set-reward-and-state", getPrimitive("de.qlearning.SetRewardAndState"))
   }
     
   

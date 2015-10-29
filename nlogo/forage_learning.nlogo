@@ -15,7 +15,7 @@ to setup
   ask patches [ set isRessource false ]
   ask n-of floor (noOfPatches * resources / 100) patches [
     set isRessource true
-    let pair one-of [ ["A" 72] ["B" 12] ]
+    let pair one-of [ [1 72] [2 12] ]
     set resType first pair
     set resColor last pair
     set pcolor resColor
@@ -31,7 +31,7 @@ to setup
   
   ; setup ql-extension
   ql:init turtles
-  let choices (list "A" "B")
+  let choices (list 1 2)
   let groups [ql:create-group (list (list self choices))] of turtles  
   ql:set-group-structure groups
   
@@ -45,7 +45,7 @@ end
 to forage
   ifelse dest = 0 [ ; no destination
     ; choose a resource type of new destination
-    let destType ql:one-of ["A" "B" ]
+    let destType ql:one-of [1 2 ]
     ; choose destination
     set dest min-one-of (patches with [isRessource and resType = destType]) [distance myself]
     ifelse dest = nobody [set dest 0] 
@@ -59,20 +59,20 @@ to forage
     ifelse patch-here != dest [
       forward 1 
     ][ ; else: turtles has arrived at its destination
-      ifelse "A" = [resType] of patch-here [
+      ifelse 1 = [resType] of patch-here [
         ifelse isRessource [
-          ql:set-reward "A" 100
+          ql:set-reward 1 100
           set vA vA + 100
         ] [
-          ql:set-reward "A" 0
+          ql:set-reward 1 0
         ]
         set nA nA + 1
       ] [
         ifelse isRessource [
-          ql:set-reward "B" resValueB
+          ql:set-reward 2 resValueB
           set vB vB + resValueB
         ] [
-          ql:set-reward "B" 0
+          ql:set-reward 2 0
         ]
         set nB nB + 1
       ]
