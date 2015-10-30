@@ -1,7 +1,7 @@
 extensions [ql]
 
 patches-own [isRessource resType resColor]
-turtles-own [exploration-rate gamma q-values dest nA nB vA vB v avA avB rnA]
+turtles-own [information state exploration-rate gamma alternatives q-values frequencies dest n1 n2 n3 v1 v2 v3 v av1 av2 av3 rn1 rn2]
 
 to setup
   clear-all
@@ -15,7 +15,8 @@ to setup
   ask patches [ set isRessource false ]
   ask n-of floor (noOfPatches * resources / 100) patches [
     set isRessource true
-    let pair one-of [ [1 72] [2 12] ]
+    let pair one-of [ [1 75] [2 15] ]
+    ;let pair one-of [ [1 75] [2 15] [3 35] ]
     set resType first pair
     set resColor last pair
     set pcolor resColor
@@ -26,18 +27,36 @@ to setup
     setxy random-xcor random-ycor
     set dest 0
     set exploration-rate global-expl-rate
-    set gamma 0.9
+    set gamma global-gamma
+    ;set information global-information
+    set information one-of (list 0 global-information)
+    ;if who = 0 [ set information 0 ]
+    set state good-resources-in-neighborhood false
+    set alternatives [ 1 2 ]
+    ;set alternatives [ 1 2 3 ]
   ]
-  
+    
   ; setup ql-extension
   ql:init turtles
-  let choices (list 1 2)
-  let groups [ql:create-group (list (list self choices))] of turtles  
-  ql:set-group-structure groups
-  
-  ql:decay-exploration
+
   
   reset-ticks
+end
+
+to-report good-resources-in-neighborhood [enable-uncertainty]
+  ;report count neighbors with [isRessource and resType = 1]
+  let info information
+  let surrounding patches with [distance myself < 2 * info]
+  let real count surrounding with [isRessource and resType = 1]
+  
+  ;ifelse (enable-uncertainty and random 100 < uncertainty) [
+    ;report max (list 0 (real + one-of [-1 1]))
+    ;report first one-of alternatives
+  ;  report one-of (list 0 information)
+  ;] [
+  ;  report min (list 1 real)
+  ;]
+  report one-of [0 1]
 end
 
 
@@ -45,6 +64,7 @@ end
 to forage
   ifelse dest = 0 [ ; no destination
     ; choose a resource type of new destination
+    ;let destType ql:one-of [1 2 3 ]
     let destType ql:one-of [1 2 ]
     ; choose destination
     set dest min-one-of (patches with [isRessource and resType = destType]) [distance myself]
@@ -59,22 +79,32 @@ to forage
     ifelse patch-here != dest [
       forward 1 
     ][ ; else: turtles has arrived at its destination
-      ifelse 1 = [resType] of patch-here [
+      ifelse (1 = [resType] of patch-here)[
         ifelse isRessource [
-          ql:set-reward 1 100
-          set vA vA + 100
+          ql:set-reward-and-state 1 100 good-resources-in-neighborhood true
+          set v1 v1 + 100
         ] [
-          ql:set-reward 1 0
+          ql:set-reward-and-state 1 0 good-resources-in-neighborhood true
         ]
-        set nA nA + 1
+        set n1 n1 + 1
       ] [
-        ifelse isRessource [
-          ql:set-reward 2 resValueB
-          set vB vB + resValueB
+        ifelse (2 = [resType] of patch-here) [      
+          ifelse isRessource [
+            ql:set-reward-and-state 2 resValue2 good-resources-in-neighborhood true
+            set v2 v2 + resValue2
+          ] [
+          ql:set-reward-and-state 2 0 good-resources-in-neighborhood true
+          ]
+          set n2 n2 + 1
         ] [
-          ql:set-reward 2 0
+          ifelse isRessource [
+            ql:set-reward-and-state 3 resValue3 good-resources-in-neighborhood true
+            set v3 v3 + resValue3
+          ] [
+          ql:set-reward-and-state 3 0 good-resources-in-neighborhood true
+          ]
+          set n3 n3 + 1
         ]
-        set nB nB + 1
       ]
       ; remove resource
       ask patch-here [
@@ -104,10 +134,12 @@ end
 
 to update-values 
   ask turtles [
-    ifelse nA > 0 [set avA vA / nA] [set avA 0]
-    ifelse nB > 0 [set avB vB / nB] [set avB 0]
-    ifelse (nA + nB) > 0 [set rnA nA / (nA + nB)] [set rnA 0]
-    ifelse (nA + nB) > 0 [set v ((vA + vB) / (nA + nB))] [set v 0]
+    ifelse n1 > 0 [set av1 v1 / n1] [set av1 0]
+    ifelse n2 > 0 [set av2 v2 / n2] [set av2 0]
+    ifelse n3 > 0 [set av3 v3 / n3] [set av3 0]
+    ifelse (n1 + n2 + n3) > 0 [set rn1 ((n1) / (n1 + n2 + n3))] [set rn1 0]
+    ifelse (n1 + n2 + n3) > 0 [set rn2 ((n2) / (n1 + n2 + n3))] [set rn2 0]
+    ifelse (n1 + n2 + n3) > 0 [set v ((v1 + v2 + v3) / (n1 + n2 + n3))] [set v 0]
  ]
 end  
   
@@ -115,10 +147,10 @@ end
   
 @#$#@#$#@
 GRAPHICS-WINDOW
-430
+450
 10
-853
-454
+871
+452
 -1
 -1
 13.333333333333334
@@ -144,14 +176,14 @@ ticks
 SLIDER
 10
 10
-182
+180
 43
 noOfTurtles
 noOfTurtles
-100
+10
 1000
 100
-100
+10
 1
 NIL
 HORIZONTAL
@@ -159,7 +191,7 @@ HORIZONTAL
 SLIDER
 185
 45
-357
+360
 78
 resources
 resources
@@ -176,8 +208,8 @@ SLIDER
 115
 360
 148
-resValueB
-resValueB
+resValue2
+resValue2
 0
 100
 50
@@ -237,9 +269,9 @@ HORIZONTAL
 
 PLOT
 10
-170
+205
 180
-315
+350
 hist rel-freq-A
 NIL
 NIL
@@ -251,13 +283,14 @@ true
 false
 "" ""
 PENS
-"default" 0.05 1 -16777216 true "" "histogram [rnA] of turtles"
+"default" 0.05 1 -16777216 true "" "histogram [rn1] of turtles with [information = 0]"
+"pen-1" 0.05 1 -7500403 true "" "histogram [rn1] of turtles with [information = 1]"
 
 PLOT
 185
-170
+205
 410
-315
+350
 hist averge-values
 NIL
 NIL
@@ -269,9 +302,8 @@ true
 true
 "" ""
 PENS
-"A" 2.0 1 -16777216 true "" "histogram [avA] of turtles"
-"B" 2.0 1 -7500403 true "" "histogram [avB] of turtles"
-"total" 2.0 1 -2674135 true "" "histogram [v] of turtles"
+"1" 2.0 1 -16777216 true "" "histogram [av1] of turtles with [information = 0]"
+"2" 2.0 1 -7500403 true "" "histogram [av1] of turtles with [information = 1]"
 
 SLIDER
 10
@@ -289,60 +321,229 @@ NIL
 HORIZONTAL
 
 PLOT
-220
-380
-420
-530
+185
+360
+410
+510
 plot 1
 NIL
 NIL
--10.0
-10.0
+0.0
+50.0
 0.0
 10.0
 true
 false
 "" ""
 PENS
-"default" 1.0 1 -16777216 true "" "histogram [avA - avB] of turtles"
+"default" 1.0 1 -16777216 true "" "histogram [v] of turtles with [information = 0]"
+"pen-1" 1.0 1 -7500403 true "" "histogram [v] of turtles with [information = 1]"
 
 MONITOR
-15
-330
-177
-375
+10
+520
+357
+565
 NIL
-mean [v] of turtles
+mean [v] of turtles with [information = 0]
 17
 1
 11
 
-PLOT
-15
-380
-215
-530
-plot 2
+SLIDER
+10
+80
+180
+113
+global-gamma
+global-gamma
+0
+1
+0
+0.1
+1
 NIL
-NIL
-0.0
-500.0
-0.0
-10.0
-true
-false
-"" ""
-PENS
-"default" 10.0 1 -16777216 true "" "histogram [first q-values] of turtles"
-"pen-1" 10.0 1 -7500403 true "" "histogram [last q-values] of turtles"
+HORIZONTAL
 
 MONITOR
-995
-165
-1282
-210
+940
+205
+1410
+250
 NIL
-mean [exploration-rate] of turtles
+[alternatives] of turtle 0
+17
+1
+11
+
+MONITOR
+940
+255
+1410
+300
+NIL
+map [precision ? 1] ([q-values] of turtle 0)
+17
+1
+11
+
+MONITOR
+940
+305
+1410
+350
+NIL
+[frequencies] of turtle 0
+17
+1
+11
+
+MONITOR
+1155
+155
+1407
+200
+NIL
+[state] of turtle 0
+17
+1
+11
+
+BUTTON
+930
+55
+993
+88
+NIL
+go
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+SLIDER
+10
+115
+180
+148
+global-information
+global-information
+0
+5
+1
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+10
+150
+182
+183
+uncertainty
+uncertainty
+0
+100
+100
+1
+1
+%
+HORIZONTAL
+
+MONITOR
+10
+620
+357
+665
+NIL
+mean [v] of turtles with [information = 2]
+17
+1
+11
+
+MONITOR
+10
+570
+357
+615
+NIL
+mean [v] of turtles with [information = 1]
+17
+1
+11
+
+SLIDER
+185
+150
+360
+183
+resValue3
+resValue3
+0
+100
+60
+1
+1
+NIL
+HORIZONTAL
+
+MONITOR
+940
+155
+1152
+200
+NIL
+[information] of turtle 0
+17
+1
+11
+
+MONITOR
+940
+375
+1152
+420
+NIL
+[information] of turtle 1
+17
+1
+11
+
+MONITOR
+940
+425
+1595
+470
+NIL
+[alternatives] of turtle 1
+17
+1
+11
+
+MONITOR
+940
+475
+1595
+520
+NIL
+map [precision ? 1] ([q-values] of turtle 1)
+17
+1
+11
+
+MONITOR
+940
+525
+1590
+570
+NIL
+[frequencies] of turtle 1
 17
 1
 11

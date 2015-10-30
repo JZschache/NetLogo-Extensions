@@ -34,9 +34,9 @@ object QLAgent {
   }
 
   /**
-   * convenient constructor of the QLAgent
+   * convenient constructors of the QLAgent
    */
-  def apply(state:Int, exploration: String, experimenting: Double, gamma:Double, nlAgent: org.nlogo.agent.Agent) = 
+  def apply(state:Int, exploration: String, experimenting: Double, gamma:Double, nlAgent: org.nlogo.agent.Agent): QLAgent = 
     new QLAgent(state, experimenting, gamma, Map[Int, Map[Int,QValue]](), 
         (exploration match {
           case "epsilon-greedy" => epsGreedy
@@ -47,7 +47,7 @@ object QLAgent {
           case "epsilon-greedy" => epsGreedyExperimenting(experimenting, _:Iterable[QValue])
           case "softmax" => softmaxExperimenting(experimenting, _:Iterable[QValue])
         }))
-
+  
   
   ////////////////////////////////////////
   // various decision making algorithms //
@@ -79,19 +79,11 @@ object QLAgent {
     val totalN = qValues.foldLeft(1.0)((sum, q) => sum + q.nDecay)
     Math.max(initialTemp / Math.log(totalN) , 0.02) // there is some problem if temperature <= 0.02
   }
-
-//  private val uncertainty = (qValuesMap: Map[String,QValue], alternatives: List[String], epsilon: Double, rh: RandomHelper) => {
-//    if (rh.uniform.nextDoubleFromTo(0, 1) < epsilon) {
-//      val qvalues = alternatives.map(alt => qValuesMap.getOrElse(alt, new QValue(alt, 0.0, 0.0)))
-//      val ns = qvalues.scanLeft(("".asInstanceOf[String], 0.0))((temp, qva) => (qva.alt, temp._2 + ( if (qva.n > 0.0) 1.0 / qva.n else 1.0))).tail
-//      val randomValue = rh.uniform.nextDoubleFromTo(0, ns.last._2)
-//      ns.find(randomValue < _._2).get._1
-//    } else {
-//      val maxima = maximum(alternatives.map(alt => qValuesMap.getOrElse(alt, new QValue(alt, 0.0, 0.0))))
-//      if (maxima.length == 1) maxima.head.alt  else rh.randomComponent(maxima).alt
-//    }
-//  }
     
+  //////////////////////////////////////////////////////////////////////////////
+  // constructing a function that updates the variables of the Netlogo-agents //
+  //////////////////////////////////////////////////////////////////////////////
+  
   def findUpdateFunction(nlAgent: org.nlogo.agent.Agent) = {
     
     val vLength = nlAgent.variables.size
@@ -100,8 +92,9 @@ object QLAgent {
     val idxQ = (0 until vLength).toList.find(i => nlAgent.variableName(i) == qvListName.toUpperCase())
     val idxN = (0 until vLength).toList.find(i => nlAgent.variableName(i) == freqListName.toUpperCase())
     val idxE = (0 until vLength).toList.find(i => nlAgent.variableName(i) == explRateName.toUpperCase())
+    val idxS = (0 until vLength).toList.find(i => nlAgent.variableName(i) == stateName.toUpperCase())
     
-    (experimenting: Double, qValues: Iterable[QLAgent.QValue]) => {
+    (state: Int, experimenting: Double, qValues: Iterable[QLAgent.QValue]) => {
       if (idxA.isDefined) {
         nlAgent.setVariable(idxA.get, 
             LogoList.fromVector(Vector[AnyRef]() ++ qValues.map(q => LogoList.fromVector(Vector[AnyRef](Double.box(q.state), Double.box(q.id))))))
@@ -112,6 +105,8 @@ object QLAgent {
         nlAgent.setVariable(idxN.get, LogoList.fromVector(Vector[AnyRef]() ++ qValues.map(q => Double.box(q.freq))))
       if (idxE.isDefined)
         nlAgent.setVariable(idxE.get, Double.box(experimenting))
+      if (idxS.isDefined)
+        nlAgent.setVariable(idxS.get, Double.box(state))
     }
   }
   
@@ -126,12 +121,19 @@ object QLAgent {
  */ 
 case class QLAgent(state:Int, experimenting: Double, gamma: Double, qValuesMap: Map[Int, Map[Int, QLAgent.QValue]],
                    choiceAlg: (Double, Iterable[QLAgent.QValue]) => Int,
-                   expDecay: Boolean, updateNLogo: (Double, Iterable[QLAgent.QValue]) => Unit,
+                   expDecay: Boolean, updateNLogo: (Int, Double, Iterable[QLAgent.QValue]) => Unit,
                    getNextExperimening: (Iterable[QLAgent.QValue]) => Double) {
   
+  /**
+   * the map of Q-Values becomes updated and a new state is set
+   */
   def updated(alt:Int, reward: Double, newState: Int) : QLAgent = {
     
+    //println("the agent chose alternative " + alt + " in state " + state + " and ends up in state " + newState)
+    
     val qValuesMapEntry = qValuesMap.getOrElse(state, Map[Int, QLAgent.QValue]())
+    
+    //println(qValuesMapEntry.values.foldLeft("")((a,b) => a + b.state + ", " + b.id + "; "))
     
     // the Q-values of the new state are needed to specify the next exploration-rate and the maximum Q-value of the next decision 
     val newStateQvalues = if(expDecay || gamma > 0.0) {
@@ -152,28 +154,38 @@ case class QLAgent(state:Int, experimenting: Double, gamma: Double, qValuesMap: 
     val newQvalue = qValuesMapEntry.getOrElse(alt, new QLAgent.QValue(state, alt, 0.0, 0.0, gamma, 0.0)).updated(reward, maxValue, expDecay)
     val newQValuesMap = qValuesMap.updated(state, qValuesMapEntry.updated(alt, newQvalue))
     
-    updateNLogo(newExperimenting, newQValuesMap.values.map(_.values).flatten)
-    QLAgent(newState, newExperimenting, gamma, newQValuesMap, choiceAlg, expDecay, updateNLogo, getNextExperimening)
+    updateNLogo(newState, newExperimenting, newQValuesMap.values.map(_.values).flatten)
+    copy(state = newState, experimenting = newExperimenting, qValuesMap = newQValuesMap)
   }
   
+  /**
+   * a list of Integers is added to the Q-Values-Map for the current state
+   */
   def setAlternatives(alternatives: List[Int]) ={
     val oldQvaluesMapEntry = qValuesMap.getOrElse(state, Map[Int, QLAgent.QValue]())
     val newQvaluesMap = qValuesMap.updated(state, 
         alternatives.map(key => (key -> oldQvaluesMapEntry.getOrElse(key, new QLAgent.QValue(state, key, 0.0, 0.0, gamma, 0.0)))).toMap)
-    updateNLogo(experimenting, newQvaluesMap.values.map(_.values).flatten)
-    QLAgent(state, experimenting, gamma, newQvaluesMap, choiceAlg, expDecay, updateNLogo, getNextExperimening)
+    updateNLogo(state, experimenting, newQvaluesMap.values.map(_.values).flatten)
+    copy(qValuesMap = newQvaluesMap)
   }
-        
   
+  /**
+   * a new state is set
+   */
+  def setState(newState:Int) = copy(state = newState)
+        
+  /**
+   * one of the elements of a list of integers is chosen given the choice-algorithm and the current Q-Values-Map
+   */
   def choose(alternatives: List[Int]): Int = {
-    val qValues = qValuesMap.getOrElse(state, alternatives.map(key => (key -> new QLAgent.QValue(state, key, 0.0, 0.0, gamma, 0.0))).toMap).values
+    val qValuesMapEntry = qValuesMap.getOrElse(state, alternatives.map(key => (key -> new QLAgent.QValue(state, key, 0.0, 0.0, gamma, 0.0))).toMap)
+    val qValues = alternatives.map(key => qValuesMapEntry.getOrElse(key, new QLAgent.QValue(state, key, 0.0, 0.0, gamma, 0.0)))
     choiceAlg(experimenting, qValues)
   }
   
   /**
    * after calling this function, the agent successively lowers the levels of exploration.
    */
-  def startDecreasing() : QLAgent = 
-    QLAgent(state, experimenting, gamma, qValuesMap, choiceAlg, true, updateNLogo, getNextExperimening)
+  def startDecreasing() : QLAgent = copy(expDecay = true)
     
 }

@@ -67,6 +67,7 @@ object QLSystem {
   val explRateName = QLSystem.config.getString(QLExtension.cfgstr + ".exploration-rate")
   val explMethodName = QLSystem.config.getString(QLExtension.cfgstr + ".exploration-method")
   val gammaName = QLSystem.config.getString(QLExtension.cfgstr + ".gamma")
+  val stateName = QLSystem.config.getString(QLExtension.cfgstr + ".state")
   
   val defaultExploraionRate = QLSystem.config.getDouble(QLExtension.cfgstr + ".default-exploration-rate")
   val defaultExploraionMethod = QLSystem.config.getString(QLExtension.cfgstr + ".default-exploration-method")
@@ -255,8 +256,16 @@ class Init extends DefaultCommand {
       val idxER = (0 until vLength).toList.find(i => agent.variableName(i) == explRateName.toUpperCase())
       val idxEM = (0 until vLength).toList.find(i => agent.variableName(i) == explMethodName.toUpperCase())
       val idxG = (0 until vLength).toList.find(i => agent.variableName(i) == gammaName.toUpperCase())
-      if (idxA.isDefined) 
-        agent.setVariable(idxA.get, LogoList())
+      val idxS = (0 until vLength).toList.find(i => agent.variableName(i) == stateName.toUpperCase())
+      val alternatives = if (idxA.isDefined) {
+          val entry = agent.getVariable(idxA.get)
+          if (entry.isInstanceOf[LogoList])
+            entry.asInstanceOf[LogoList].map(e => e.asInstanceOf[Double].toInt).toList
+          else {
+            agent.setVariable(idxA.get, LogoList())
+            List[Int]()
+          }
+        } else List[Int]()
       if (idxQ.isDefined) 
         agent.setVariable(idxQ.get, LogoList())
       if (idxN.isDefined)
@@ -273,8 +282,14 @@ class Init extends DefaultCommand {
           agent.getVariable(idxG.get).asInstanceOf[Double]
         else
           0.0
+      val state = if (idxS.isDefined)
+          agent.getVariable(idxS.get).asInstanceOf[Double].toInt
+        else
+          defaultState
+      val akkaAgent = AkkaAgent(QLAgent(state, explorationMethod, explorationRate, gamma, agent))
+      akkaAgent send {_.setAlternatives(alternatives)}
       // return mapping
-      a -> AkkaAgent(QLAgent(defaultState, explorationMethod, explorationRate, gamma, agent))
+      a -> akkaAgent
     }).toMap }
     // must wait for new agents to be set
     qlDataMap.await
@@ -427,10 +442,9 @@ class SetRewardAndState extends DefaultCommand {
     val alternative = args(0).getIntValue
     val reward = args(1).getDoubleValue
     val newState = args(2).getIntValue
+    //println("agent " + context.getAgent.id + " chose alternative " + alternative + " and ends up in state " + newState)
     QLSystem.qlDataMap.get.apply(context.getAgent) send { _.updated(alternative, reward, newState)}
   }
 }
-
-
 
 
