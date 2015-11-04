@@ -172,7 +172,7 @@ case class QLAgent(state:Int, experimenting: Double, gamma: Double, qValuesMap: 
   /**
    * a new state is set
    */
-  def setState(newState:Int) = copy(state = newState)
+//  def setState(newState:Int) = copy(state = newState)
         
   /**
    * one of the elements of a list of integers is chosen given the choice-algorithm and the current Q-Values-Map

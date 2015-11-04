@@ -1,5 +1,7 @@
-patches-own [isRessource resType resColor]
-turtles-own [q dest nA nB vA vB v avA avB rnA]
+patches-own [res-type is-resource res-color]
+turtles-own [q dest dest-type n1 n2 v1 v2 av1 av2 rn1 av]
+
+globals [ patch-config ]
 
 to setup
   clear-all
@@ -8,14 +10,14 @@ to setup
   resize-world 0 floor (sqrt (noOfPatches)) 0 floor (sqrt (noOfPatches))
   set-patch-size 400 / floor(sqrt(noOfPatches))
   ; setup patches
-  ask patches [ set isRessource false ]
-  ask n-of floor (noOfPatches * resources / 100) patches [
-    set isRessource true
-    let pair one-of [ ["A" 72] ["B" 12] ]
-    set resType first pair
-    set resColor last pair
-    set pcolor resColor
+  set patch-config [ [1 72] [2 12] ]
+  ask patches [
+    set is-resource false
+    let pair one-of patch-config
+    set res-type first pair
+    set res-color last pair
   ]
+  grow-resources
   ; setup turtles
   crt noOfTurtles [
     setxy random-xcor random-ycor
@@ -29,64 +31,67 @@ end
 to forage
   ifelse dest = 0 [ ; no destination
     ; choose a resource type of new destination
-    let destType "B"
-    if (random-float 1) < q [ set destType "A" ]
+    ifelse (random-float 1) < q [ set dest-type 1 ] [ set dest-type 2 ]
     ; choose destination
-    set dest min-one-of (patches with [isRessource and resType = destType]) [distance myself]
-    ifelse dest = nobody [set dest 0] 
-    [
+    set dest min-one-of (patches with [is-resource and (res-type = [dest-type] of myself)]) [distance myself]
+    ifelse (dest = nobody) [
+      set dest 0
+    ] [
       if patch-here != dest [
         set heading towards dest
         forward 1
       ]
     ]
-  ][ ; else: turtles is on its way to a destination
+  ] [ ; else: turtles is on its way to a destination
     ifelse patch-here != dest [
       forward 1 
     ][ ; else: turtles has arrived at its destination
-      ifelse "A" = [resType] of patch-here [
-        if isRessource [
-          set vA vA + 100
+      if is-resource [
+        ifelse (dest-type = 1) [
+          set v1 v1 + 100
+        ] [
+          set v2 v2 + res-2-value
         ]
-        set nA nA + 1
+      ]
+      ifelse (dest-type = 1) [
+        set n1 n1 + 1
       ] [
-        if isRessource [
-          set vB vB + resValueB
-        ]
-        set nB nB + 1
+        set n2 n2 + 1
       ]
       ; remove resource
       ask patch-here [
-        set isRessource false
+        set is-resource false
         set pcolor black
       ]
+      ;setxy random-xcor random-ycor
       set dest 0
     ]
   ]
 end
 
-to regrow-resources
-  ask patches with [not isRessource and resType != 0] [
+to grow-resources
+  ask patches [
+;  ask patches with [not pause and not isRessource and resType != 0] [
     if random 100 < growthrate [
-      set isRessource true
-      set pcolor resColor
+      set is-resource true
+      set pcolor res-color
     ]
   ]
 end
 
 to go
   ask turtles [ forage ]
-  regrow-resources
+  grow-resources
   update-values
   tick
 end
 
 to update-values 
   ask turtles [
-    ifelse nA > 0 [set avA vA / nA] [set avA 0]
-    ifelse nB > 0 [set avB vB / nB] [set avB 0]
-    ifelse (nA + nB) > 0 [set rnA nA / (nA + nB)] [set rnA 0]
-    ifelse (nA + nB) > 0 [set v ((vA + vB) / (nA + nB))] [set v 0]
+    ifelse n1 > 0 [set av1 v1 / n1] [set av1 0]
+    ifelse n2 > 0 [set av2 v2 / n2] [set av2 0]
+    ifelse (n1 + n2) > 0 [set rn1 n1 / (n1 + n2)] [set rn1 0]
+    ifelse (n1 + n2) > 0 [set av ((v1 + v2) / (n1 + n2))] [set av 0]
  ]
 end
 
@@ -97,10 +102,10 @@ to q1-sweep
     set q1 ?
     ask turtles [
       set dest 0
-      set vA 0
-      set vB 0
-      set nA 0
-      set nB 0
+      set v1 0
+      set v2 0
+      set n1 0
+      set n2 0
       set q q1
    ]
    repeat forageLength [ 
@@ -113,12 +118,12 @@ end
 to manually-update-plots
   set-current-plot "average-value-plot"
   set-current-plot-pen "total"
-  let mean-rf-a mean [v] of turtles
-  plotxy q1 mean [v] of turtles
-  set-current-plot-pen "A"
-  plotxy q1 mean [avA] of turtles
-  set-current-plot-pen "B"
-  plotxy q1 mean [avB] of turtles
+  let mean-rf-a mean [av] of turtles
+  plotxy q1 mean [av] of turtles
+  set-current-plot-pen "1"
+  plotxy q1 mean [av1] of turtles
+  set-current-plot-pen "2"
+  plotxy q1 mean [av2] of turtles
 end
   
   
@@ -129,11 +134,11 @@ end
 GRAPHICS-WINDOW
 430
 10
-844
-445
+853
+454
 -1
 -1
-4.25531914893617
+13.333333333333334
 1
 10
 1
@@ -144,9 +149,9 @@ GRAPHICS-WINDOW
 1
 1
 0
-94
+30
 0
-94
+30
 0
 0
 1
@@ -156,13 +161,13 @@ ticks
 SLIDER
 10
 10
-182
+180
 43
 noOfTurtles
 noOfTurtles
 100
 1000
-1000
+100
 100
 1
 NIL
@@ -170,29 +175,14 @@ HORIZONTAL
 
 SLIDER
 10
-50
-182
-83
-resources
-resources
+80
+180
+113
+res-2-value
+res-2-value
 0
 100
 50
-1
-1
-%
-HORIZONTAL
-
-SLIDER
-185
-85
-360
-118
-resValueB
-resValueB
-0
-100
-90
 5
 1
 NIL
@@ -263,8 +253,8 @@ true
 true
 "" ""
 PENS
-"A" 1.0 0 -16777216 true "" ""
-"B" 1.0 0 -9276814 true "" ""
+"1" 1.0 0 -16777216 true "" ""
+"2" 1.0 0 -9276814 true "" ""
 "total" 1.0 0 -2674135 true "" ""
 
 BUTTON
@@ -285,30 +275,30 @@ NIL
 1
 
 SLIDER
-185
-50
-360
-83
+10
+45
+180
+78
 growthrate
 growthrate
 0
 100
-20
+3
 1
 1
 NIL
 HORIZONTAL
 
 SLIDER
-10
-85
-182
-118
+185
+80
+357
+113
 q1
 q1
 0
 1
-0.9
+0.99
 0.1
 1
 NIL
@@ -330,7 +320,7 @@ true
 false
 "" ""
 PENS
-"default" 0.05 1 -16777216 true "" "histogram [rnA] of turtles"
+"default" 0.05 1 -16777216 true "" "histogram [rn1] of turtles"
 
 PLOT
 185
@@ -348,9 +338,9 @@ true
 true
 "" ""
 PENS
-"A" 2.0 1 -16777216 true "" "histogram [avA] of turtles"
-"B" 2.0 1 -7500403 true "" "histogram [avB] of turtles"
-"total" 2.0 1 -2674135 true "" "histogram [v] of turtles"
+"1" 2.0 1 -16777216 true "" "histogram [av1] of turtles"
+"2" 2.0 1 -7500403 true "" "histogram [av2] of turtles"
+"total" 2.0 1 -2674135 true "" "histogram [av] of turtles"
 
 @#$#@#$#@
 ## WHAT IS IT?

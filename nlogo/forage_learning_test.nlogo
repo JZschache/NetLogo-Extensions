@@ -1,18 +1,16 @@
 extensions [ql]
 
 patches-own [res-type is-resource res-color]
-turtles-own [dest-type information state exploration-rate alternatives q-values frequencies dest n1 n2 v1 v2 av av1 av2 rn1]
+turtles-own [dest-type state internal-state exploration-rate alternatives q-values frequencies dest n11 n12 n21 n22 v11 v12 v21 v22 v av11 av12 av21 av22 rn1 rn2]
 
 globals [ patch-config ]
 
 to setup
   clear-all
-  
   ; resize world
-  let noOfPatches number-of-turtles * 9
-  set-patch-size 400 / floor(sqrt(noOfPatches))
+  let noOfPatches noOfTurtles * 9
   resize-world 0 floor (sqrt (noOfPatches)) 0 floor (sqrt (noOfPatches))
-  
+  set-patch-size 400 / floor(sqrt(noOfPatches))
   ; setup patches
   set patch-config [ [1 72] [2 12] ]
   ask patches [
@@ -23,36 +21,20 @@ to setup
   ]
   grow-resources
   ; setup turtles
-  crt number-of-turtles [
+  crt noOfTurtles [
     setxy random-xcor random-ycor
     set dest 0
     set exploration-rate global-expl-rate
-    ;set information global-information
-    set information one-of (list 0 global-information)
-    set state good-resources-in-neighborhood
+    set internal-state one-of [ 1 2 ]
+    set state internal-state
     set alternatives [ 1 2 ]
   ]
   
   ; setup ql-extension
   ql:init turtles
-  
+
   reset-ticks
 end
-
-to-report good-resources-in-neighborhood
-  let surrounding patches with [distance myself < 2 * ([information] of myself)]
-  let real count surrounding with [is-resource and res-type = 1]
-  
-  ifelse (random 100 < uncertainty) [
-    ;report max (list 0 (real + one-of [-1 1]))
-    ;report first one-of alternatives
-    report one-of (n-values (information + 1) [?])
-  ] [
-    report min (list 1 real)
-  ]
-  ;report one-of [0 1]
-end
-
 
 ; the action of a turtle in the search for resources
 to forage
@@ -60,7 +42,7 @@ to forage
     ; choose a resource type of new destination
     set dest-type ql:one-of [ 1 2 ]
     ; choose destination
-    set dest min-one-of (patches with [is-resource and (res-type = ([dest-type] of myself))]) [distance myself]
+    set dest min-one-of (patches with [is-resource and (res-type = [dest-type] of myself)]) [distance myself]
     ifelse dest = nobody [
       set dest 0
     ] [
@@ -73,27 +55,52 @@ to forage
     ifelse patch-here != dest [
       forward 1 
     ][ ; else: turtles has arrived at its destination
-      let reward 0
-      ifelse (dest-type = 1) [
-        set n1 n1 + 1
-        if is-resource [
-          set reward 100
-          set v1 v1 + 100
+      ; new state (random)
+      let new-internal-state one-of [ 1 2 ]
+      
+      ifelse is-resource [
+        ifelse (dest-type = 1) [
+          ql:set-reward-and-state 1 100 new-internal-state
+          ifelse internal-state = 1 [
+            set v11 v11 + 100
+          ][
+            set v21 v21 + 100
+          ]
+        ] [
+          ql:set-reward-and-state 2 resValue2 new-internal-state
+          ifelse internal-state = 1 [
+            set v12 v12 + resValue2
+          ][
+            set v22 v22 + resValue2
+          ]
         ]
       ] [
-        set n2 n2 + 1
-        if is-resource [
-          set reward res-2-value
-          set v2 v2 + res-2-value
+        ifelse (dest-type = 1) [
+          ql:set-reward-and-state 1 0 new-internal-state
+        ] [
+          ql:set-reward-and-state 2 0 new-internal-state
         ]
       ]
+      ifelse (dest-type = 1) [
+        ifelse internal-state = 1 [
+            set n11 n11 + 1
+          ][
+            set n21 n21 + 1
+          ]
+      ] [
+        ifelse internal-state = 1 [
+            set n12 n12 + 1
+          ][
+            set n22 n22 + 1
+          ]
+      ]
+      set internal-state new-internal-state
       ; remove resource
       ask patch-here [
         set is-resource false
         set pcolor black
       ]
-      ; update ql-agent (after resource have been removed)
-      ql:set-reward-and-state dest-type reward good-resources-in-neighborhood
+      ;setxy random-xcor random-ycor
       set dest 0
     ]
   ]
@@ -101,6 +108,7 @@ end
 
 to grow-resources
   ask patches [
+;  ask patches with [not pause and not isRessource and resType != 0] [
     if random 100 < growthrate [
       set is-resource true
       set pcolor res-color
@@ -117,10 +125,14 @@ end
 
 to update-values 
   ask turtles [
-    ifelse n1 > 0 [set av1 v1 / n1] [set av1 0]
-    ifelse n2 > 0 [set av2 v2 / n2] [set av2 0]
-    ifelse (n1 + n2) > 0 [set rn1 ((n1) / (n1 + n2))] [set rn1 0]
-    ifelse (n1 + n2) > 0 [set av ((v1 + v2) / (n1 + n2))] [set av 0]
+    ifelse n11 > 0 [set av11 v11 / n11] [set av11 0]
+    ifelse n12 > 0 [set av12 v12 / n12] [set av12 0]
+    ifelse n21 > 0 [set av21 v21 / n21] [set av21 0]
+    ifelse n22 > 0 [set av22 v22 / n22] [set av22 0]    
+
+;;    ifelse (n1 + n2 + n3) > 0 [set rn1 ((n1) / (n1 + n2 + n3))] [set rn1 0]
+;;    ifelse (n1 + n2 + n3) > 0 [set rn2 ((n2) / (n1 + n2 + n3))] [set rn2 0]
+;;    ifelse (n1 + n2 + n3) > 0 [set v ((v1 + v2 + v3) / (n1 + n2 + n3))] [set v 0]
  ]
 end  
   
@@ -159,8 +171,8 @@ SLIDER
 10
 180
 43
-number-of-turtles
-number-of-turtles
+noOfTurtles
+noOfTurtles
 10
 1000
 100
@@ -171,11 +183,26 @@ HORIZONTAL
 
 SLIDER
 185
+45
+360
+78
+resources
+resources
+0
+100
+50
+1
+1
+%
+HORIZONTAL
+
+SLIDER
+185
 115
 360
 148
-res-2-value
-res-2-value
+resValue2
+resValue2
 0
 100
 50
@@ -227,49 +254,11 @@ growthrate
 growthrate
 0
 100
-3
+5
 1
 1
-%
+NIL
 HORIZONTAL
-
-PLOT
-10
-205
-180
-350
-hist rel-freq-A
-NIL
-NIL
-0.0
-1.0
-0.0
-10.0
-true
-false
-"" ""
-PENS
-"default" 0.05 1 -16777216 true "" "histogram [rn1] of turtles with [information = 0]"
-"pen-1" 0.05 1 -7500403 true "" "histogram [rn1] of turtles with [information = 1]"
-
-PLOT
-185
-205
-410
-350
-hist averge-values
-NIL
-NIL
-0.0
-100.0
-0.0
-10.0
-true
-true
-"" ""
-PENS
-"1" 2.0 1 -16777216 true "" "histogram [av1] of turtles with [information = 0]"
-"2" 2.0 1 -7500403 true "" "histogram [av1] of turtles with [information = 1]"
 
 SLIDER
 10
@@ -286,35 +275,20 @@ global-expl-rate
 NIL
 HORIZONTAL
 
-PLOT
-185
-360
-410
-510
-plot 1
-NIL
-NIL
-0.0
-60.0
-0.0
-10.0
-true
-false
-"" ""
-PENS
-"default" 1.0 1 -16777216 true "" "histogram [av] of turtles with [information = 0]"
-"pen-1" 1.0 1 -7500403 true "" "histogram [av] of turtles with [information = 1]"
-
-MONITOR
+SLIDER
 10
-520
-367
-565
-NIL
-mean [av] of turtles with [information = 0]
-17
+80
+180
+113
+global-gamma
+global-gamma
+0
 1
-11
+0
+0.1
+1
+NIL
+HORIZONTAL
 
 MONITOR
 940
@@ -340,9 +314,9 @@ map [precision ? 1] ([q-values] of turtle 0)
 
 MONITOR
 940
-305
+355
 1410
-350
+400
 NIL
 [frequencies] of turtle 0
 17
@@ -352,7 +326,7 @@ NIL
 MONITOR
 1155
 155
-1407
+1310
 200
 NIL
 [state] of turtle 0
@@ -408,54 +382,10 @@ uncertainty
 HORIZONTAL
 
 MONITOR
-10
-620
-367
-665
-NIL
-mean [av] of turtles with [information = 2]
-17
-1
-11
-
-MONITOR
-10
-570
-367
-615
-NIL
-mean [av] of turtles with [information = 1]
-17
-1
-11
-
-MONITOR
 940
-155
-1152
-200
-NIL
-[information] of turtle 0
-17
-1
-11
-
-MONITOR
-940
-375
-1152
-420
-NIL
-[information] of turtle 1
-17
-1
-11
-
-MONITOR
-940
-425
-1595
 470
+1595
+515
 NIL
 [alternatives] of turtle 1
 17
@@ -464,9 +394,9 @@ NIL
 
 MONITOR
 940
-475
-1595
 520
+1595
+565
 NIL
 map [precision ? 1] ([q-values] of turtle 1)
 17
@@ -475,14 +405,150 @@ map [precision ? 1] ([q-values] of turtle 1)
 
 MONITOR
 940
-525
+620
 1590
-570
+665
 NIL
 [frequencies] of turtle 1
 17
 1
 11
+
+MONITOR
+940
+155
+1150
+200
+NIL
+[internal-state] of turtle 0
+17
+1
+11
+
+MONITOR
+940
+420
+1177
+465
+NIL
+[internal-state] of turtle 1
+17
+1
+11
+
+MONITOR
+1180
+420
+1352
+465
+NIL
+[state ] of turtle 1
+17
+1
+11
+
+MONITOR
+940
+305
+995
+350
+NIL
+[av11] of turtle 0
+1
+1
+11
+
+MONITOR
+1000
+305
+1050
+350
+NIL
+[av12] of turtle 0
+1
+1
+11
+
+MONITOR
+1055
+305
+1105
+350
+NIL
+[av21] of turtle 0
+1
+1
+11
+
+MONITOR
+1110
+305
+1165
+350
+NIL
+[av22] of turtle 0
+1
+1
+11
+
+MONITOR
+940
+570
+995
+615
+NIL
+[av11] of turtle 1
+1
+1
+11
+
+MONITOR
+1000
+570
+1050
+615
+NIL
+[av21] of turtle 1
+1
+1
+11
+
+PLOT
+10
+190
+360
+430
+plot 1
+NIL
+NIL
+30.0
+60.0
+0.0
+10.0
+true
+true
+"" ""
+PENS
+"av11" 1.0 1 -16777216 true "" "histogram [av11] of turtles"
+"av21" 1.0 1 -7500403 true "" "histogram [av21] of turtles"
+
+PLOT
+10
+435
+360
+670
+plot 2
+NIL
+NIL
+-30.0
+30.0
+0.0
+10.0
+true
+false
+"" ""
+PENS
+"default" 1.0 1 -16777216 true "" "histogram [av11 - av21] of turtles"
 
 @#$#@#$#@
 ## WHAT IS IT?

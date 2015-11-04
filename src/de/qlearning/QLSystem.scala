@@ -396,16 +396,18 @@ class DecreaseExperimenting extends DefaultCommand {
 /**
  * an agent is asked to choose one of the given alternatives
  * 
- * this method is non-blocking
+ * this method is blocking
  */
 class OneOf extends DefaultReporter {
+  import QLSystem.timeout
   
   override def getAgentClassString = "TP"
   override def getSyntax = reporterSyntax(Array( ListType), NumberType)
   
   def report(args: Array[Argument], context: Context): AnyRef = {
     val alternatives = args(0).getList.map(s => s.asInstanceOf[Double].toInt).toList
-    Double.box(QLSystem.qlDataMap.get.apply(context.getAgent).get.choose(alternatives))
+    val qlAgent = QLSystem.qlDataMap.get.apply(context.getAgent).await
+    Double.box(qlAgent.choose(alternatives))
   }
 }
 
