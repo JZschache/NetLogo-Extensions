@@ -30,16 +30,18 @@ end
 ; the action of a turtle in the search for resources
 to forage
   ifelse dest = 0 [ ; no destination
-    ; choose a resource type of new destination
-    ifelse (random-float 1) < q [ set dest-type 1 ] [ set dest-type 2 ]
-    ; choose destination
-    set dest min-one-of (patches with [is-resource and (res-type = [dest-type] of myself)]) [distance myself]
-    ifelse (dest = nobody) [
-      set dest 0
-    ] [
-      if patch-here != dest [
-        set heading towards dest
-        forward 1
+    if random 100 < 50 [
+      ; choose a resource type of new destination
+      ifelse (random-float 1) < q [ set dest-type 1 ] [ set dest-type 2 ]
+      ; choose destination
+      set dest min-one-of (patches with [is-resource and (res-type = [dest-type] of myself)]) [distance myself]
+      ifelse (dest = nobody) [
+        set dest 0
+      ] [
+        if patch-here != dest [
+          set heading towards dest
+          forward 1
+        ]
       ]
     ]
   ] [ ; else: turtles is on its way to a destination
@@ -286,7 +288,7 @@ growthrate
 3
 1
 1
-NIL
+%
 HORIZONTAL
 
 SLIDER
