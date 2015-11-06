@@ -1,7 +1,7 @@
 extensions [ql]
 
 patches-own [res-type is-resource res-color]
-turtles-own [density dest-type next-reward information state exploration-rate alternatives q-values frequencies dest n1 n2 v1 v2 av av1 av2 rn1]
+turtles-own [density dest-type next-reward type-B state exploration-rate alternatives q-values frequencies dest n1 n2 v1 v2 av av1 av2 rn1]
 
 globals [ patch-config ]
 
@@ -27,11 +27,7 @@ to setup
     setxy random-xcor random-ycor
     set dest 0
     set exploration-rate global-expl-rate
-    ;set information global-information
-;    if who = 0 [
-;      set information 0
-;    ]
-    set information one-of (list 0 global-information)
+    set type-B (random 100 < type-B-rate)
     set state good-resources-in-neighborhood
     set alternatives [ 1 2 ]
     set next-reward "nothing"
@@ -44,31 +40,26 @@ to setup
 end
 
 to-report good-resources-in-neighborhood
-  let surrounding patches with [distance myself < 2 * ([information] of myself)]
-  let real count surrounding with [is-resource and res-type = 1]
+  ifelse type-B [
+    let surrounding patches with [distance myself < 2 ]
+    let real count surrounding with [is-resource and res-type = 1]
+    let s min (list 1 real)
   
-  let s min (list 1 real)
-  
-  ifelse (random 100 < uncertainty) [
-    ;report max (list 0 (real + one-of [-1 1]))
-    ;report first one-of alternatives
-    ;report one-of (n-values (information + 1) [?])
-    ifelse information = 0 [
-      report 0
-    ] [
+    ifelse (random 100 < uncertainty) [
       report 1 - s
+    ] [
+      report s
     ]
-  ] [
-    report s
+  ] [ ; type-A-agents
+    report 0
   ]
-  ;report one-of [0 1]
 end
 
 
 ; the action of a turtle in the search for resources
 to forage
   ifelse dest = 0 [ ; no destination
-    if random 100 < waiting [
+    if waiting-rate = 100 or random 100 > waiting-rate [; wait a random number of rounds
       if (next-reward != "nothing") [
         ql:set-reward-and-state dest-type next-reward good-resources-in-neighborhood
       ]
@@ -97,7 +88,7 @@ to forage
         set is-resource false
         set pcolor black
       ]
-      ;setxy random-xcor random-ycor
+      if waiting-rate = 100 [setxy random-xcor random-ycor]
       set dest 0
     ]
   ]
@@ -119,11 +110,9 @@ to choose-resource-patch
 end
 
 to grow-resources
-  ask patches [
-    if random 100 < growthrate [
-      set is-resource true
-      set pcolor res-color
-    ]
+  ask patches with [ random 100 < growthrate ] [
+    set is-resource true
+    set pcolor res-color
   ]
 end
 
@@ -133,6 +122,43 @@ to go
   ]
   grow-resources
   update-values
+  tick
+end
+
+to evolution
+  repeat 200 [
+    ask turtles [
+      forage 
+    ]
+    grow-resources
+  ]
+  update-values  
+  
+  let old-agent one-of turtles
+  ql:remove-agent old-agent
+  ask old-agent [ die ]
+  
+  let new-agent nobody
+  
+  let mean-av mean [av] of turtles
+  
+  ask one-of turtles with [ av > mean-av] [
+    hatch 1 [
+      setxy random-xcor random-ycor
+      set dest 0
+      set exploration-rate global-expl-rate
+      ifelse random 100 < 10 [
+        set type-B random 2 = 1
+      ] [
+        set type-B ([type-B] of myself)
+      ]
+      set state good-resources-in-neighborhood
+      set alternatives [ 1 2 ]
+      set next-reward "nothing"
+      set new-agent self
+    ]
+  ]
+  ql:add-agent new-agent
   tick
 end
 
@@ -193,14 +219,14 @@ HORIZONTAL
 
 SLIDER
 185
-150
+115
 360
-183
+148
 res-2-value
 res-2-value
 0
 100
-50
+70
 5
 1
 NIL
@@ -242,14 +268,14 @@ NIL
 
 SLIDER
 185
-115
+80
 360
-148
+113
 growthrate
 growthrate
 0
 100
-5
+3
 1
 1
 %
@@ -257,9 +283,9 @@ HORIZONTAL
 
 PLOT
 10
-205
+155
 265
-350
+300
 hist rel-freq-1
 NIL
 NIL
@@ -271,14 +297,14 @@ true
 true
 "" ""
 PENS
-"info = 0" 0.05 1 -16777216 true "" "histogram [rn1] of turtles with [information = 0]"
-"info = 1" 0.05 1 -7500403 true "" "histogram [rn1] of turtles with [information = 1]"
+"type-A" 0.05 1 -16777216 true "" "histogram [rn1] of turtles with [not type-B]"
+"type-B" 0.05 1 -7500403 true "" "histogram [rn1] of turtles with [type-B]"
 
 PLOT
 10
-355
+305
 265
-500
+450
 hist av1 - av2
 NIL
 NIL
@@ -290,8 +316,8 @@ true
 true
 "" ""
 PENS
-"info = 0" 2.0 1 -16777216 true "" "histogram [av1 - av2] of turtles with [information = 0]"
-"info = 1" 2.0 1 -7500403 true "" "histogram [av1 - av2] of turtles with [information = 1]"
+"type-A" 2.0 1 -16777216 true "" "histogram [av1 - av2] of turtles with [not type-B]"
+"type-B" 2.0 1 -7500403 true "" "histogram [av1 - av2] of turtles with [type-B]"
 
 SLIDER
 10
@@ -310,9 +336,9 @@ HORIZONTAL
 
 PLOT
 10
-505
+455
 265
-655
+605
 hist av
 NIL
 NIL
@@ -324,25 +350,25 @@ true
 true
 "" ""
 PENS
-"info = 0" 1.0 1 -16777216 true "" "histogram [av] of turtles with [information = 0]"
-"info = 1" 1.0 1 -7500403 true "" "histogram [av] of turtles with [information = 1]"
+"type-A" 1.0 1 -16777216 true "" "histogram [av] of turtles with [not type-B]"
+"type-B" 1.0 1 -7500403 true "" "histogram [av] of turtles with [type-B]"
 
 MONITOR
 270
-505
+510
 627
-550
+555
 NIL
-mean [av] of turtles with [information = 0]
+mean [av] of turtles with [not type-B]
 2
 1
 11
 
 MONITOR
-940
-205
-1410
-250
+800
+60
+1270
+105
 NIL
 [alternatives] of turtle 0
 17
@@ -350,10 +376,10 @@ NIL
 11
 
 MONITOR
-940
-255
-1410
-300
+800
+110
+1270
+155
 NIL
 map [precision ? 1] ([q-values] of turtle 0)
 17
@@ -361,35 +387,131 @@ map [precision ? 1] ([q-values] of turtle 0)
 11
 
 MONITOR
-940
-305
-1410
-350
+800
+160
+1270
+205
 NIL
 [frequencies] of turtle 0
 17
 1
 11
 
+SLIDER
+10
+80
+180
+113
+type-B-rate
+type-B-rate
+0
+100
+50
+10
+1
+%
+HORIZONTAL
+
+SLIDER
+10
+115
+180
+148
+uncertainty
+uncertainty
+0
+50
+30
+5
+1
+%
+HORIZONTAL
+
 MONITOR
-1155
-155
-1407
-200
+270
+560
+627
+605
 NIL
-[state] of turtle 0
+mean [av] of turtles with [type-B]
+2
+1
+11
+
+MONITOR
+800
+10
+1012
+55
+NIL
+[type-B] of turtle 0
+17
+1
+11
+
+MONITOR
+800
+260
+1012
+305
+NIL
+[type-B] of turtle 1
+17
+1
+11
+
+MONITOR
+800
+310
+1455
+355
+NIL
+[alternatives] of turtle 1
+17
+1
+11
+
+MONITOR
+800
+360
+1455
+405
+NIL
+map [precision ? 1] ([q-values] of turtle 1)
+17
+1
+11
+
+MONITOR
+800
+410
+1450
+455
+NIL
+[frequencies] of turtle 1
+17
+1
+11
+
+MONITOR
+765
+535
+992
+580
+NIL
+count turtles with [type-B]
 17
 1
 11
 
 BUTTON
-930
-55
-993
-88
+765
+500
+867
+533
 NIL
-go
-NIL
+evolution
+T
 1
 T
 OBSERVER
@@ -400,123 +522,16 @@ NIL
 1
 
 SLIDER
-10
-115
-180
-148
-global-information
-global-information
-0
-5
-1
-1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-10
-150
-180
-183
-uncertainty
-uncertainty
-0
-100
-0
-5
-1
-%
-HORIZONTAL
-
-MONITOR
-270
-605
-627
-650
-NIL
-mean [av] of turtles with [information = 2]
-17
-1
-11
-
-MONITOR
-270
-555
-627
-600
-NIL
-mean [av] of turtles with [information = 1]
-2
-1
-11
-
-MONITOR
-940
-155
-1152
-200
-NIL
-[information] of turtle 0
-17
-1
-11
-
-MONITOR
-940
-375
-1152
-420
-NIL
-[information] of turtle 1
-17
-1
-11
-
-MONITOR
-940
-425
-1595
-470
-NIL
-[alternatives] of turtle 1
-17
-1
-11
-
-MONITOR
-940
-475
-1595
-520
-NIL
-map [precision ? 1] ([q-values] of turtle 1)
-17
-1
-11
-
-MONITOR
-940
-525
-1590
-570
-NIL
-[frequencies] of turtle 1
-17
-1
-11
-
-SLIDER
 185
-65
-357
-98
-waiting
-waiting
+45
+360
+78
+waiting-rate
+waiting-rate
 0
 100
 50
-5
+25
 1
 %
 HORIZONTAL
@@ -869,40 +884,45 @@ NetLogo 5.2.0
 @#$#@#$#@
 @#$#@#$#@
 <experiments>
-  <experiment name="q1-sweep" repetitions="1" runMetricsEveryStep="false">
+  <experiment name="exp-forage-random-waiting" repetitions="1" runMetricsEveryStep="false">
     <setup>setup</setup>
     <go>go</go>
     <timeLimit steps="10000"/>
-    <metric>mean [rnA] of turtles</metric>
-    <metric>mean [v] of turtles</metric>
-    <metric>mean [avA] of turtles</metric>
-    <metric>mean [avB] of turtles</metric>
-    <enumeratedValueSet variable="noOfTurtles">
+    <metric>[rn1] of turtles</metric>
+    <metric>[av] of turtles</metric>
+    <metric>[av1] of turtles</metric>
+    <metric>[av2] of turtles</metric>
+    <metric>[alternatives] of turtles</metric>
+    <metric>[q-values] of turtles</metric>
+    <metric>[frequencies] of turtles</metric>
+    <enumeratedValueSet variable="global-expl-rate">
+      <value value="0.05"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="number-of-turtles">
       <value value="1000"/>
     </enumeratedValueSet>
-    <enumeratedValueSet variable="resources">
+    <enumeratedValueSet variable="random-waiting?">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="type-B-rate">
+      <value value="0"/>
+      <value value="50"/>
+      <value value="100"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="res-2-value">
       <value value="50"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="growthrate">
-      <value value="1"/>
       <value value="3"/>
-      <value value="5"/>
-      <value value="10"/>
-      <value value="15"/>
-      <value value="20"/>
     </enumeratedValueSet>
-    <enumeratedValueSet variable="resValueB">
+    <enumeratedValueSet variable="uncertainty">
+      <value value="0"/>
       <value value="10"/>
       <value value="20"/>
       <value value="30"/>
       <value value="40"/>
       <value value="50"/>
-      <value value="60"/>
-      <value value="70"/>
-      <value value="80"/>
-      <value value="90"/>
     </enumeratedValueSet>
-    <steppedValueSet variable="q1" first="0.02" step="0.04" last="0.98"/>
   </experiment>
 </experiments>
 @#$#@#$#@

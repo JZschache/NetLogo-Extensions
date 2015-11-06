@@ -72,6 +72,51 @@ object QLSystem {
   val defaultExploraionRate = QLSystem.config.getDouble(QLExtension.cfgstr + ".default-exploration-rate")
   val defaultExploraionMethod = QLSystem.config.getString(QLExtension.cfgstr + ".default-exploration-method")
   
+  
+  def createQLAgent(agent: org.nlogo.agent.Agent)= {
+    // read and set variables
+	val vLength = agent.variables.size
+    val idxA = (0 until vLength).toList.find(i => agent.variableName(i) == altListName.toUpperCase())
+    val idxQ = (0 until vLength).toList.find(i => agent.variableName(i) == qvListName.toUpperCase())
+    val idxN = (0 until vLength).toList.find(i => agent.variableName(i) == freqListName.toUpperCase())
+    val idxER = (0 until vLength).toList.find(i => agent.variableName(i) == explRateName.toUpperCase())
+    val idxEM = (0 until vLength).toList.find(i => agent.variableName(i) == explMethodName.toUpperCase())
+    val idxG = (0 until vLength).toList.find(i => agent.variableName(i) == gammaName.toUpperCase())
+    val idxS = (0 until vLength).toList.find(i => agent.variableName(i) == stateName.toUpperCase())
+    val alternatives = if (idxA.isDefined) {
+      val entry = agent.getVariable(idxA.get)
+      if (entry.isInstanceOf[LogoList])
+        entry.asInstanceOf[LogoList].map(e => e.asInstanceOf[Double].toInt).toList
+      else {
+        agent.setVariable(idxA.get, LogoList())
+        List[Int]()
+      }
+    } else List[Int]()
+    if (idxQ.isDefined) 
+      agent.setVariable(idxQ.get, LogoList())
+    if (idxN.isDefined)
+      agent.setVariable(idxN.get, LogoList())
+    val explorationRate = if (idxER.isDefined)
+        agent.getVariable(idxER.get).asInstanceOf[Double]
+      else
+        defaultExploraionRate
+    val explorationMethod = if (idxEM.isDefined)
+        agent.getVariable(idxEM.get).asInstanceOf[String]
+      else
+        defaultExploraionMethod
+    val gamma = if (idxG.isDefined) 
+        agent.getVariable(idxG.get).asInstanceOf[Double]
+      else
+        0.0
+    val state = if (idxS.isDefined)
+        agent.getVariable(idxS.get).asInstanceOf[Double].toInt
+      else
+        defaultState
+    val akkaAgent = AkkaAgent(QLAgent(state, explorationMethod, explorationRate, gamma, agent))
+    akkaAgent send {_.setAlternatives(alternatives)}
+	akkaAgent
+  }
+  
 }
 
 
@@ -246,52 +291,41 @@ class Init extends DefaultCommand {
     val newNLAgents = args(0).getAgentSet.agents.asScala.toList
     
     // create the QLAgents
-    qlDataMap send { newNLAgents.map(a => {
-      val agent = a.asInstanceOf[org.nlogo.agent.Agent]
-      // read and set variables
-      val vLength = agent.variables.size
-      val idxA = (0 until vLength).toList.find(i => agent.variableName(i) == altListName.toUpperCase())
-      val idxQ = (0 until vLength).toList.find(i => agent.variableName(i) == qvListName.toUpperCase())
-      val idxN = (0 until vLength).toList.find(i => agent.variableName(i) == freqListName.toUpperCase())
-      val idxER = (0 until vLength).toList.find(i => agent.variableName(i) == explRateName.toUpperCase())
-      val idxEM = (0 until vLength).toList.find(i => agent.variableName(i) == explMethodName.toUpperCase())
-      val idxG = (0 until vLength).toList.find(i => agent.variableName(i) == gammaName.toUpperCase())
-      val idxS = (0 until vLength).toList.find(i => agent.variableName(i) == stateName.toUpperCase())
-      val alternatives = if (idxA.isDefined) {
-          val entry = agent.getVariable(idxA.get)
-          if (entry.isInstanceOf[LogoList])
-            entry.asInstanceOf[LogoList].map(e => e.asInstanceOf[Double].toInt).toList
-          else {
-            agent.setVariable(idxA.get, LogoList())
-            List[Int]()
-          }
-        } else List[Int]()
-      if (idxQ.isDefined) 
-        agent.setVariable(idxQ.get, LogoList())
-      if (idxN.isDefined)
-        agent.setVariable(idxN.get, LogoList())
-      val explorationRate = if (idxER.isDefined)
-          agent.getVariable(idxER.get).asInstanceOf[Double]
-        else
-          defaultExploraionRate
-      val explorationMethod = if (idxEM.isDefined)
-          agent.getVariable(idxEM.get).asInstanceOf[String]
-        else
-          defaultExploraionMethod
-      val gamma = if (idxG.isDefined) 
-          agent.getVariable(idxG.get).asInstanceOf[Double]
-        else
-          0.0
-      val state = if (idxS.isDefined)
-          agent.getVariable(idxS.get).asInstanceOf[Double].toInt
-        else
-          defaultState
-      val akkaAgent = AkkaAgent(QLAgent(state, explorationMethod, explorationRate, gamma, agent))
-      akkaAgent send {_.setAlternatives(alternatives)}
-      // return mapping
-      a -> akkaAgent
-    }).toMap }
+    qlDataMap send { newNLAgents.map(a => a -> createQLAgent(a.asInstanceOf[org.nlogo.agent.Agent])).toMap }
     // must wait for new agents to be set
+    qlDataMap.await
+  }
+}
+
+
+class AddAgent extends DefaultCommand {
+  import QLSystem._
+  
+  override def getAgentClassString = "O"
+  override def getSyntax = commandSyntax(Array( TurtleType | PatchType))
+
+  def perform(args: Array[Argument], c: Context) {
+    // read parameter
+    val newNLAgent = args(0).getAgent
+    // update the QLAgents
+    qlDataMap send { _ + (newNLAgent -> createQLAgent(newNLAgent.asInstanceOf[org.nlogo.agent.Agent])) }
+    // must wait for new agent to be set
+    qlDataMap.await
+  }
+}
+
+class RemoveAgent extends DefaultCommand {
+  import QLSystem._
+  
+  override def getAgentClassString = "O"
+  override def getSyntax = commandSyntax(Array( TurtleType | PatchType))
+
+  def perform(args: Array[Argument], c: Context) {
+    // read parameter
+    val newNLAgent = args(0).getAgent
+    // update the QLAgents
+    qlDataMap send { _ - newNLAgent }
+    // must wait for new agent to be set
     qlDataMap.await
   }
 }
