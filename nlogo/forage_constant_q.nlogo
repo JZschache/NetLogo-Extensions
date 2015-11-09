@@ -1,12 +1,13 @@
 patches-own [res-type is-resource res-color]
 turtles-own [q dest dest-type n1 n2 v1 v2 av1 av2 rn1 av]
 
-globals [ patch-config ]
+globals [ patch-config step ]
 
 to setup
   clear-all
+  set step 0
   ; resize world
-  let noOfPatches noOfTurtles * 9
+  let noOfPatches number-of-turtles * 9
   resize-world 0 floor (sqrt (noOfPatches)) 0 floor (sqrt (noOfPatches))
   set-patch-size 400 / floor(sqrt(noOfPatches))
   ; setup patches
@@ -19,7 +20,7 @@ to setup
   ]
   grow-resources
   ; setup turtles
-  crt noOfTurtles [
+  crt number-of-turtles [
     setxy random-xcor random-ycor
     set dest 0
     set q q1
@@ -67,6 +68,7 @@ to forage
       ]
       if waiting-rate = 100 [setxy random-xcor random-ycor]
       set dest 0
+      set step step + 1
     ]
   ]
 end
@@ -79,7 +81,10 @@ to grow-resources
 end
 
 to go
-  ask turtles [ forage ]
+  while [step < number-of-turtles] [
+    ask turtles [ forage ]
+  ]
+  set step step - number-of-turtles
   grow-resources
   update-values
   tick
@@ -162,8 +167,8 @@ SLIDER
 10
 180
 43
-noOfTurtles
-noOfTurtles
+number-of-turtles
+number-of-turtles
 100
 1000
 100
@@ -196,7 +201,7 @@ forageLength
 forageLength
 0
 10000
-1000
+2000
 100
 1
 NIL
@@ -281,9 +286,9 @@ SLIDER
 growthrate
 growthrate
 0
-10
+30
+15
 5
-1
 1
 %
 HORIZONTAL
@@ -298,7 +303,7 @@ q1
 0
 1
 0.99
-0.1
+0.01
 1
 NIL
 HORIZONTAL
@@ -704,85 +709,28 @@ NetLogo 5.2.0
 @#$#@#$#@
 @#$#@#$#@
 <experiments>
-  <experiment name="q1-sweep-waiting-rate-75" repetitions="1" runMetricsEveryStep="false">
+  <experiment name="q1-sweep" repetitions="1" runMetricsEveryStep="false">
     <setup>setup</setup>
     <go>go</go>
-    <timeLimit steps="10000"/>
+    <timeLimit steps="1000"/>
     <metric>mean [rn1] of turtles</metric>
     <metric>mean [av] of turtles</metric>
     <metric>mean [av1] of turtles</metric>
     <metric>mean [av2] of turtles</metric>
-    <enumeratedValueSet variable="noOfTurtles">
+    <enumeratedValueSet variable="number-of-turtles">
       <value value="1000"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="waiting-rate">
+      <value value="0"/>
+      <value value="25"/>
+      <value value="50"/>
       <value value="75"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="growthrate">
-      <value value="1"/>
-      <value value="2"/>
-      <value value="3"/>
-      <value value="4"/>
-      <value value="5"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="res-2-value">
-      <value value="10"/>
-      <value value="30"/>
-      <value value="50"/>
-      <value value="70"/>
-      <value value="90"/>
-    </enumeratedValueSet>
-    <steppedValueSet variable="q1" first="0.02" step="0.04" last="0.98"/>
-  </experiment>
-  <experiment name="q1-sweep-waiting-rate-50" repetitions="1" runMetricsEveryStep="false">
-    <setup>setup</setup>
-    <go>go</go>
-    <timeLimit steps="10000"/>
-    <metric>mean [rn1] of turtles</metric>
-    <metric>mean [av] of turtles</metric>
-    <metric>mean [av1] of turtles</metric>
-    <metric>mean [av2] of turtles</metric>
-    <enumeratedValueSet variable="noOfTurtles">
-      <value value="1000"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="waiting-rate">
-      <value value="50"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="growthrate">
-      <value value="1"/>
-      <value value="2"/>
-      <value value="3"/>
-      <value value="4"/>
-      <value value="5"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="res-2-value">
-      <value value="10"/>
-      <value value="30"/>
-      <value value="50"/>
-      <value value="70"/>
-      <value value="90"/>
-    </enumeratedValueSet>
-    <steppedValueSet variable="q1" first="0.02" step="0.04" last="0.98"/>
-  </experiment>
-  <experiment name="q1-sweep-random" repetitions="1" runMetricsEveryStep="false">
-    <setup>setup</setup>
-    <go>go</go>
-    <timeLimit steps="10000"/>
-    <metric>mean [rn1] of turtles</metric>
-    <metric>mean [av] of turtles</metric>
-    <metric>mean [av1] of turtles</metric>
-    <metric>mean [av2] of turtles</metric>
-    <enumeratedValueSet variable="noOfTurtles">
-      <value value="1000"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="waiting-rate">
       <value value="100"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="growthrate">
-      <value value="1"/>
-      <value value="3"/>
       <value value="5"/>
       <value value="10"/>
+      <value value="15"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="res-2-value">
       <value value="10"/>

@@ -1,13 +1,13 @@
 extensions [ql]
 
 patches-own [res-type is-resource res-color]
-turtles-own [density dest-type next-reward type-B state exploration-rate alternatives q-values frequencies dest n1 n2 v1 v2 av av1 av2 rn1]
+turtles-own [density dest-type next-reward type-B state exploration-rate alternatives q-values frequencies dest n1 n2 v1 v2 av av1 av2 rn1 q-values-std]
 
-globals [ patch-config ]
+globals [ patch-config step ]
 
 to setup
   clear-all
-  
+  set step 0
   ; resize world
   let noOfPatches number-of-turtles * 9
   set-patch-size 400 / floor(sqrt(noOfPatches))
@@ -90,6 +90,7 @@ to forage
       ]
       if waiting-rate = 100 [setxy random-xcor random-ycor]
       set dest 0
+      set step step + 1
     ]
   ]
 end
@@ -117,19 +118,21 @@ to grow-resources
 end
 
 to go
-  ask turtles [
-    forage 
+  while [step < number-of-turtles] [
+    ask turtles [ forage ]
   ]
+  set step step - number-of-turtles
   grow-resources
-  update-values
+  ;update-values
   tick
 end
 
 to evolution
-  repeat 200 [
-    ask turtles [
-      forage 
+  repeat 100 [
+    while [step < number-of-turtles] [
+      ask turtles [ forage ]
     ]
+    set step step - number-of-turtles
     grow-resources
   ]
   update-values  
@@ -169,9 +172,24 @@ to update-values
     ifelse n2 > 0 [set av2 v2 / n2] [set av2 0]
     ifelse (n1 + n2) > 0 [set rn1 ((n1) / (n1 + n2))] [set rn1 0]
     ifelse (n1 + n2) > 0 [set av ((v1 + v2) / (n1 + n2))] [set av 0]
+    
+    let total-n sum frequencies
+    set q-values-std 0
+    if (total-n > 0) [
+      let zipped (map [ (list ?1 ?2) ] q-values frequencies)
+      let filtered filter [ ( filter? (item 1 ?) total-n) ] zipped
+      let qvs map [ (item 0 ?) / 100 ] filtered
+      if (length qvs > 1) [ 
+        set q-values-std precision (standard-deviation qvs) 2
+      ]
+    ]
  ]
 end  
   
+to-report filter? [ n total-n ]
+  let expectation global-expl-rate / 2
+  report 2.33 < (n / total-n - expectation) * (sqrt total-n) / (sqrt (expectation * (1 - expectation)))
+end
   
   
 @#$#@#$#@
@@ -226,7 +244,7 @@ res-2-value
 res-2-value
 0
 100
-70
+50
 5
 1
 NIL
@@ -275,7 +293,7 @@ growthrate
 growthrate
 0
 100
-3
+10
 1
 1
 %
@@ -305,19 +323,19 @@ PLOT
 305
 265
 450
-hist av1 - av2
+q-values-std
 NIL
 NIL
--50.0
-50.0
+0.0
+1.0
 0.0
 10.0
 true
 true
 "" ""
 PENS
-"type-A" 2.0 1 -16777216 true "" "histogram [av1 - av2] of turtles with [not type-B]"
-"type-B" 2.0 1 -7500403 true "" "histogram [av1 - av2] of turtles with [type-B]"
+"type-A" 0.05 1 -16777216 true "" "histogram [q-values-std] of turtles with [not type-B]"
+"type-B" 0.05 1 -7500403 true "" "histogram [q-values-std] of turtles with [type-B]"
 
 SLIDER
 10
@@ -421,7 +439,7 @@ uncertainty
 uncertainty
 0
 50
-30
+50
 5
 1
 %
@@ -530,11 +548,28 @@ waiting-rate
 waiting-rate
 0
 100
-50
+75
 25
 1
 %
 HORIZONTAL
+
+BUTTON
+275
+660
+407
+693
+NIL
+update-values
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
 
 @#$#@#$#@
 ## WHAT IS IT?
@@ -884,11 +919,13 @@ NetLogo 5.2.0
 @#$#@#$#@
 @#$#@#$#@
 <experiments>
-  <experiment name="exp-forage-random-waiting" repetitions="1" runMetricsEveryStep="false">
+  <experiment name="exp-forage-average-values" repetitions="1" runMetricsEveryStep="false">
     <setup>setup</setup>
-    <go>go</go>
-    <timeLimit steps="10000"/>
+    <go>if ticks &gt; 4950 [update-values]
+go</go>
+    <timeLimit steps="5000"/>
     <metric>[rn1] of turtles</metric>
+    <metric>[q-values-std] of turtles</metric>
     <metric>[av] of turtles</metric>
     <metric>[av1] of turtles</metric>
     <metric>[av2] of turtles</metric>
@@ -901,8 +938,11 @@ NetLogo 5.2.0
     <enumeratedValueSet variable="number-of-turtles">
       <value value="1000"/>
     </enumeratedValueSet>
-    <enumeratedValueSet variable="random-waiting?">
-      <value value="true"/>
+    <enumeratedValueSet variable="waiting-rate">
+      <value value="0"/>
+      <value value="50"/>
+      <value value="75"/>
+      <value value="100"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="type-B-rate">
       <value value="0"/>
@@ -910,18 +950,18 @@ NetLogo 5.2.0
       <value value="100"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="res-2-value">
+      <value value="30"/>
       <value value="50"/>
+      <value value="70"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="growthrate">
-      <value value="3"/>
+      <value value="10"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="uncertainty">
       <value value="0"/>
-      <value value="10"/>
-      <value value="20"/>
+      <value value="15"/>
       <value value="30"/>
-      <value value="40"/>
-      <value value="50"/>
+      <value value="45"/>
     </enumeratedValueSet>
   </experiment>
 </experiments>
