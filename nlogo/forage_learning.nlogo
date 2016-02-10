@@ -42,6 +42,7 @@ end
 to-report good-resources-in-neighborhood
   ifelse type-B [
     let surrounding patches with [distance myself < 2 ]
+    ;show count surrounding
     let real count surrounding with [is-resource and res-type = 1]
     let s min (list 1 real)
   
@@ -137,15 +138,15 @@ to evolution
   ]
   update-values  
   
-  let old-agent one-of turtles
-  ql:remove-agent old-agent
-  ask old-agent [ die ]
-  
-  let new-agent nobody
+  let old-agents n-of 10 turtles
+  ask old-agents [ 
+    ql:remove-agent self
+    die
+  ]
   
   let mean-av mean [av] of turtles
   
-  ask one-of turtles with [ av > mean-av] [
+  ask n-of 10 turtles with [ av > mean-av] [
     hatch 1 [
       setxy random-xcor random-ycor
       set dest 0
@@ -158,10 +159,9 @@ to evolution
       set state good-resources-in-neighborhood
       set alternatives [ 1 2 ]
       set next-reward "nothing"
-      set new-agent self
+      ql:add-agent self
     ]
   ]
-  ql:add-agent new-agent
   tick
 end
 
@@ -173,18 +173,30 @@ to update-values
     ifelse (n1 + n2) > 0 [set rn1 ((n1) / (n1 + n2))] [set rn1 0]
     ifelse (n1 + n2) > 0 [set av ((v1 + v2) / (n1 + n2))] [set av 0]
     
-    let total-n sum frequencies
+    let total-n n1 + n2
     set q-values-std 0
     if (total-n > 0) [
-      let zipped (map [ (list ?1 ?2) ] q-values frequencies)
+      let zipped (map [ (list ?1 ?2) ] (list av1 av2) (list n1 n2))
       let filtered filter [ ( filter? (item 1 ?) total-n) ] zipped
       let qvs map [ (item 0 ?) / 100 ] filtered
       if (length qvs > 1) [ 
         set q-values-std precision (standard-deviation qvs) 2
       ]
+      ;if (not type-B and q-values-std > 0.05) [
+      ;  show filtered
+      ;]
     ]
  ]
 end  
+
+to start-observation
+  ask turtles [
+    set n1 0
+    set n2 0
+    set v1 0
+    set v2 0 
+  ]
+end
   
 to-report filter? [ n total-n ]
   let expectation global-expl-rate / 2
@@ -327,7 +339,7 @@ q-values-std
 NIL
 NIL
 0.0
-1.0
+0.5
 0.0
 10.0
 true
@@ -439,7 +451,7 @@ uncertainty
 uncertainty
 0
 50
-50
+0
 5
 1
 %
@@ -548,7 +560,7 @@ waiting-rate
 waiting-rate
 0
 100
-75
+100
 25
 1
 %
@@ -561,6 +573,40 @@ BUTTON
 693
 NIL
 update-values
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+BUTTON
+320
+470
+452
+503
+NIL
+update-values\n
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+BUTTON
+485
+470
+652
+503
+NIL
+start-observation
 NIL
 1
 T
@@ -919,10 +965,52 @@ NetLogo 5.2.0
 @#$#@#$#@
 @#$#@#$#@
 <experiments>
-  <experiment name="exp-forage-average-values" repetitions="1" runMetricsEveryStep="false">
+  <experiment name="exp-forage-average-values-wr50" repetitions="1" runMetricsEveryStep="false">
     <setup>setup</setup>
-    <go>if ticks &gt; 4950 [update-values]
-go</go>
+    <go>go
+if ticks &gt; 4950 [update-values]</go>
+    <timeLimit steps="5000"/>
+    <metric>[rn1] of turtles</metric>
+    <metric>[q-values-std] of turtles</metric>
+    <metric>[av] of turtles</metric>
+    <metric>[av1] of turtles</metric>
+    <metric>[av2] of turtles</metric>
+    <metric>[alternatives] of turtles</metric>
+    <metric>[q-values] of turtles</metric>
+    <metric>[frequencies] of turtles</metric>
+    <enumeratedValueSet variable="global-expl-rate">
+      <value value="0.05"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="number-of-turtles">
+      <value value="1000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="waiting-rate">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="type-B-rate">
+      <value value="0"/>
+      <value value="50"/>
+      <value value="100"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="res-2-value">
+      <value value="30"/>
+      <value value="50"/>
+      <value value="70"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="growthrate">
+      <value value="10"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="uncertainty">
+      <value value="0"/>
+      <value value="15"/>
+      <value value="30"/>
+      <value value="45"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="exp-forage-average-values-wr0" repetitions="1" runMetricsEveryStep="false">
+    <setup>setup</setup>
+    <go>go
+if ticks &gt; 4950 [update-values]</go>
     <timeLimit steps="5000"/>
     <metric>[rn1] of turtles</metric>
     <metric>[q-values-std] of turtles</metric>
@@ -940,14 +1028,244 @@ go</go>
     </enumeratedValueSet>
     <enumeratedValueSet variable="waiting-rate">
       <value value="0"/>
-      <value value="50"/>
-      <value value="75"/>
-      <value value="100"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="type-B-rate">
       <value value="0"/>
       <value value="50"/>
       <value value="100"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="res-2-value">
+      <value value="30"/>
+      <value value="50"/>
+      <value value="70"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="growthrate">
+      <value value="10"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="uncertainty">
+      <value value="0"/>
+      <value value="15"/>
+      <value value="30"/>
+      <value value="45"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="exp-forage-average-values-wr75" repetitions="1" runMetricsEveryStep="false">
+    <setup>setup</setup>
+    <go>go
+if ticks &gt; 4950 [update-values]</go>
+    <timeLimit steps="5000"/>
+    <metric>[rn1] of turtles</metric>
+    <metric>[q-values-std] of turtles</metric>
+    <metric>[av] of turtles</metric>
+    <metric>[av1] of turtles</metric>
+    <metric>[av2] of turtles</metric>
+    <metric>[alternatives] of turtles</metric>
+    <metric>[q-values] of turtles</metric>
+    <metric>[frequencies] of turtles</metric>
+    <enumeratedValueSet variable="global-expl-rate">
+      <value value="0.05"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="number-of-turtles">
+      <value value="1000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="waiting-rate">
+      <value value="75"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="type-B-rate">
+      <value value="0"/>
+      <value value="50"/>
+      <value value="100"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="res-2-value">
+      <value value="30"/>
+      <value value="50"/>
+      <value value="70"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="growthrate">
+      <value value="10"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="uncertainty">
+      <value value="0"/>
+      <value value="15"/>
+      <value value="30"/>
+      <value value="45"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="exp-forage-average-values-wr100" repetitions="1" runMetricsEveryStep="false">
+    <setup>setup</setup>
+    <go>go
+if ticks &gt; 9950 [update-values]</go>
+    <timeLimit steps="5000"/>
+    <metric>[rn1] of turtles</metric>
+    <metric>[q-values-std] of turtles</metric>
+    <metric>[av] of turtles</metric>
+    <metric>[av1] of turtles</metric>
+    <metric>[av2] of turtles</metric>
+    <metric>[alternatives] of turtles</metric>
+    <metric>[q-values] of turtles</metric>
+    <metric>[frequencies] of turtles</metric>
+    <enumeratedValueSet variable="global-expl-rate">
+      <value value="0.05"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="number-of-turtles">
+      <value value="1000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="waiting-rate">
+      <value value="100"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="type-B-rate">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="res-2-value">
+      <value value="30"/>
+      <value value="50"/>
+      <value value="70"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="growthrate">
+      <value value="10"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="uncertainty">
+      <value value="0"/>
+      <value value="15"/>
+      <value value="30"/>
+      <value value="45"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="exp-forage-average-values-100-agents" repetitions="10" runMetricsEveryStep="false">
+    <setup>setup</setup>
+    <go>go
+if ticks &gt; 4950 [update-values]</go>
+    <timeLimit steps="5000"/>
+    <metric>[rn1] of turtles</metric>
+    <metric>[q-values-std] of turtles</metric>
+    <metric>[av] of turtles</metric>
+    <metric>[av1] of turtles</metric>
+    <metric>[av2] of turtles</metric>
+    <metric>[alternatives] of turtles</metric>
+    <metric>[q-values] of turtles</metric>
+    <metric>[frequencies] of turtles</metric>
+    <enumeratedValueSet variable="global-expl-rate">
+      <value value="0.05"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="number-of-turtles">
+      <value value="100"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="waiting-rate">
+      <value value="0"/>
+      <value value="50"/>
+      <value value="75"/>
+      <value value="100"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="type-B-rate">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="res-2-value">
+      <value value="30"/>
+      <value value="50"/>
+      <value value="70"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="growthrate">
+      <value value="10"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="uncertainty">
+      <value value="0"/>
+      <value value="15"/>
+      <value value="30"/>
+      <value value="45"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="exp-forage-evolution" repetitions="1" runMetricsEveryStep="true">
+    <setup>setup</setup>
+    <go>evolution</go>
+    <timeLimit steps="10000"/>
+    <metric>mean [av] of turtles with [not type-B]</metric>
+    <metric>mean [av] of turtles with [type-B]</metric>
+    <metric>count turtles with [not type-B]</metric>
+    <metric>count turtles with [type-B]</metric>
+    <enumeratedValueSet variable="global-expl-rate">
+      <value value="0.05"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="number-of-turtles">
+      <value value="1000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="waiting-rate">
+      <value value="100"/>
+      <value value="0"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="type-B-rate">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="res-2-value">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="growthrate">
+      <value value="10"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="uncertainty">
+      <value value="0"/>
+      <value value="15"/>
+      <value value="30"/>
+      <value value="45"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="exp-forage-evolution-agent-100" repetitions="10" runMetricsEveryStep="true">
+    <setup>setup</setup>
+    <go>evolution</go>
+    <timeLimit steps="10000"/>
+    <metric>count turtles with [not type-B]</metric>
+    <metric>count turtles with [type-B]</metric>
+    <enumeratedValueSet variable="global-expl-rate">
+      <value value="0.05"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="number-of-turtles">
+      <value value="100"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="waiting-rate">
+      <value value="100"/>
+      <value value="0"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="type-B-rate">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="res-2-value">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="growthrate">
+      <value value="10"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="uncertainty">
+      <value value="0"/>
+      <value value="15"/>
+      <value value="30"/>
+      <value value="45"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="exp-forage-average-values-burnin" repetitions="1" runMetricsEveryStep="false">
+    <setup>setup</setup>
+    <go>go
+if ticks &lt; 1000 [start-observation]
+if ticks &gt; 9950 [update-values]</go>
+    <timeLimit steps="10000"/>
+    <metric>[rn1] of turtles</metric>
+    <metric>[q-values-std] of turtles</metric>
+    <metric>[av] of turtles</metric>
+    <metric>[av1] of turtles</metric>
+    <metric>[av2] of turtles</metric>
+    <metric>[alternatives] of turtles</metric>
+    <metric>[q-values] of turtles</metric>
+    <metric>[frequencies] of turtles</metric>
+    <enumeratedValueSet variable="global-expl-rate">
+      <value value="0.05"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="number-of-turtles">
+      <value value="1000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="waiting-rate">
+      <value value="100"/>
+      <value value="0"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="type-B-rate">
+      <value value="50"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="res-2-value">
       <value value="30"/>

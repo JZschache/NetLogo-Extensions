@@ -67,31 +67,29 @@ object QLExtension {
   
   val sysloader = ClassLoader.getSystemClassLoader().asInstanceOf[URLClassLoader]
   
-  if (inParallelMode) {                              
-    // adding the jars to the system class loader
-    val sysclass = classOf[URLClassLoader]
-    try {
-      val method = sysclass.getDeclaredMethod("addURL", classOf[URL])
-      method.setAccessible(true)
-      jarList.foreach(jarName => {
-        val file = new File(jarName)
-        // check whether jar exists
-        new FileReader(file)
-        // load jar
-        method.invoke(sysloader, file.toURL())
-      })
-    } catch {
-      case e: FileNotFoundException =>
-        val newLine = System.getProperty("line.separator")
-        System.err.println("FileNotFoundException: Check if all required jars exists: " + newLine +  
-            jarList.tail.foldLeft(jarList.first)((s, el) => s + "," + newLine + el)) + "." + newLine + 
-        exit(0)
-      case t: Throwable => 
-        val newLine = System.getProperty("line.separator")
-        System.err.println("Setting additional jars failed. A SecurityManager may prevent the adding of jars to the class path at runtime." + newLine + 
-            "Manually add the names of the jars to the variable 'Class-Path' of the manifest file of NetLogo.jar.")
-        t.printStackTrace()
-    }
+  // adding the jars to the system class loader
+  val sysclass = classOf[URLClassLoader]
+  try {
+    val method = sysclass.getDeclaredMethod("addURL", classOf[URL])
+	method.setAccessible(true)
+	jarList.foreach(jarName => {
+	  val file = new File(jarName)
+	  // check whether jar exists
+	  new FileReader(file)
+	  // load jar
+	  method.invoke(sysloader, file.toURL())
+	})
+  } catch {
+    case e: FileNotFoundException =>
+	  val newLine = System.getProperty("line.separator")
+	  System.err.println("FileNotFoundException: Check if all required jars exists: " + newLine +  
+	      jarList.tail.foldLeft(jarList.first)((s, el) => s + "," + newLine + el)) + "." + newLine + 
+	  exit(0)
+	case t: Throwable => 
+	  val newLine = System.getProperty("line.separator")
+	  System.err.println("Setting additional jars failed. A SecurityManager may prevent the adding of jars to the class path at runtime." + newLine + 
+	      "Manually add the names of the jars to the variable 'Class-Path' of the manifest file of NetLogo.jar.")
+      t.printStackTrace()
   } 
 }
 

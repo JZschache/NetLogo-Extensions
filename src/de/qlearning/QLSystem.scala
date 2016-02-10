@@ -56,9 +56,9 @@ object QLSystem {
   // an object to handle the performance measures (works only in parallel-mode)
   val perfMeasures = if (usePerformanceMeasures) new PerformanceMeasures() else new EmptyPerformanceMeasures()
 	  
-  // this map connects an NetLogo-agent (turtle / patch) to a QLAgent that performs the learning 
-  // it therefore also holds all data about the agents
-  val qlDataMap = AkkaAgent(Map[Agent, AkkaAgent[QLAgent]]())  
+  // this map connects a thread to a map of data 
+  // a map of data links an NetLogo-agent (turtle / patch) to a QLAgent that performs the learning 
+  val threadDataMap = AkkaAgent(Map[Long, Map[Agent, AkkaAgent[QLAgent]]]())  
   
   // names of agent variables
   val altListName = QLSystem.config.getString(QLExtension.cfgstr + ".alternatives-list")
@@ -269,31 +269,45 @@ class Init extends DefaultCommand {
   override def getSyntax = commandSyntax(Array( TurtlesetType | PatchsetType))
 
   def perform(args: Array[Argument], c: Context) {
-        
-    // stop all data agents and reset the map
-    // this may take a while
-    qlDataMap send {map => {
-      map.values.foreach(_.close)
-      Map[org.nlogo.api.Agent, AkkaAgent[QLAgent]]()
-    }}
-    // wait till complete
-    qlDataMap.await
+    //val nvmC = c.asInstanceOf[org.nlogo.nvm.ExtensionContext]
+    //val bsrn = nvmC.workspace().behaviorSpaceRunNumber()
+    val threadId = Thread.currentThread().getId()
+    
+    //println("Thread number " + threadId + " calls the Init-Command")
+    
+    val oldData = threadDataMap.get.get(threadId)
+    if (oldData.isDefined) {
+      // stop all data agents and reset the map
+      // this may take a while
+      oldData.get.values.foreach(_.close)
+    }
+    
+//    qlDataMap send {map => {
+//      map.values.foreach(_.close)
+//      Map[org.nlogo.api.Agent, AkkaAgent[QLAgent]]()
+//    }}
+//     wait till complete
+//    threadDataMap.await
     
     // init performance measures
-    perfMeasures.init
+    if (usePerformanceMeasures) perfMeasures.init
     
-    // the groups structure is deleted, 
-    // the NetLogo-model is reloaded,
-    // and the commands and reporters are recompiled
-    netLogoSuper ! NetLogoSupervisor.InitNetLogoActors(c.asInstanceOf[org.nlogo.nvm.ExtensionContext].workspace())
+    if (inParallelMode) {
+      // the groups structure is deleted, 
+      // the NetLogo-model is reloaded,
+      // and the commands and reporters are recompiled
+      netLogoSuper ! NetLogoSupervisor.InitNetLogoActors(c.asInstanceOf[org.nlogo.nvm.ExtensionContext].workspace())
+    }
     
     // read parameter
     val newNLAgents = args(0).getAgentSet.agents.asScala.toList
     
     // create the QLAgents
-    qlDataMap send { newNLAgents.map(a => a -> createQLAgent(a.asInstanceOf[org.nlogo.agent.Agent])).toMap }
+    threadDataMap send { _.updated(threadId, newNLAgents.map(a => a -> createQLAgent(a.asInstanceOf[org.nlogo.agent.Agent])).toMap) }
+//    qlDataMap send { newNLAgents.map(a => a -> createQLAgent(a.asInstanceOf[org.nlogo.agent.Agent])).toMap }
     // must wait for new agents to be set
-    qlDataMap.await
+    threadDataMap.await
+        
   }
 }
 
@@ -301,32 +315,44 @@ class Init extends DefaultCommand {
 class AddAgent extends DefaultCommand {
   import QLSystem._
   
-  override def getAgentClassString = "O"
+  override def getAgentClassString = "OTP"
   override def getSyntax = commandSyntax(Array( TurtleType | PatchType))
 
   def perform(args: Array[Argument], c: Context) {
+    val threadId = Thread.currentThread().getId()
     // read parameter
     val newNLAgent = args(0).getAgent
     // update the QLAgents
-    qlDataMap send { _ + (newNLAgent -> createQLAgent(newNLAgent.asInstanceOf[org.nlogo.agent.Agent])) }
+    threadDataMap send { map => {
+      val old = map.getOrElse(threadId, Map[org.nlogo.api.Agent, AkkaAgent[QLAgent]]())
+      map.updated(threadId, old + (newNLAgent -> createQLAgent(newNLAgent.asInstanceOf[org.nlogo.agent.Agent])))
+    }}
+//    qlDataMap send { _ + (newNLAgent -> createQLAgent(newNLAgent.asInstanceOf[org.nlogo.agent.Agent])) }
     // must wait for new agent to be set
-    qlDataMap.await
+    threadDataMap.await
   }
 }
 
 class RemoveAgent extends DefaultCommand {
   import QLSystem._
   
-  override def getAgentClassString = "O"
+  override def getAgentClassString = "OTP"
   override def getSyntax = commandSyntax(Array( TurtleType | PatchType))
 
   def perform(args: Array[Argument], c: Context) {
+    val threadId = Thread.currentThread().getId()
     // read parameter
-    val newNLAgent = args(0).getAgent
+    val dyingNLAgent = args(0).getAgent
     // update the QLAgents
-    qlDataMap send { _ - newNLAgent }
+    threadDataMap send { map => {
+      val old = map.getOrElse(threadId, Map[org.nlogo.api.Agent, AkkaAgent[QLAgent]]())
+      old.apply(dyingNLAgent).close
+      map.updated(threadId, old - dyingNLAgent)
+    }}
+    
+//    qlDataMap send { _ - dyingNLAgent }
     // must wait for new agent to be set
-    qlDataMap.await
+    threadDataMap.await
   }
 }
 
@@ -342,11 +368,13 @@ class CreateGroup extends DefaultReporter {
   
   def report(args: Array[Argument], context: Context): AnyRef = {
     
+    val threadId = Thread.currentThread().getId()
+    
     val (nlAgents, qlAgents, alternatives) = args(0).getList.map(entry => {
       val ll = entry.asInstanceOf[LogoList]
       val nlAgent = ll.first.asInstanceOf[org.nlogo.api.Agent]
       val alt = ll.butFirst.first.asInstanceOf[LogoList].map(s => s.asInstanceOf[Double].toInt).toList
-      val qlAgent = QLSystem.qlDataMap.get().get(nlAgent)
+      val qlAgent = QLSystem.threadDataMap.get.getOrElse(threadId, Map[org.nlogo.api.Agent, AkkaAgent[QLAgent]]()).get(nlAgent)
       if (qlAgent.isDefined)
         qlAgent.get send { _.setAlternatives(alt) }
       (nlAgent, qlAgent, alt)
@@ -366,12 +394,15 @@ class NewGroupStructure extends DefaultCommand {
   override def getSyntax = commandSyntax(Array(ListType))
   
   def perform(args: Array[Argument], c: Context) {
+    
+    val threadId = Thread.currentThread().getId()
+    
     val groupStructure = args(0).getList.map(_.asInstanceOf[NLGroup]).toList.map(group => {
       if (group.qlAgents.isEmpty) {
         // find QLAgents to NLAgents
         // this must be done here because when creating a group, the qlAgents may not exist yet
         val newQlAgents = (group.nlAgents zip group.alternatives).map(pair => {
-          val qlAgent = QLSystem.qlDataMap.get().apply(pair._1)
+          val qlAgent = QLSystem.threadDataMap.get.getOrElse(threadId, Map[org.nlogo.api.Agent, AkkaAgent[QLAgent]]()).apply(pair._1)
           qlAgent send { _.setAlternatives(pair._2) }
           qlAgent })
         group.copy(qlAgents = newQlAgents)
@@ -423,7 +454,10 @@ class DecreaseExperimenting extends DefaultCommand {
   override def getSyntax = commandSyntax(Array[Int]())
   
   def perform(args: Array[Argument], c: Context) {
-    QLSystem.qlDataMap.get.values.foreach(_ send {_.startDecreasing} )
+    
+    val threadId = Thread.currentThread().getId()
+    
+    QLSystem.threadDataMap.get.getOrElse(threadId, Map[org.nlogo.api.Agent, AkkaAgent[QLAgent]]()).values.foreach(_ send {_.startDecreasing} )
   }
 }
 
@@ -439,8 +473,11 @@ class OneOf extends DefaultReporter {
   override def getSyntax = reporterSyntax(Array( ListType), NumberType)
   
   def report(args: Array[Argument], context: Context): AnyRef = {
+    
+    val threadId = Thread.currentThread().getId()
+    
     val alternatives = args(0).getList.map(s => s.asInstanceOf[Double].toInt).toList
-    val qlAgent = QLSystem.qlDataMap.get.apply(context.getAgent).await
+    val qlAgent = QLSystem.threadDataMap.get.getOrElse(threadId, Map[org.nlogo.api.Agent, AkkaAgent[QLAgent]]()).apply(context.getAgent).await
     Double.box(qlAgent.choose(alternatives))
   }
 }
@@ -457,9 +494,12 @@ class SetReward extends DefaultCommand {
   override def getSyntax = commandSyntax(Array(NumberType, NumberType))
   
   def perform(args: Array[Argument], context: Context) {
+    
+    val threadId = Thread.currentThread().getId()
+    
     val alternative = args(0).getIntValue
     val reward = args(1).getDoubleValue
-    QLSystem.qlDataMap.get.apply(context.getAgent) send { _.updated(alternative, reward, QLSystem.defaultState)}
+    QLSystem.threadDataMap.get.getOrElse(threadId, Map[org.nlogo.api.Agent, AkkaAgent[QLAgent]]()).apply(context.getAgent) send { _.updated(alternative, reward, QLSystem.defaultState)}
   }
 }
 
@@ -475,11 +515,14 @@ class SetRewardAndState extends DefaultCommand {
   override def getSyntax = commandSyntax(Array(NumberType, NumberType, NumberType))
   
   def perform(args: Array[Argument], context: Context) {
+    
+    val threadId = Thread.currentThread().getId()
+    
     val alternative = args(0).getIntValue
     val reward = args(1).getDoubleValue
     val newState = args(2).getIntValue
     //println("agent " + context.getAgent.id + " chose alternative " + alternative + " and ends up in state " + newState)
-    QLSystem.qlDataMap.get.apply(context.getAgent) send { _.updated(alternative, reward, newState)}
+    QLSystem.threadDataMap.get.getOrElse(threadId, Map[org.nlogo.api.Agent, AkkaAgent[QLAgent]]()).apply(context.getAgent) send { _.updated(alternative, reward, newState)}
   }
 }
 
