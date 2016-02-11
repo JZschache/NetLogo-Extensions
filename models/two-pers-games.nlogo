@@ -101,14 +101,14 @@ to setup
     hatch 1 [ ; create a partner
       setxy (1 + [xcor] of myself) (1 + [ycor] of myself)
       set is-player-x false
-      set group-structure lput (ql:create-group (list (list myself (n-values n-alt-x [(word ?)])) (list self (n-values n-alt-y [(word ?)])))) group-structure
+      set group-structure lput (ql:create-group (list (list myself (n-values n-alt-x [?])) (list self (n-values n-alt-y [?])))) group-structure
       face myself
       set partner self
     ]
     face partner    
   ]
   
-  ql:init turtles experimenting exploration-method
+  ql:init turtles
   ql:set-group-structure group-structure
   
   ask turtles [
@@ -310,7 +310,7 @@ experimenting
 experimenting
 0
 16
-0.2
+0.1
 0.05
 1
 NIL
@@ -337,7 +337,7 @@ INPUTBOX
 395
 175
 means-x
-10  0\n 0 10\n
+10  0\n10  8\n
 1
 1
 String
@@ -369,7 +369,7 @@ INPUTBOX
 625
 330
 fields
-| 1: (10, 0) O | 2: ( 0,10) O |\n| 3: ( 0,10) O | 4: (10, 0) O |\n
+| 1: (10,10) ON| 2: ( 0,10)   |\n| 3: (10, 0)   | 4: ( 8, 8)  N|\n
 1
 1
 String
@@ -398,7 +398,7 @@ INPUTBOX
 575
 175
 means-y
- 0 10\n10  0\n
+10 10\n 0  8\n
 1
 1
 String
@@ -411,7 +411,7 @@ CHOOSER
 game-name
 game-name
 "Custom" "CopyMeansX" "TransposeMeansX" "BattleOfTheSexes" "Chicken" "CollaborationGame" "CoordinationGame" "DispersionGame" "GrabTheDollar" "GuessTwoThirdsAve" "HawkAndDove" "MajorityVoting" "MatchingPennies" "PrisonersDilemma" "RandomGame" "RandomZeroSum" "RockPaperScissors" "ShapleysGame"
-12
+2
 
 BUTTON
 580
@@ -436,7 +436,7 @@ INPUTBOX
 765
 496
 sample-equilibria
-   x1   x2   y1   y2  |   Ex   Ey  |   mx\n----------------------------------------\n  1/2  1/2  1/2  1/2  |    5    5  |    O\n
+ x1 x2 y1 y2  | Ex Ey  | mx\n------------------------\n
 1
 1
 String

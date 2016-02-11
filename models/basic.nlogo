@@ -1,45 +1,42 @@
 extensions[ql]
 
-turtles-own[alternatives q-values frequencies exploration]
+turtles-own[exploration-rate exploration-method alternatives q-values frequencies rel-freqs]
 
 to setup
   clear-all
   create-turtles n-turtles [
     setxy random-xcor random-ycor
+    set exploration-rate global-exploration
+    set exploration-method "epsilon-greedy"
+    ;set exploration-method "Roth-Erev"
+    set alternatives [ 0 1 ]
+    set rel-freqs [0 0]
   ]
-  ql:init turtles exploration-rate "epsilon-greedy"
-  let choices (list "forward" "right")
-  let groups [ql:create-group (list (list self choices))] of turtles  
-  ql:set-group-structure groups
+  ql:init turtles
   reset-ticks
+  ask patches [set pcolor white]
 end
 
-to-report get-rewards [ headless-id ]
-  let group-list ql:get-group-list headless-id
-  let result map [reward ?] group-list
-  report result
-end
-
-to-report reward [group-choice]
-  let agent first ql:get-agents group-choice
-  let decision first ql:get-decisions group-choice
-  ifelse decision = "forward" [
-    ask agent [fd 1]
-    report ql:set-rewards group-choice (list forward-reward)
-  ] [
-    ask agent [right 90]
-    report ql:set-rewards group-choice (list right-reward)
+to go
+  ask turtles [
+    let action ql:one-of [ 0 1 ] 
+    ifelse action = 0 [
+      fd 1
+      ql:set-reward action random-normal forward-reward 1
+    ] [
+      right 90
+      ql:set-reward action random-normal right-reward 1
+    ]
+    let total-freq sum frequencies
+    if (total-freq > 0) [set rel-freqs map [? / total-freq] frequencies ]
   ]
-end
-
-to update
-  tick 
+  tick
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
-360
+355
 20
-782
+777
 463
 -1
 -1
@@ -95,43 +92,26 @@ NIL
 NIL
 1
 
-BUTTON
-240
-55
-350
-88
-NIL
-ql:start
-NIL
-1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
-1
-
 SLIDER
 65
 90
-235
+210
 123
 forward-reward
 forward-reward
 0
 100
-17
+43
 1
 1
 NIL
 HORIZONTAL
 
 SLIDER
-65
-125
-235
-158
+215
+90
+350
+123
 right-reward
 right-reward
 0
@@ -142,33 +122,16 @@ right-reward
 NIL
 HORIZONTAL
 
-BUTTON
-240
-90
-350
-123
-NIL
-ql:stop
-NIL
-1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
-1
-
 SLIDER
 65
 55
 235
 88
-exploration-rate
-exploration-rate
+global-exploration
+global-exploration
 0
 1
-0.05
+0.11
 0.01
 1
 NIL
@@ -176,10 +139,10 @@ HORIZONTAL
 
 PLOT
 65
-165
+170
 350
-315
-mean of Q-values
+320
+Q-values
 NIL
 NIL
 0.0
@@ -190,14 +153,14 @@ true
 true
 "" ""
 PENS
-"qv-forward" 1.0 0 -16777216 true "" "plot mean [first q-values] of turtles"
-"qv-right" 1.0 0 -7500403 true "" "plot mean [last q-values] of turtles"
+"forward" 1.0 0 -16777216 true "" "plot mean [first q-values] of turtles"
+"right" 1.0 0 -7500403 true "" "plot mean [last q-values] of turtles"
 
 BUTTON
 65
-330
-350
-363
+125
+210
+158
 NIL
 ql:decay-exploration
 NIL
@@ -210,13 +173,49 @@ NIL
 NIL
 1
 
-MONITOR
-65
-375
-352
-420
+BUTTON
+240
+55
+350
+88
 NIL
-mean [exploration] of turtles
+go
+T
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+PLOT
+65
+320
+350
+465
+relative frequencies
+NIL
+NIL
+0.0
+10.0
+0.0
+1.0
+true
+true
+"" ""
+PENS
+"forward" 1.0 0 -16777216 true "" "plot mean [first rel-freqs] of turtles"
+"right" 1.0 0 -7500403 true "" "plot mean [last rel-freqs] of turtles"
+
+MONITOR
+215
+125
+350
+170
+mean exploration
+mean [exploration-rate] of turtles
 2
 1
 11
