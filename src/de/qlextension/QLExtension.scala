@@ -105,6 +105,8 @@ class QLExtension extends DefaultClassManager {
   
   override def load(manager: PrimitiveManager) {
     manager.addPrimitive("init", getPrimitive("de.qlearning.Init"))
+    manager.addPrimitive("decay-exploration", getPrimitive("de.qlearning.DecreaseExperimenting"))
+    
     manager.addPrimitive("add-agent", getPrimitive("de.qlearning.AddAgent"))
     manager.addPrimitive("remove-agent", getPrimitive("de.qlearning.RemoveAgent"))
     
@@ -112,7 +114,6 @@ class QLExtension extends DefaultClassManager {
     manager.addPrimitive("set-group-structure", getPrimitive("de.qlearning.NewGroupStructure"))
     manager.addPrimitive("start", getPrimitive("de.qlearning.Start"))
     manager.addPrimitive("stop", getPrimitive("de.qlearning.Stop"))
-    manager.addPrimitive("decay-exploration", getPrimitive("de.qlearning.DecreaseExperimenting"))
     manager.addPrimitive("get-group-list", getPrimitive("de.qlearning.GetGroupList"))
     manager.addPrimitive("get-agents", getPrimitive("de.qlearning.GetAgents"))
     manager.addPrimitive("get-decisions", getPrimitive("de.qlearning.GetDecisions"))

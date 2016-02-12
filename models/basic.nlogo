@@ -68,9 +68,9 @@ SLIDER
 n-turtles
 n-turtles
 0
+10000
+1000
 100
-100
-1
 1
 NIL
 HORIZONTAL

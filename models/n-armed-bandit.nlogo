@@ -1,16 +1,16 @@
 extensions[ql]
-patches-own[ exploration-rate q-values ]
+patches-own[ exploration-rate exploration-method q-values ]
 
 to setup
   clear-all
   set-patch-size 400 / n-patches  
   resize-world 0 (n-patches - 1) 0 (n-patches - 1)
   ask patches [
-    set exploration-rate experimenting
+    set exploration-rate global-exploration
+    set exploration-method "epsilon-greedy"
   ]
   ql:init patches
-  let choices [0 1]
-  let groups [ql:create-group (list (list self choices))] of patches
+  let groups [ql:create-group (list (list self [0 1]))] of patches
   ql:set-group-structure groups
   reset-ticks
 end
@@ -20,15 +20,15 @@ to-report get-rewards [ headless-id ]
   report map [reward ?] group-list
 end
 
-to-report reward [group-choice]
-  let agent first ql:get-agents group-choice
-  let decision first ql:get-decisions group-choice
+to-report reward [group]
+  let agent first ql:get-agents group
+  let decision first ql:get-decisions group
   ifelse decision = 0 [
     ask agent [set pcolor blue]
-    report ql:set-rewards group-choice (list random-normal mean-1 sd)
+    report ql:set-rewards group (list random-normal alt-1-reward 1)
   ] [
     ask agent [set pcolor red]
-    report ql:set-rewards group-choice (list random-normal mean-2 sd)
+    report ql:set-rewards group (list random-normal alt-2-reward 1)
   ]
 end
 
@@ -43,7 +43,7 @@ GRAPHICS-WINDOW
 466
 -1
 -1
-8.0
+2.0
 1
 10
 1
@@ -54,9 +54,9 @@ GRAPHICS-WINDOW
 1
 1
 0
-49
+199
 0
-49
+199
 0
 0
 1
@@ -66,13 +66,13 @@ ticks
 SLIDER
 50
 35
-222
+220
 68
 n-patches
 n-patches
 0
 200
-50
+200
 1
 1
 ^2
@@ -114,14 +114,14 @@ NIL
 
 SLIDER
 50
-140
-222
-173
-mean-1
-mean-1
+105
+220
+138
+alt-1-reward
+alt-1-reward
 0
-100
-50
+10
+5
 1
 1
 NIL
@@ -129,14 +129,14 @@ HORIZONTAL
 
 SLIDER
 50
-175
-222
-208
-mean-2
-mean-2
+140
+220
+173
+alt-2-reward
+alt-2-reward
 0
-100
-75
+10
+7
 1
 1
 NIL
@@ -162,10 +162,10 @@ NIL
 SLIDER
 50
 70
-222
+220
 103
-experimenting
-experimenting
+global-exploration
+global-exploration
 0
 1
 0.05
@@ -174,27 +174,12 @@ experimenting
 NIL
 HORIZONTAL
 
-SLIDER
-50
-105
-222
-138
-sd
-sd
-0
-100
-10
-0.1
-1
-NIL
-HORIZONTAL
-
 PLOT
 50
-215
+175
 350
-365
-means of qv-1 and qv-2
+345
+Q-values
 NIL
 NIL
 0.0
@@ -205,8 +190,8 @@ true
 true
 "" ""
 PENS
-"qv-1" 1.0 0 -16777216 true "" "plot mean [first q-values] of patches"
-"qv-2" 1.0 0 -7500403 true "" "plot mean [last q-values] of patches"
+"alt-1" 1.0 0 -16777216 true "" "plot mean [first q-values] of patches"
+"alt-2" 1.0 0 -7500403 true "" "plot mean [last q-values] of patches"
 
 MONITOR
 50
@@ -647,7 +632,8 @@ NetLogo 5.2.0
   <experiment name="performance-experiment" repetitions="10" runMetricsEveryStep="false">
     <setup>setup
 ql:start</setup>
-    <final>ql:stop</final>
+    <final>ql:stop
+wait 1</final>
     <exitCondition>ticks &gt; 1000</exitCondition>
     <metric>ql:get-performance "HundredTicks"</metric>
     <metric>ql:get-performance "NLSuperIdle"</metric>
@@ -669,23 +655,20 @@ ql:start</setup>
     <metric>ql:get-performance "HeadlessIdle 4"</metric>
     <metric>ql:get-performance "HeadlessHandleGroups 4"</metric>
     <metric>ql:get-performance "HeadlessHandleChoices 4"</metric>
-    <enumeratedValueSet variable="sd">
-      <value value="10"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="mean-1">
-      <value value="50"/>
-    </enumeratedValueSet>
     <enumeratedValueSet variable="n-patches">
       <value value="50"/>
       <value value="100"/>
       <value value="150"/>
       <value value="200"/>
     </enumeratedValueSet>
-    <enumeratedValueSet variable="mean-2">
-      <value value="75"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="experimenting">
+    <enumeratedValueSet variable="global-exploration">
       <value value="0.05"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="alt-1-reward">
+      <value value="5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="alt-2-reward">
+      <value value="7"/>
     </enumeratedValueSet>
   </experiment>
 </experiments>
