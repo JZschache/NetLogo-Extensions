@@ -1,6 +1,6 @@
 extensions[ql games]
 
-turtles-own[ q-values frequencies rel-freqs exploration q-values-std last-action last-field]
+turtles-own[ q-values frequencies rel-freqs exploration-rate exploration-method q-values-std last-action last-field]
 globals[ game means-x-matrix means-y-matrix means-max groups group-structure rel-freq-0 rel-freq-1 nextTick next-groups updated]
 
 to-report read-means-matrix
@@ -67,7 +67,7 @@ to setup
   set groups []
   set-default-shape turtles "circle"
   create-turtles n-groups [
-    set size 0.2
+    set size 0.1
     let group (list self)
     hatch group-size - 1 [ ; create partners
       set group lput self group
@@ -77,8 +77,13 @@ to setup
   ; reset global
   set n-agents count turtles
   
+  ask turtles [
+    set exploration-rate global-exploration
+    set exploration-method "epsilon-greedy"
+  ]
+  
   ; it is important that the ql-extension is initialised before the groups are created (because of the dynamic group structure)
-  ql:init turtles experimenting exploration-method
+  ql:init turtles
   
   set group-structure []
   (foreach groups (n-values n-groups [floor (? / 3)]) (n-values n-groups [? mod 3]) [
@@ -95,15 +100,15 @@ to setup
             set anotherTurtle one-of other (turtle-set group-members) with [ not member? self neighbors ]
           ]
           create-link-with  anotherTurtle
-          set group-structure lput (ql:create-group (list (list self (n-values n-alt [(word ?)])) (list anotherTurtle (n-values n-alt [(word ?)])) )) group-structure
+          set group-structure lput (ql:create-group (list (list self (n-values n-alt [?])) (list anotherTurtle (n-values n-alt [?])) )) group-structure
         ]
       ]
       set i i + 1
     ]
-    layout-circle group-members 1.5
-    let rxc (1 - ?2) * 3.5
-    let ryc (1 - ?3) * 3.5
-    foreach group-members [ ask ? [ setxy xcor + rxc ycor + ryc]]
+    layout-circle group-members 1
+    ;let rxc (1 - ?2) * 3.5
+    ;let ryc (1 - ?3) * 3.5
+    ;foreach group-members [ ask ? [ setxy xcor + rxc ycor + ryc]]
   ])
   
   set next-groups n-of floor (n-agents / 2) group-structure
@@ -140,8 +145,8 @@ to-report reward [group-choice]
   let agents ql:get-agents group-choice
   let decisions ql:get-decisions group-choice
   
-  let dec-x (read-from-string first decisions) 
-  let dec-y (read-from-string last decisions)
+  let dec-x first decisions
+  let dec-y last decisions
   
   let field dec-x * n-alt + dec-y
   ask first agents [
@@ -204,7 +209,7 @@ end
 to-report filter? [ n total-n ]
   let expectation 0.05
   if (exploration-method = "epsilon-greedy") [
-    set expectation experimenting / n-alt
+    set expectation exploration-rate / n-alt
   ]
   report 2.33 < (n / total-n - expectation) * (sqrt total-n) / (sqrt (expectation * (1 - expectation)))
 end
@@ -212,11 +217,11 @@ end
 GRAPHICS-WINDOW
 775
 25
-1330
-601
+1450
+721
 -1
 -1
-45.45454545454545
+166.66666666666666
 1
 10
 1
@@ -227,9 +232,9 @@ GRAPHICS-WINDOW
 1
 1
 0
-11
+3
 0
-11
+3
 0
 0
 1
@@ -245,7 +250,7 @@ n-agents
 n-agents
 0
 10000
-450
+20
 10
 1
 NIL
@@ -305,10 +310,10 @@ NIL
 SLIDER
 30
 60
-215
+227
 93
-experimenting
-experimenting
+global-exploration
+global-exploration
 0
 16
 0.1
@@ -338,20 +343,10 @@ INPUTBOX
 395
 175
 means-x
- 8  0\n10  2\n
+10  0\n 0  2\n
 1
 1
 String
-
-CHOOSER
-30
-95
-215
-140
-exploration-method
-exploration-method
-"epsilon-greedy" "softmax"
-0
 
 INPUTBOX
 220
@@ -359,7 +354,7 @@ INPUTBOX
 625
 290
 fields
-| 1: ( 8, 8) O | 2: ( 0,10) O |\n| 3: (10, 0) O | 4: ( 2, 2)  N|\n
+| 1: (10,10) ON| 2: ( 0, 0)   |\n| 3: ( 0, 0)   | 4: ( 2, 2)  N|\n
 1
 1
 String
@@ -390,7 +385,7 @@ CHOOSER
 game-name
 game-name
 "TransposeMeansX" "Chicken" "DispersionGame" "GrabTheDollar" "GuessTwoThirdsAve" "HawkAndDove" "PrisonersDilemma" "RockPaperScissors" "ShapleysGame"
-6
+0
 
 BUTTON
 580
@@ -415,7 +410,7 @@ INPUTBOX
 765
 425
 sample-equilibria
- x1 x2 y1 y2  | Ex Ey  | mx\n------------------------\n
+   x1   x2   y1   y2  |   Ex   Ey  |   mx\n----------------------------------------\n  1/6  5/6  1/6  5/6  |  5/3  5/3  |     \n
 1
 1
 String
@@ -470,7 +465,7 @@ MONITOR
 217
 190
 mean [exploration]
-mean [exploration] of turtles
+mean [exploration-rate] of turtles
 5
 1
 11

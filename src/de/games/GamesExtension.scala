@@ -10,8 +10,8 @@ import de.util.Rational._
 
 object GamesExtension {
   
-  private def lines(n: Int) = (0 until n).foldLeft("")((str, el) => str + "-")
-  private def spaces(n: Int) = (0 until n).foldLeft("")((str, el) => str + " ")
+  private def lines(n: Int, line:String) = (0 until n).foldLeft("")((str, el) => str + line)
+  private def spaces(n: Int, offset:String) = (0 until n).foldLeft("")((str, el) => str + offset)
   
   /**
    * prints the solutions of a game in a table with header
@@ -19,7 +19,7 @@ object GamesExtension {
    * withExpectations includes the expected values and indicator of optimality (optimalInd)
    * 
    */
-  def printSolutions(game: TwoPersonsGame, withExpectations: Boolean, optimalInd:String =  "O"): String = {
+  def printSolutions(game: TwoPersonsGame, offset:String, withExpectations: Boolean, optimalInd:String =  "O"): String = {
     
     val expectations = game.mixedSolutions.map(row => {
       val (x, y) = row.map(_._2).splitAt(game.pm1.nrow)
@@ -31,6 +31,8 @@ object GamesExtension {
     val pureExpectations = game.pm1.content zip game.pm2.content
     val mpf = new MaximalPairFinder(expectations ++ pureExpectations)
     
+    //val prettySol = game.mixedSolutions.map(_.map(_._2.pretty))
+    //val prettyExp = expectations.map(p => (p._1.pretty, p._2.pretty))
     val prettySol = game.mixedSolutions.map(_.map(_._2.pretty))
     val prettyExp = expectations.map(p => (p._1.pretty, p._2.pretty))
     
@@ -41,21 +43,20 @@ object GamesExtension {
                       maxLengthSol
     
     val colLength = if (withExpectations) game.pm1.nrow + game.pm1.ncol + 4 else game.pm1.nrow + game.pm1.ncol
-    val header = (1 to game.pm1.nrow).foldLeft("")((a,b) => a + spaces(maxLength) + "x" + b ) +  
-                 (1 to game.pm1.ncol).foldLeft("")((a,b) => a + spaces(maxLength) + "y" + b ) + 
+    val header = (1 to game.pm1.nrow).foldLeft("")((a,b) => a + spaces(maxLength, offset) + "x" + b ) +  
+                 (1 to game.pm1.ncol).foldLeft("")((a,b) => a + spaces(maxLength, offset) + "y" + b ) + 
                  (if (withExpectations) 
-                   "  |" + spaces(maxLength) + "Ex" + spaces(maxLength) + "Ey" + "  |" + spaces(maxLength)  + "mx" 
+                   "  |" + spaces(maxLength, offset) + "Ex" + spaces(maxLength, offset) + "Ey" + offset + "|" + spaces(maxLength, offset)  + "mx" 
                  else 
-                   "") +  "\n" + 
-                 (1 to colLength).foldLeft("")((a,b) => a + lines(maxLength + 2) ) + "\n"
+                   "") +  "\n\n"
 
     if (withExpectations) {
       header + (prettySol, prettyExp, mpf.maximaIndices.take(prettyExp.length)).zipped.foldLeft("")((st, row) => st + 
-        row._1.foldLeft("")((a,b) => a + spaces(maxLength - b.size + 2) + b ) +
-        "  |" + spaces(maxLength - row._2._1.size + 2) + row._2._1 + spaces(maxLength - row._2._2.size + 2) + row._2._2 + "  |" +
-             spaces(maxLength + 1) + (if (row._3) optimalInd else " ") + "\n")
+        row._1.foldLeft("")((a,b) => a + spaces(maxLength - b.size + 2, offset) + b ) +
+        "  |" + spaces(maxLength - row._2._1.size + 2, offset) + row._2._1 + spaces(maxLength - row._2._2.size + 2, offset) + row._2._2 + offset + "|" +
+             spaces(maxLength + 1, offset) + (if (row._3) optimalInd else " ") + "\n")
     } else {
-      header + prettySol.foldLeft("")((st, row) => st + row.foldLeft("")((a,b) => a + spaces(maxLength - b.size + 2) + b ) + "\n")
+      header + prettySol.foldLeft("")((st, row) => st + row.foldLeft("")((a,b) => a + spaces(maxLength - b.size + 2, offset) + b ) + "\n")
     }
   }
 }
@@ -73,8 +74,8 @@ class GamesExtension extends DefaultClassManager {
     manager.addPrimitive("two-persons-gamut-game", new GetTwoPersonsGamutGame)
     // reporters on game objects
     manager.addPrimitive("game-matrix", new GetGameMatrix)
-    manager.addPrimitive("game-pure-solutions", new GetGamePureSolutions)
-    manager.addPrimitive("game-pure-optima", new GetGamePureOptima)
+    manager.addPrimitive("pure-solutions", new GetGamePureSolutions)
+    manager.addPrimitive("pure-optima", new GetGamePureOptima)
     manager.addPrimitive("get-solutions-string", new GetSolutionsString)
 //    manager.addPrimitive("get-solutions-string-with-expect", new GetSolutionsStringWithExpectations)
     manager.addPrimitive("get-fields-string", new GetFieldsString)
@@ -157,9 +158,9 @@ class PayoffMatrix(val content: List[Rational], val nrow:Int, val ncol:Int) exte
   // note that entries are assumed to be integers
   private val pretty = content.map(_.floor)
   private val maxLength = pretty.max.toString.size
-  private def getPrettyRow(row:Int) = pretty.drop(row * ncol).take(ncol).map(p => 
-    (0 until (maxLength - p.toString.size)).foldLeft("")((str, el) => str + " ") + p)
-  def getPrettyRows = (0 until nrow).map(i => getPrettyRow(i)).toList
+  private def getPrettyRow(row:Int, offset:String) = pretty.drop(row * ncol).take(ncol).map(p => 
+    (0 until (maxLength - p.toString.size)).foldLeft("")((str, el) => str + offset) + p)
+  def getPrettyRows(offset:String) = (0 until nrow).map(i => getPrettyRow(i,offset)).toList
   
 }
 
@@ -237,11 +238,12 @@ class GetMatrixTranspose extends DefaultReporter {
 class GetMatrixAsPrettyStrings extends DefaultReporter {
   
   override def getAgentClassString = "O"
-  override def getSyntax = reporterSyntax(Array[Int](WildcardType), ListType)
+  override def getSyntax = reporterSyntax(Array[Int](WildcardType, StringType), ListType)
   
   def report(args: Array[Argument], c: Context): AnyRef = {
     val pm = args(0).get.asInstanceOf[PayoffMatrix]
-    pm.getPrettyRows.toLogoList
+    val offset = args(1).getString
+    pm.getPrettyRows(offset).toLogoList
   }
 }
 
@@ -352,24 +354,26 @@ class GetGamePureOptima extends DefaultReporter {
 class GetSolutionsString extends DefaultReporter {
   
   override def getAgentClassString = "O"
-  override def getSyntax = reporterSyntax(Array[Int](WildcardType), ListType)
+  override def getSyntax = reporterSyntax(Array[Int](WildcardType, StringType), ListType)
   
   def report(args: Array[Argument], c: Context): AnyRef = {
     val game = args(0).get.asInstanceOf[TwoPersonsGame]
-    GamesExtension.printSolutions(game, true).toLogoObject
+    val offset = args(1).getString
+    GamesExtension.printSolutions(game, offset, true).toLogoObject
   }
 }
 
 class GetFieldsString extends DefaultReporter {
   
   override def getAgentClassString = "O"
-  override def getSyntax = reporterSyntax(Array[Int](WildcardType), ListType)
+  override def getSyntax = reporterSyntax(Array[Int](WildcardType, StringType), ListType)
   
-  private def spaces(n: Int) = (0 until n).foldLeft("")((str, el) => str + " ")
+  private def spaces(n: Int, offset: String) = (0 until n).foldLeft("")((str, el) => str + offset)
   
   def report(args: Array[Argument], c: Context): AnyRef = {
   
     val game = args(0).get.asInstanceOf[TwoPersonsGame]
+    val offset = args(1).getString
     
     val pureExpectations = game.pm1.content zip game.pm2.content
     val mpf = new MaximalPairFinder(pureExpectations)
@@ -383,10 +387,10 @@ class GetFieldsString extends DefaultReporter {
     
     val stringList = (1 to game.pm1.content.length).map(i => { 
       val (x,y) = pureExpectations(i - 1)
-      spaces(maxLengthNr + 1 - i.toString.length()) + i + ": (" + 
-      spaces(maxLengthEntries - x.floor.toString.length()) + x.floor + "," + 
-      spaces(maxLengthEntries - y.floor.toString().length()) + y.floor + ") " + 
-      (if (isMaxima(i - 1)) "O" else " ") + (if (isSolution(i - 1)) "N" else " ")
+      spaces(maxLengthNr + 1 - i.toString.length(), offset) + i + ":" + offset + "(" + 
+      spaces(maxLengthEntries - x.floor.toString.length(), offset) + x.floor + "," + 
+      spaces(maxLengthEntries - y.floor.toString().length(), offset) + y.floor + ")" + offset +  
+      (if (isMaxima(i - 1)) "O" else offset) + (if (isSolution(i - 1)) "N" else offset)
     })
     
     val result = stringList.foldLeft(("", 1))((r, el) => if (r._2 == game.pm1.ncol) (r._1 + "|" + el + "|\n", 1 ) else (r._1 + "|" + el , r._2 + 1))._1

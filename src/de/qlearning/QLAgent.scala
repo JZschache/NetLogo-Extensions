@@ -39,11 +39,17 @@ object QLAgent {
   /**
    *  the QValue (immutable) as used by Roth-Erev
    */ 
-  class QValueSum(val state: Int, val id: Int, val freq: Double, val value: Double) extends QValue {
+  class QValueSum(val state: Int, val id: Int, val freq: Double, val value: Double, val sum: Double) extends QValue {
     
-    def updatedChosen(amount: Double, epsilon: Double) = new QValueSum(state, id, freq + 1.0, value + (1.0 - epsilon) * amount)
+    def updatedChosen(amount: Double, epsilon: Double) = {
+      //println("new Sum (chosen): " + (value + (1.0 - epsilon) * amount))
+      new QValueSum(state, id, freq + 1.0, value + (1.0 / (freq + 1.0)) * (amount - value), sum + (1.0 - epsilon) * amount)
+    }
     
-    def updatedUnchosen(amount: Double, epsilon: Double) = new QValueSum(state, id, freq, value + epsilon * amount)
+    def updatedUnchosen(amount: Double, epsilon: Double) = {
+      //println("new Sum (unchosen): " + (value + epsilon * amount))
+      new QValueSum(state, id, freq, value, sum + epsilon * amount)
+    }
         
   }
 
@@ -88,7 +94,7 @@ object QLAgent {
         (exploration match {
           case "epsilon-greedy" => (state: Int, alt: Int) => new QValueAvg(state, alt, 0.0, 0.0, gamma)
           case "softmax" => (state: Int, alt: Int) => new QValueAvg(state, alt, 0.0, 0.0, gamma)
-          case "Roth-Erev" => (state: Int, alt: Int) => new QValueSum(state, alt, 0.0, 1.0)
+          case "Roth-Erev" => (state: Int, alt: Int) => new QValueSum(state, alt, 0.0, 0.0, 1.0)
         }),
         (exploration match {
           case "epsilon-greedy" => updatedQValues(gamma, _:Int, _: Int, _: Double, _: Int, _: Map[Int, Map[Int, QLAgent.QValue]], _: Double)
@@ -130,11 +136,21 @@ object QLAgent {
     expForm.find(randomValue < _._2).get._1
   }
   
-  private val rothErev = (_: Double, qValues: Iterable[QValue])  => {
+  private val rothErev = (epsilon: Double, qValues: Iterable[QValue])  => {
     val rh = de.util.ThreadLocalRandomHelper.current
-    val sumForm = qValues.scanLeft((0, 0.0))((result, qva) => (qva.id, result._2 + qva.value)).tail
+    val sumForm = qValues.scanLeft((0, 0.0))((result, qva) => (qva.id, result._2 + Math.max(qva.asInstanceOf[QValueSum].sum, 0))).tail
     val randomValue = rh.uniform.nextDoubleFromTo(0, sumForm.last._2)
-    sumForm.find(randomValue < _._2).get._1
+    //println("sumForm: " + sumForm)
+    try {
+      sumForm.find(randomValue <= _._2).get._1
+    } catch {
+      case ex: java.util.NoSuchElementException => {
+        println("sumForm: " + sumForm)
+        println("randomValue: " + randomValue)
+        println("sumForm.find(randomValue < _._2): " + sumForm.find(randomValue < _._2))
+        throw ex
+      }
+    }
   }
     
   ////////////////////////////////////////////////////////
@@ -233,7 +249,9 @@ case class QLAgent(state:Int, qValuesMap: Map[Int, Map[Int, QLAgent.QValue]],
   def choose(alternatives: List[Int]): Int = {
     val qValuesMapEntry = qValuesMap.getOrElse(state, Map[Int, QLAgent.QValue]())
     val qValues = alternatives.map(key => qValuesMapEntry.getOrElse(key, newQValue(state, key)))
-    choiceAlg(nDecayMap.getOrElse(state, 1.0), qValues)
+    val choice = choiceAlg(nDecayMap.getOrElse(state, 1.0), qValues)
+    //println(choice)
+    choice
   }
   
   /**

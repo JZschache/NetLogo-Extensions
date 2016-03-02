@@ -185,6 +185,8 @@ class NetLogoSupervisor(netLogoRouter: ActorRef) extends Actor with FSM[NetLogoS
     
     case Event(Tick, d: InitializedTrait) => {
       
+//      println("tick")
+      
       val time1 = scala.compat.Platform.currentTime
       QLSystem.perfMeasures.stopNlSuperIdlePerf(time1)
       QLSystem.perfMeasures.startNlSuperHandleGroupsPerf(time1)

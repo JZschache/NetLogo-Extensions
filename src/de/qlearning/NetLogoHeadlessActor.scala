@@ -80,18 +80,24 @@ class NetLogoHeadlessActor(val id: Int) extends Actor with FSM[NetLogoHeadlessAc
     // can only be received in state Ready
     case Event(NetLogoSupervisor.NLGroupsList(_, groups), _) => {
       
+//      println(id + ": groups: " + groups)
+      
       val time1 = scala.compat.Platform.currentTime
       QLSystem.perfMeasures.stopHeadlessIdlePerf(id, time1)
       QLSystem.perfMeasures.startHeadlessHandleGroupsPerf(id, time1)
       
       Future.sequence(groups.map(group => Future.sequence((group.qlAgents zip group.alternatives).map(pair => 
         pair._1.future map {_.choose(pair._2)}
-      )))) onSuccess {
-        case list =>  {
+      )))) onComplete {
+        case Right(list) =>  {
+//          println(id + ": success: " + list)
           // forward choices of agents to self
           val groupsChoices = (groups zip list).map(pair => NLGroupChoice(pair._1.nlAgents, pair._1.qlAgents, pair._2, Nil, Nil))
+//          println(id + ": groupsChoices: " + groupsChoices)
           self ! NLGroupChoicesList(groupsChoices)
         }
+        case Left(failure) =>
+          failure.printStackTrace()
       }
       
       val time2 = scala.compat.Platform.currentTime
@@ -113,20 +119,23 @@ class NetLogoHeadlessActor(val id: Int) extends Actor with FSM[NetLogoHeadlessAc
     
     case Event(NLGroupChoicesList(list), Initialized(reporter, _)) => {
       
+//      println(id + ": list: " + list)
+      
       val time1 = scala.compat.Platform.currentTime
       QLSystem.perfMeasures.stopHeadlessIdlePerf(id, time1)
       QLSystem.perfMeasures.startHeadlessHandleChoicesPerf(id, time1)
             
       Future {
           workspace.runCompiledReporter(workspace.defaultOwner, reporter).asInstanceOf[org.nlogo.api.LogoList]
-      } onSuccess {
-        case result =>
+      } onComplete {
+        case Right(result) =>
           result.foreach(ar => {
             // forwards rewards to agents
             val groupChoice = ar.asInstanceOf[NLGroupChoice]
             val ars = (groupChoice.choices, groupChoice.rewards, groupChoice.newStates).zipped.map((a,r,s) => (a,r,s))
             (groupChoice.qlAgents, ars).zipped.foreach((agent, ars) => agent send {_.updated(ars._1, ars._2, ars._3) }) 
           })
+        case Left(failure) => failure.printStackTrace()
       }
       
       val time2 = scala.compat.Platform.currentTime
