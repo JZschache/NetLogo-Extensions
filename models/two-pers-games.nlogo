@@ -217,8 +217,8 @@ end
 GRAPHICS-WINDOW
 890
 25
-1398
-554
+1400
+556
 -1
 -1
 100.0
@@ -3195,6 +3195,47 @@ wait 1</final>
     </enumeratedValueSet>
     <enumeratedValueSet variable="game-name">
       <value value="&quot;Custom&quot;"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="exp-two-persons-prisoner-test" repetitions="100" runMetricsEveryStep="false">
+    <setup>set-game
+setup
+ql:start</setup>
+    <go>wait-for-tick</go>
+    <final>ql:stop
+wait 1</final>
+    <exitCondition>ticks &gt; 1000</exitCondition>
+    <metric>fields</metric>
+    <metric>rel-freq-optimal</metric>
+    <metric>rel-freq-nash</metric>
+    <metric>mean [q-values-std] of turtles</metric>
+    <metric>mean [exploration-rate] of turtles</metric>
+    <metric>count turtles with [is-player-x and last-action = 0]</metric>
+    <metric>count turtles with [is-player-x and last-action = 1]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 0]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 1]</metric>
+    <metric>count turtles with [last-field = 0]</metric>
+    <metric>count turtles with [last-field = 1]</metric>
+    <metric>count turtles with [last-field = 2]</metric>
+    <metric>count turtles with [last-field = 3]</metric>
+    <enumeratedValueSet variable="global-exploration-method">
+      <value value="&quot;epsilon-greedy&quot;"/>
+      <value value="&quot;Roth-Erev&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="n-pairs">
+      <value value="1000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="sd">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="means-x">
+      <value value="&quot; 5 0\n 10 2&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="global-exploration">
+      <value value="0.1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="game-name">
+      <value value="&quot;TransposeMeansX&quot;"/>
     </enumeratedValueSet>
   </experiment>
 </experiments>

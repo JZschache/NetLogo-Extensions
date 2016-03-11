@@ -1,51 +1,71 @@
 extensions[ql]
 
-patches-own[ is-best q-values frequencies rel-freqs q-values-std last-action]
+patches-own[ is-best exploration-rate exploration-method q-values frequencies rel-freqs q-values-std last-action]
 globals[ alternatives patches-list n-groups next-groups updated nextTick no-coop ]
 
 to setup
   clear-all
   set-patch-size 400 / n-patches  
   resize-world 0 (n-patches - 1) 0 (n-patches - 1)
-  ql:init patches experimenting "epsilon-greedy"
-  
+
   ask patches [
+    set exploration-rate global-exploration
+    set exploration-method  "epsilon-greedy"
     set rel-freqs [0 0]
-    ifelse (random 2 = 1) [set pcolor blue] [set pcolor red]
+    ifelse (random 2 = 1) [
+      set last-action 0
+      set pcolor blue
+    ] [
+      set last-action 1
+      set pcolor red
+    ]
     set is-best (random 2 = 1)
   ]
   
-  set alternatives ["C" "D"]
+  ql:init patches 
+ 
+  set alternatives [0 1]
   set patches-list [self] of patches
-  set n-groups floor (n-patches ^ 2 / group-size)
-  set next-groups get-next-groups n-groups
+  ifelse not sample-population [
+    set n-groups floor (n-patches ^ 2 / (group-size * sample-size-multiplier) )
+  ][
+    set n-groups floor (n-patches ^ 2 / group-size)
+  ]
+  set next-groups get-next-groups
   set updated true  
   set nextTick 0
   set no-coop 0
-    
+  
   reset-ticks
 end
 
-to-report get-next-groups [number]
-  ifelse spatial [
+to-report get-next-groups
+  ifelse not sample-population [
     ;report map [ ql:create-group map [(list ? alternatives)] (get-close-patches ?) ] n-of number patches-list
     let group-structure []
     let fixed-patches patches-list
     let i 0
-    while [i < number] [
+    while [i < n-groups] [
+      let startidx i * group-size * sample-size-multiplier
+      let endidx (i + 1) * group-size * sample-size-multiplier
+      let sample shuffle sublist fixed-patches startidx endidx
+      let j 0
+      while [ j < (group-size * sample-size-multiplier) ] [
+        set group-structure lput (ql:create-group map [(list ? alternatives)] sublist sample j (j + group-size)) group-structure
+        set j j + group-size 
+      ]
       set i i + 1
-      set group-structure lput ql:create-group map [(list ? alternatives)] sublist fixed-patches 0 group-size group-structure
-      set fixed-patches sublist fixed-patches group-size length fixed-patches
     ]
     report group-structure
   ][
     let group-structure []
     let random-patches shuffle patches-list
     let i 0
-    while [i < number] [
+    while [i < n-groups] [
+      let startidx i * group-size
+      let endidx (i + 1) * group-size
+      set group-structure lput (ql:create-group map [(list ? alternatives)] sublist random-patches startidx endidx) group-structure
       set i i + 1
-      set group-structure lput ql:create-group map [(list ? alternatives)] sublist random-patches 0 group-size group-structure
-      set random-patches sublist random-patches group-size length random-patches
     ]
     report group-structure
   ]
@@ -57,7 +77,7 @@ to-report get-groups
     report next-groups
   ] [
     set updated false
-    report get-next-groups n-groups
+    report get-next-groups
   ]
 end
 
@@ -74,7 +94,7 @@ to-report reward [group-choice]
   let decisions ql:get-decisions group-choice
   (foreach agents decisions [
     ask ?1 [
-      ifelse (?2 = "C") [ 
+      ifelse (?2 = 0) [ 
         set last-action 0
         set pcolor blue
       ] [
@@ -84,14 +104,14 @@ to-report reward [group-choice]
     ]
   ])
   
-  ifelse (member? "C" decisions) [
+  ifelse (member? 0 decisions) [
     ifelse asymmetric [
       report ql:set-rewards group-choice (map [
-        ifelse-value (?1 = "C") [ 
+        ifelse-value (?1 = 0) [ 
           ifelse-value ([is-best] of ?2) [C-reward - (C-costs / 2)] [C-reward - C-costs] ] [ C-reward ] 
       ] decisions agents)
     ][
-      report ql:set-rewards group-choice map [ ifelse-value (? = "C") [ C-reward - C-costs ] [ C-reward ] ] decisions
+      report ql:set-rewards group-choice map [ ifelse-value (? = 0) [ C-reward - C-costs ] [ C-reward ] ] decisions
     ]
   ] [
     report ql:set-rewards group-choice map [default-reward] decisions
@@ -102,7 +122,7 @@ end
 to wait-for-tick
   set nextTick nextTick + 1
   while [ticks < nextTick] [
-    set next-groups get-next-groups n-groups
+    set next-groups get-next-groups
     set updated true
   ]
   ;while [ticks < nextTick] [ 
@@ -111,7 +131,7 @@ to wait-for-tick
 end
 
 to update
-  ;update-slow
+  update-slow
   tick
 end
 
@@ -141,7 +161,7 @@ end
 to-report filter? [ n total-n ]
   let expectation 0.05
   if (exploration-method = "epsilon-greedy") [
-    set expectation experimenting / 2
+    set expectation exploration-rate / 2
   ]
   report 2.33 < (n / total-n - expectation) * (sqrt total-n) / (sqrt (expectation * (1 - expectation)))
 end
@@ -153,7 +173,7 @@ GRAPHICS-WINDOW
 456
 -1
 -1
-20.0
+4.0
 1
 10
 1
@@ -164,9 +184,9 @@ GRAPHICS-WINDOW
 1
 1
 0
-19
+99
 0
-19
+99
 0
 0
 1
@@ -182,7 +202,7 @@ n-patches
 n-patches
 1
 100
-20
+100
 1
 1
 ^2
@@ -244,8 +264,8 @@ SLIDER
 60
 215
 93
-experimenting
-experimenting
+global-exploration
+global-exploration
 0
 16
 0.1
@@ -253,16 +273,6 @@ experimenting
 1
 NIL
 HORIZONTAL
-
-CHOOSER
-30
-95
-215
-140
-exploration-method
-exploration-method
-"epsilon-greedy" "softmax"
-0
 
 PLOT
 30
@@ -320,7 +330,7 @@ group-size
 group-size
 2
 10
-3
+2
 1
 1
 NIL
@@ -367,7 +377,7 @@ C-costs
 C-costs
 1
 C-reward - 1
-3
+2
 1
 1
 NIL
@@ -396,12 +406,12 @@ no-coop / n-groups
 11
 
 SWITCH
-220
-170
-390
-203
-spatial
-spatial
+30
+95
+215
+128
+sample-population
+sample-population
 1
 1
 -1000
@@ -431,7 +441,7 @@ SWITCH
 203
 asymmetric
 asymmetric
-0
+1
 1
 -1000
 
@@ -473,7 +483,22 @@ default-reward
 default-reward
 0
 10
-0
+2
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+30
+130
+215
+163
+sample-size-multiplier
+sample-size-multiplier
+1
+5
+1
 1
 1
 NIL
@@ -952,32 +977,33 @@ wait 1</final>
     </enumeratedValueSet>
     <steppedValueSet variable="group-size" first="2" step="1" last="10"/>
   </experiment>
-  <experiment name="exp-volunteers-goeree" repetitions="1" runMetricsEveryStep="false">
+  <experiment name="exp-volunteers-goeree" repetitions="1" runMetricsEveryStep="true">
     <setup>setup
 ql:start</setup>
-    <go>if ticks &gt; 990 [ update-slow ]
-wait-for-tick</go>
+    <go>wait-for-tick</go>
     <final>ql:stop
 wait 1</final>
-    <exitCondition>ticks &gt; 1000</exitCondition>
+    <exitCondition>ticks &gt; 20</exitCondition>
+    <metric>ticks</metric>
+    <metric>nextTick</metric>
     <metric>mean [q-values-std] of patches</metric>
     <metric>count patches with [last-action = 0]</metric>
     <metric>no-coop</metric>
-    <metric>[first rel-freqs] of patches</metric>
     <enumeratedValueSet variable="n-patches">
       <value value="100"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="exploration-method">
-      <value value="&quot;epsilon-greedy&quot;"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="asymmetric">
       <value value="false"/>
     </enumeratedValueSet>
-    <enumeratedValueSet variable="spatial">
+    <enumeratedValueSet variable="sample-population">
       <value value="false"/>
       <value value="true"/>
     </enumeratedValueSet>
-    <enumeratedValueSet variable="experimenting">
+    <enumeratedValueSet variable="sample-size-multiplier">
+      <value value="1"/>
+      <value value="4"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="global-exploration">
       <value value="0.05"/>
       <value value="0.1"/>
       <value value="0.2"/>

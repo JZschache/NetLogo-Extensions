@@ -20,7 +20,7 @@ to-report read-means-matrix
 end
 
 to-report write-means-matrix [ matrix ]
-  let strings games:matrix-as-pretty-strings matrix
+  let strings games:matrix-as-pretty-strings matrix "  "
   let result ""
   foreach strings [ set result (word result (reduce [(word ?1 " " ?2 )] ?) "\n") ]
   report result
@@ -40,11 +40,11 @@ to set-game
   ]
   
   ; update interface
-  let m games:matrix-as-pretty-strings means-x-matrix
+  let m games:matrix-as-pretty-strings means-x-matrix "  "
   set n-alt length m
   set means-x write-means-matrix means-x-matrix
-  set sample-equilibria games:get-solutions-string game
-  set fields games:get-fields-string game
+  set sample-equilibria games:get-solutions-string game "  "
+  set fields games:get-fields-string game "  "
 end
 
 
@@ -169,10 +169,11 @@ to-report reward [group-choice]
 end
 
 to wait-for-tick
-  set nextTick nextTick + 1
+  set nextTick nextTick + 100
   while [ticks < nextTick] [
     set next-groups n-of floor (n-agents / 2) group-structure
     set updated true
+    ;set rel-freq-0 map [ (length filter [ 0 = [last-action] of ? ] ? ) / group-size] groups
   ]
   ;while [ticks < nextTick] [ 
   ;  update-slow
@@ -217,11 +218,11 @@ end
 GRAPHICS-WINDOW
 775
 25
-1450
-721
+1316
+587
 -1
 -1
-166.66666666666666
+31.25
 1
 10
 1
@@ -232,9 +233,9 @@ GRAPHICS-WINDOW
 1
 1
 0
-3
+16
 0
-3
+16
 0
 0
 1
@@ -250,7 +251,7 @@ n-agents
 n-agents
 0
 10000
-20
+1000
 10
 1
 NIL
@@ -343,7 +344,7 @@ INPUTBOX
 395
 175
 means-x
-10  0\n 0  2\n
+10   0\n  6   4\n
 1
 1
 String
@@ -354,7 +355,7 @@ INPUTBOX
 625
 290
 fields
-| 1: (10,10) ON| 2: ( 0, 0)   |\n| 3: ( 0, 0)   | 4: ( 2, 2)  N|\n
+|  1:  (10,10)  ON|  2:  (  0,  6)      |\n|  3:  (  6,  0)      |  4:  (  4,  4)    N|\n
 1
 1
 String
@@ -410,7 +411,7 @@ INPUTBOX
 765
 425
 sample-equilibria
-   x1   x2   y1   y2  |   Ex   Ey  |   mx\n----------------------------------------\n  1/6  5/6  1/6  5/6  |  5/3  5/3  |     \n
+      x1      x2      y1      y2  |      Ex      Ey  |      mx\n\n    1/2    1/2    1/2    1/2  |        5        5  |         \n
 1
 1
 String
@@ -514,7 +515,7 @@ group-size
 group-size
 0
 100
-20
+50
 1
 1
 NIL
@@ -529,7 +530,7 @@ n-way
 n-way
 1
 group-size / 2
-10
+1
 1
 1
 NIL
@@ -1082,6 +1083,206 @@ wait 1</final>
     <enumeratedValueSet variable="means-x">
       <value value="&quot;10  0\n 0 8\n&quot;"/>
       <value value="&quot;10  0\n 0 10\n&quot;"/>
+    </enumeratedValueSet>
+    <steppedValueSet variable="beta" first="0" step="0.1" last="1"/>
+  </experiment>
+  <experiment name="exp-n-way-coordination-1-risk" repetitions="1" runMetricsEveryStep="false">
+    <setup>set-game
+setup
+ql:start</setup>
+    <go>if ticks &gt; 990 [ update-slow ]
+wait-for-tick</go>
+    <final>ql:stop
+wait 1</final>
+    <exitCondition>ticks &gt; 1000</exitCondition>
+    <metric>fields</metric>
+    <metric>mean [q-values-std] of turtles</metric>
+    <metric>mean [exploration-rate] of turtles</metric>
+    <metric>count turtles with [last-action = 0]</metric>
+    <metric>count turtles with [last-action = 1]</metric>
+    <metric>count turtles with [last-field = 0]</metric>
+    <metric>count turtles with [last-field = 1]</metric>
+    <metric>count turtles with [last-field = 2]</metric>
+    <metric>count turtles with [last-field = 3]</metric>
+    <metric>rel-freq-0</metric>
+    <enumeratedValueSet variable="n-agents">
+      <value value="10000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="sd">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="game-name">
+      <value value="&quot;TransposeMeansX&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="global-exploration">
+      <value value="0.05"/>
+      <value value="0.2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="n-way">
+      <value value="1"/>
+      <value value="5"/>
+      <value value="10"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="means-x">
+      <value value="&quot;10  0\n 6 2\n&quot;"/>
+      <value value="&quot;10  0\n 6 4\n&quot;"/>
+      <value value="&quot;10  0\n 6 6\n&quot;"/>
+      <value value="&quot;10  0\n 6 8\n&quot;"/>
+      <value value="&quot;10  0\n 6 10\n&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="group-size">
+      <value value="25"/>
+      <value value="50"/>
+      <value value="100"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="beta">
+      <value value="0"/>
+      <value value="0.5"/>
+      <value value="1"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="exp-n-way-coordination-1-long" repetitions="1" runMetricsEveryStep="false">
+    <setup>set-game
+setup
+ql:start</setup>
+    <go>if ticks &gt; 99990 [ update-slow ]
+wait-for-tick</go>
+    <final>ql:stop
+wait 1</final>
+    <exitCondition>ticks &gt; 100000</exitCondition>
+    <metric>fields</metric>
+    <metric>mean [q-values-std] of turtles</metric>
+    <metric>mean [exploration-rate] of turtles</metric>
+    <metric>count turtles with [last-action = 0]</metric>
+    <metric>count turtles with [last-action = 1]</metric>
+    <metric>count turtles with [last-field = 0]</metric>
+    <metric>count turtles with [last-field = 1]</metric>
+    <metric>count turtles with [last-field = 2]</metric>
+    <metric>count turtles with [last-field = 3]</metric>
+    <metric>rel-freq-0</metric>
+    <enumeratedValueSet variable="n-agents">
+      <value value="10000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="sd">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="game-name">
+      <value value="&quot;TransposeMeansX&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="global-exploration">
+      <value value="0.05"/>
+      <value value="0.1"/>
+      <value value="0.2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="n-way">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="means-x">
+      <value value="&quot;10  0\n 6 2\n&quot;"/>
+      <value value="&quot;10  0\n 6 4\n&quot;"/>
+      <value value="&quot;10  0\n 0 6\n&quot;"/>
+      <value value="&quot;10  0\n 0 8\n&quot;"/>
+      <value value="&quot;10  0\n 0 10\n&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="group-size">
+      <value value="25"/>
+      <value value="50"/>
+      <value value="100"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="beta">
+      <value value="0"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="exp-n-way-coordination-1-long-time" repetitions="1" runMetricsEveryStep="true">
+    <setup>set-game
+setup
+ql:start</setup>
+    <go>if ticks &gt; 99990 [ update-slow ]
+wait-for-tick</go>
+    <final>ql:stop
+wait 1</final>
+    <exitCondition>ticks &gt; 100000</exitCondition>
+    <metric>fields</metric>
+    <metric>mean [q-values-std] of turtles</metric>
+    <metric>mean [exploration-rate] of turtles</metric>
+    <metric>count turtles with [last-action = 0]</metric>
+    <metric>count turtles with [last-action = 1]</metric>
+    <metric>count turtles with [last-field = 0]</metric>
+    <metric>count turtles with [last-field = 1]</metric>
+    <metric>count turtles with [last-field = 2]</metric>
+    <metric>count turtles with [last-field = 3]</metric>
+    <metric>rel-freq-0</metric>
+    <enumeratedValueSet variable="n-agents">
+      <value value="10000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="sd">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="game-name">
+      <value value="&quot;TransposeMeansX&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="global-exploration">
+      <value value="0.05"/>
+      <value value="0.1"/>
+      <value value="0.2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="n-way">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="means-x">
+      <value value="&quot;10  0\n 0 6\n&quot;"/>
+      <value value="&quot;10  0\n 0 8\n&quot;"/>
+      <value value="&quot;10  0\n 0 10\n&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="group-size">
+      <value value="25"/>
+      <value value="50"/>
+      <value value="100"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="beta">
+      <value value="0"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="exp-n-way-coordination-2-risk" repetitions="1" runMetricsEveryStep="false">
+    <setup>set-game
+setup
+ql:start</setup>
+    <go>if ticks &gt; 990 [ update-slow ]
+wait-for-tick</go>
+    <final>ql:stop
+wait 1</final>
+    <exitCondition>ticks &gt; 1000</exitCondition>
+    <metric>fields</metric>
+    <metric>mean [q-values-std] of turtles</metric>
+    <metric>mean [exploration-rate] of turtles</metric>
+    <metric>count turtles with [last-action = 0]</metric>
+    <metric>count turtles with [last-action = 1]</metric>
+    <metric>count turtles with [last-field = 0]</metric>
+    <metric>count turtles with [last-field = 1]</metric>
+    <metric>count turtles with [last-field = 2]</metric>
+    <metric>count turtles with [last-field = 3]</metric>
+    <metric>rel-freq-0</metric>
+    <enumeratedValueSet variable="n-agents">
+      <value value="10000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="sd">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="game-name">
+      <value value="&quot;TransposeMeansX&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="global-exploration">
+      <value value="0.1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="group-size">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="n-way">
+      <value value="5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="means-x">
+      <value value="&quot;10  0\n 6 2\n&quot;"/>
+      <value value="&quot;10  0\n 6 4\n&quot;"/>
     </enumeratedValueSet>
     <steppedValueSet variable="beta" first="0" step="0.1" last="1"/>
   </experiment>

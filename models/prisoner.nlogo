@@ -1,18 +1,20 @@
 extensions[ql]
 
-patches-own[ q-values frequencies rel-freqs q-values-std last-action last-field]
+patches-own[ exploration-rate exploration-method q-values frequencies rel-freqs q-values-std last-action last-field]
 globals[ alternative-ids alternative-names alternative-colors patches-list n-groups next-groups updated nextTick groups group-fields group-fields-sum mean-group-fields]
 
 to setup
   clear-all
   set-patch-size 400 / n-patches  
   resize-world 0 (n-patches - 1) 0 (n-patches - 1)
-  ql:init patches experimenting "epsilon-greedy"
-  
+   
   ask patches [
+    set exploration-rate experimenting
+    set exploration-method "epsilon-greedy"
     set rel-freqs [0 0]
     ifelse (random 2 = 1) [set pcolor blue] [set pcolor red]
   ]
+  ql:init patches
   
   set alternative-names [ "C" "D" "P" "E"]
   set alternative-colors [ blue red green yellow ]
@@ -32,7 +34,7 @@ to setup
     let i 0
     while [i < n-groups] [
       set i i + 1
-      set group-structure lput ql:create-group map [(list ?  map [(word ?)] alternative-ids)] sublist fixed-patches 0 group-size group-structure
+      set group-structure lput ql:create-group map [(list ? alternative-ids)] sublist fixed-patches 0 group-size group-structure
       set groups lput sublist fixed-patches 0 group-size groups
       set fixed-patches sublist fixed-patches group-size length fixed-patches
     ]
@@ -54,7 +56,7 @@ to-report get-next-groups
   let i 0
   while [i < n-groups] [
     set i i + 1
-    set group-structure lput ql:create-group map [(list ? map [(word ?)] alternative-ids)] sublist random-patches 0 group-size group-structure
+    set group-structure lput ql:create-group map [(list ? alternative-ids)] sublist random-patches 0 group-size group-structure
     set groups lput sublist random-patches 0 group-size groups
     set random-patches sublist random-patches group-size length random-patches
   ]
@@ -85,16 +87,15 @@ to-report reward [group-choice]
   let n 0
   let nc 0
   let np 0
-  let field sum map [read-from-string ?] decisions
+  let field sum decisions
   (foreach agents decisions [
     ask ?1 [
-      let alt-id read-from-string ?2
-      set last-action alt-id
+      set last-action ?2
       set last-field field
-      set pcolor item alt-id alternative-colors
-      if (alt-id != 3) [set n n + 1]
-      if (alt-id = 0 or alt-id = 2) [set nc nc + 1]
-      if (alt-id = 2) [set np np + 1]
+      set pcolor item ?2 alternative-colors
+      if (?2 != 3) [set n n + 1]
+      if (?2 = 0 or ?2 = 2) [set nc nc + 1]
+      if (?2 = 2) [set np np + 1]
     ]
   ])
   
@@ -103,7 +104,7 @@ to-report reward [group-choice]
   if n > 0 [ set pool nc * r-by-n * group-size / n ]
   let rewards (list (pool - 1) (pool - np * s) (pool - 1 - nd * c-by-s * s) (l-by-r-1 * (group-size * r-by-n - 1)) )
 
-  report ql:set-rewards group-choice map [ item ( read-from-string ? ) rewards ] decisions
+  report ql:set-rewards group-choice map [ item ? rewards ] decisions
   
 end
 
@@ -274,16 +275,6 @@ experimenting
 1
 NIL
 HORIZONTAL
-
-CHOOSER
-30
-95
-215
-140
-exploration-method
-exploration-method
-"epsilon-greedy" "softmax"
-0
 
 PLOT
 30
