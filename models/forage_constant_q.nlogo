@@ -11,8 +11,9 @@ to setup
   resize-world 0 floor (sqrt (noOfPatches)) 0 floor (sqrt (noOfPatches))
   set-patch-size 400 / floor(sqrt(noOfPatches))
   ; setup patches
-  set patch-config [ [1 72] [2 12] ]
+  set patch-config [ [1 65] [2 15] ]
   ask patches [
+    set pcolor white
     set is-resource false
     let pair one-of patch-config
     set res-type first pair
@@ -21,6 +22,8 @@ to setup
   grow-resources
   ; setup turtles
   crt number-of-turtles [
+    set size 1.5
+    set color black
     setxy random-xcor random-ycor
     set dest 0
     set q q1
@@ -169,10 +172,10 @@ SLIDER
 43
 number-of-turtles
 number-of-turtles
-100
+10
 1000
 100
-100
+10
 1
 NIL
 HORIZONTAL

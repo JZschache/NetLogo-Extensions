@@ -2,3 +2,4 @@ bin
 .settings
 .cache
 /ql.jar
+/qlearning.jar
