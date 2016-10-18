@@ -1,7 +1,7 @@
 extensions[ql]
 
 patches-own[ exploration-rate exploration-method q-values frequencies rel-freqs q-values-std last-action last-field]
-globals[ alternative-ids alternative-names alternative-colors patches-list n-groups next-groups updated nextTick groups group-fields group-fields-sum mean-group-fields]
+globals[ alternative-ids alternative-names alternative-colors patches-list n-groups next-groups updated nextTick nextWrite groups group-fields group-fields-sum mean-group-fields]
 
 to setup
   clear-all
@@ -45,6 +45,7 @@ to setup
   ] 
   
   set nextTick 0
+  set nextWrite 10
   
   reset-ticks
 end
@@ -109,11 +110,12 @@ to-report reward [group-choice]
 end
 
 to wait-for-tick
-  set nextTick nextTick + 1
+  set nextTick nextTick + (10 ^ (ifelse-value (ticks > 0) [floor (log ticks 10)] [0]))
   ;set mean-group-fields mean group-fields
   ;set group-fields map [[last-field] of (first ?)] groups
-  while [ticks < nextTick] [
-    
+  show nextTick
+  while [ticks < 10 or ticks < nextTick] [
+    if ticks > 999000 [update-slow]
     ;set group-fields map [[last-field] of (first ?)] groups
     ifelse not spatial [
       set next-groups get-next-groups
@@ -130,6 +132,14 @@ end
 to update
   ;update-slow
   tick
+  ;if ticks > 999990 [update-slow]
+  if (ticks >= nextWrite) [
+    file-open "/home/johannes/matchingLaw/qlExtension/multiplePersons/exp-pri-plain-small-pop-time2.csv"
+    file-print (word "\"x\",\"" n-patches "\",\"" experimenting "\",\"" enable-exit "\",\"" enable-punishment "\",\"" spatial "\",\"" group-size "\",\"" r-by-n "\",\"" s "\",\"" c-by-s "\",\"" l-by-r-1 "\",\"" ticks "\",\"" (count patches with [last-action = 0]) "\"")
+    file-close
+    set nextWrite nextWrite + (10 ^ (ifelse-value (ticks > 0) [floor ((log ticks 10) + 0.00000000001)] [0]))
+  ]
+  
 end
 
 to update-slow
@@ -175,7 +185,7 @@ GRAPHICS-WINDOW
 441
 -1
 -1
-20.0
+8.0
 1
 10
 1
@@ -186,9 +196,9 @@ GRAPHICS-WINDOW
 1
 1
 0
-19
+49
 0
-19
+49
 0
 0
 1
@@ -204,7 +214,7 @@ n-patches
 n-patches
 1
 100
-20
+50
 1
 1
 ^2
@@ -332,7 +342,7 @@ group-size
 group-size
 2
 20
-20
+10
 1
 1
 NIL
@@ -364,7 +374,7 @@ r-by-n
 r-by-n
 0
 0.9
-0.8
+0.6
 0.1
 1
 NIL
@@ -936,6 +946,54 @@ NetLogo 5.2.0
 @#$#@#$#@
 @#$#@#$#@
 <experiments>
+  <experiment name="exp-pri-plain-gs02" repetitions="1" runMetricsEveryStep="false">
+    <setup>setup
+ql:start</setup>
+    <go>if ticks &gt; 990 [update-slow]
+wait-for-tick</go>
+    <final>ql:stop 
+wait 1</final>
+    <exitCondition>ticks &gt; 1000</exitCondition>
+    <metric>mean [q-values-std] of patches</metric>
+    <metric>standard-deviation [q-values-std] of patches</metric>
+    <metric>count patches with [last-action = 0]</metric>
+    <enumeratedValueSet variable="n-patches">
+      <value value="100"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="experimenting">
+      <value value="0.05"/>
+      <value value="0.1"/>
+      <value value="0.2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="enable-exit">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="enable-punishment">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="spatial">
+      <value value="false"/>
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="group-size">
+      <value value="2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="r-by-n">
+      <value value="0.6"/>
+      <value value="0.7"/>
+      <value value="0.8"/>
+      <value value="0.9"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="s">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="c-by-s">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="l-by-r-1">
+      <value value="0"/>
+    </enumeratedValueSet>
+  </experiment>
   <experiment name="exp-pri-plain-gs05" repetitions="1" runMetricsEveryStep="false">
     <setup>setup
 ql:start</setup>
@@ -1975,6 +2033,136 @@ wait 1</final>
       <value value="0"/>
     </enumeratedValueSet>
     <steppedValueSet variable="l-by-r-1" first="0.1" step="0.2" last="0.9"/>
+  </experiment>
+  <experiment name="exp-pri-plain-gs02-coop-dev" repetitions="1" runMetricsEveryStep="true">
+    <setup>setup
+ql:start</setup>
+    <go>wait-for-tick</go>
+    <final>ql:stop 
+wait 1</final>
+    <exitCondition>ticks &gt; 1000000</exitCondition>
+    <metric>count patches with [last-action = 0]</metric>
+    <enumeratedValueSet variable="n-patches">
+      <value value="100"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="experimenting">
+      <value value="0.05"/>
+      <value value="0.1"/>
+      <value value="0.2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="enable-exit">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="enable-punishment">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="spatial">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="group-size">
+      <value value="2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="r-by-n">
+      <value value="0.9"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="s">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="c-by-s">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="l-by-r-1">
+      <value value="0"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="exp-pri-plain-gs20-coop-dev-small-pop" repetitions="1" runMetricsEveryStep="true">
+    <setup>setup
+ql:start</setup>
+    <go>wait-for-tick</go>
+    <final>ql:stop 
+wait 1</final>
+    <exitCondition>ticks &gt; 1000000</exitCondition>
+    <metric>count patches with [last-action = 0]</metric>
+    <enumeratedValueSet variable="n-patches">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="experimenting">
+      <value value="0.05"/>
+      <value value="0.1"/>
+      <value value="0.2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="enable-exit">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="enable-punishment">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="spatial">
+      <value value="false"/>
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="group-size">
+      <value value="20"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="r-by-n">
+      <value value="0.8"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="s">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="c-by-s">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="l-by-r-1">
+      <value value="0"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="exp-pri-plain-small-pop" repetitions="1" runMetricsEveryStep="false">
+    <setup>setup
+ql:start</setup>
+    <final>ql:stop 
+file-close-all
+wait 1</final>
+    <exitCondition>ticks &gt; 1000000</exitCondition>
+    <metric>count patches with [last-action = 0]</metric>
+    <enumeratedValueSet variable="n-patches">
+      <value value="50"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="experimenting">
+      <value value="0.05"/>
+      <value value="0.1"/>
+      <value value="0.2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="enable-exit">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="enable-punishment">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="spatial">
+      <value value="false"/>
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="group-size">
+      <value value="5"/>
+      <value value="10"/>
+      <value value="20"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="r-by-n">
+      <value value="0.2"/>
+      <value value="0.4"/>
+      <value value="0.6"/>
+      <value value="0.8"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="s">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="c-by-s">
+      <value value="0.5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="l-by-r-1">
+      <value value="0"/>
+    </enumeratedValueSet>
   </experiment>
 </experiments>
 @#$#@#$#@

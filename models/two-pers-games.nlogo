@@ -1,7 +1,7 @@
 extensions[ql games]
 
 turtles-own[ is-player-x q-values frequencies rel-freqs exploration-rate exploration-method q-values-std last-action nash-action optimal-action last-field]
-globals[ means-x-matrix means-y-matrix means-max optimal-fields nash-fields rel-freq-optimal rel-freq-nash nextTick ]
+globals[ means-x-matrix means-y-matrix means-max optimal-fields nash-fields rel-freq-optimal rel-freq-nash nextTick nextWrite]
 
 to-report read-means-matrix [ nr ]
   let row-string-list []
@@ -124,6 +124,7 @@ to setup
   ]
   
   set nextTick 0
+  set nextWrite 10
   
   reset-ticks
 end
@@ -173,9 +174,22 @@ to wait-for-tick
   ]
 end
 
+;to update
+;  update-slow
+;  tick
+;end
+
 to update
-  update-slow
+  ;update-slow
   tick
+  ;if ticks > 999990 [update-slow]
+  if (ticks >= nextWrite) [
+    file-open "/home/johannes/matchingLaw/qlExtension/twoPersonsGames/exp-two-persons-prisoner-revision.csv"
+    file-print (word "\"x\",\"" global-exploration-method "\",\"" n-pairs "\",\"" sd "\",\"" (read-means-matrix 1) "\",\"" global-exploration "\",\"" ticks "\",\"" (count turtles with [last-action = 0]) "\"")
+    file-close
+    ;set nextWrite nextWrite + (10 ^ (ifelse-value (ticks > 0) [floor ((log ticks 10) + 0.00000000001)] [0]))
+    set nextWrite nextWrite + 10
+  ]
 end
 
 to update-slow
@@ -217,11 +231,11 @@ end
 GRAPHICS-WINDOW
 890
 25
-1400
-556
+1302
+458
 -1
 -1
-100.0
+2.150537634408602
 1
 10
 1
@@ -232,9 +246,9 @@ GRAPHICS-WINDOW
 1
 1
 0
-4
+186
 0
-4
+186
 0
 0
 1
@@ -250,7 +264,7 @@ n-pairs
 n-pairs
 0
 10000
-1
+3824
 1
 1
 NIL
@@ -343,7 +357,7 @@ INPUTBOX
 395
 175
 means-x
-  0  10    0\n  0    0  10\n10    0    0\n
+  9    2\n10    0\n
 1
 1
 String
@@ -356,7 +370,7 @@ CHOOSER
 global-exploration-method
 global-exploration-method
 "epsilon-greedy" "softmax" "Roth-Erev"
-2
+0
 
 MONITOR
 30
@@ -375,7 +389,7 @@ INPUTBOX
 625
 330
 fields
-|  1:  (  0,  0)      |  2:  (10,  0)  O  |  3:  (  0,10)  O  |\n|  4:  (  0,10)  O  |  5:  (  0,  0)      |  6:  (10,  0)  O  |\n|  7:  (10,  0)  O  |  8:  (  0,10)  O  |  9:  (  0,  0)      |\n
+|  1:  (  9,  9)  O  |  2:  (  2,10)  ON|\n|  3:  (10,  2)  ON|  4:  (  0,  0)      |\n
 1
 1
 String
@@ -404,7 +418,7 @@ INPUTBOX
 575
 175
 means-y
-  0    0  10\n10    0    0\n  0  10    0\n
+  9  10\n  2    0\n
 1
 1
 String
@@ -417,7 +431,7 @@ CHOOSER
 game-name
 game-name
 "Custom" "CopyMeansX" "TransposeMeansX" "BattleOfTheSexes" "Chicken" "CollaborationGame" "CoordinationGame" "DispersionGame" "GrabTheDollar" "GuessTwoThirdsAve" "HawkAndDove" "MajorityVoting" "MatchingPennies" "PrisonersDilemma" "RandomGame" "RandomZeroSum" "RockPaperScissors" "ShapleysGame"
-17
+4
 
 BUTTON
 580
@@ -442,7 +456,7 @@ INPUTBOX
 765
 496
 sample-equilibria
-        x1        x2        x3        y1        y2        y3  |        Ex        Ey  |        mx\n\n      1/3      1/3      1/3      1/3      1/3      1/3  |    10/3    10/3  |          O\n
+        x1        x2        y1        y2  |        Ex        Ey  |        mx\n\n      2/3      1/3      2/3      1/3  |    20/3    20/3  |           \n
 1
 1
 String
@@ -456,7 +470,7 @@ n-alt-x
 n-alt-x
 1
 10
-3
+2
 1
 1
 NIL
@@ -471,7 +485,7 @@ n-alt-y
 n-alt-y
 1
 10
-3
+2
 1
 1
 NIL
@@ -3233,6 +3247,51 @@ wait 1</final>
     </enumeratedValueSet>
     <enumeratedValueSet variable="global-exploration">
       <value value="0.1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="game-name">
+      <value value="&quot;TransposeMeansX&quot;"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="exp-two-persons-prisoner-revision" repetitions="1" runMetricsEveryStep="false">
+    <setup>set-game
+setup
+ql:start</setup>
+    <final>ql:stop
+wait 1</final>
+    <exitCondition>ticks &gt; 2000</exitCondition>
+    <metric>fields</metric>
+    <metric>rel-freq-optimal</metric>
+    <metric>rel-freq-nash</metric>
+    <metric>mean [q-values-std] of turtles</metric>
+    <metric>mean [exploration-rate] of turtles</metric>
+    <metric>count turtles with [is-player-x and last-action = 0]</metric>
+    <metric>count turtles with [is-player-x and last-action = 1]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 0]</metric>
+    <metric>count turtles with [not is-player-x and last-action = 1]</metric>
+    <metric>count turtles with [last-field = 0]</metric>
+    <metric>count turtles with [last-field = 1]</metric>
+    <metric>count turtles with [last-field = 2]</metric>
+    <metric>count turtles with [last-field = 3]</metric>
+    <enumeratedValueSet variable="global-exploration-method">
+      <value value="&quot;epsilon-greedy&quot;"/>
+      <value value="&quot;Roth-Erev&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="n-pairs">
+      <value value="10000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="sd">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="means-x">
+      <value value="&quot; 3 0\n 10 2&quot;"/>
+      <value value="&quot; 5 0\n 10 2&quot;"/>
+      <value value="&quot; 7 0\n 10 2&quot;"/>
+      <value value="&quot; 9 0\n 10 2&quot;"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="global-exploration">
+      <value value="0.05"/>
+      <value value="0.1"/>
+      <value value="0.2"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="game-name">
       <value value="&quot;TransposeMeansX&quot;"/>
